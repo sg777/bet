@@ -1393,19 +1393,22 @@ void BET_p2p_bvvloop_test(void *_ptr)
 	
 	while ( bet->pushsock>= 0 && bet->subsock>= 0 )
     {
-
+		ptr=0;
         if ( (recvlen= nn_recv(bet->subsock,&ptr,NN_MSG,0)) > 0 )
         {
-          
-            if ( (argjson= cJSON_Parse(ptr)) != 0 )
+          	char *tmp=clonestr(ptr);
+            if ( (argjson= cJSON_Parse(tmp)) != 0 )
             {
                 if ( BET_p2p_bvvcommand(argjson,bet,BVV_VARS) != 0 ) // usually just relay to players
                 {
                 	// do soemthing incase any command or logic failures
                 }
-                free_json(argjson);
+                //free_json(argjson);
             }
-            nn_freemsg(ptr);
+			if(tmp)
+				free(tmp);
+			if(ptr)
+            	nn_freemsg(ptr);
         }
 
     }
@@ -3083,18 +3086,21 @@ void BET_p2p_clientloop_test(void * _ptr)
         
         if ( bet->subsock >= 0 && bet->pushsock >= 0 )
         {
+        		ptr=0;
 	        	recvlen= nn_recv (bet->subsock, &ptr, NN_MSG, 0);
-                if (( (msgjson= cJSON_Parse(ptr)) != 0 ) && (recvlen>0))
+				char *tmp=clonestr(ptr);
+                if (( (msgjson= cJSON_Parse(tmp)) != 0 ) && (recvlen>0))
                 {
                     if ( BET_p2p_clientupdate_test(msgjson,bet,Player_VARS_global) < 0 )
                     {
                     	printf("\nFAILURE\n");
                     	// do something here, possibly this could be because unknown commnad or because of encountering a special case which state machine fails to handle
                     }           
-                    /*
+                    if(tmp)
+						free(tmp);	
 					if(ptr)
 					 nn_freemsg(ptr);
-					 */
+					 
                 }
                 
         }
