@@ -2032,8 +2032,8 @@ void BET_p2p_host_blinds_info(struct lws *wsi)
 	char *rendered=NULL;
 	blindsInfo=cJSON_CreateObject();
 	cJSON_AddStringToObject(blindsInfo,"method","blindsInfo");
-	cJSON_AddNumberToObject(blindsInfo,"small_blind",small_blind_amount);
-	cJSON_AddNumberToObject(blindsInfo,"big_blind",big_blind_amount);
+	cJSON_AddNumberToObject(blindsInfo,"small_blind",1000000);
+	cJSON_AddNumberToObject(blindsInfo,"big_blind",2000000);
 	printf("%s::%d::lws::%s\n",__FUNCTION__,__LINE__,jstr(blindsInfo,"method"));
 	rendered=cJSON_Print(blindsInfo);
 	lws_write(wsi,rendered,strlen(rendered),0);
