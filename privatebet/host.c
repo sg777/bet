@@ -3470,9 +3470,10 @@ void BET_p2p_hostloop(void *_ptr)
                     //if ( (sendlen= nn_send(bet->pubsock,ptr,recvlen,0)) != recvlen )
                     //    printf("sendlen.%d != recvlen.%d for %s\n",sendlen,recvlen,jprint(argjson,0));
                 }
-                free_json(argjson);
+                //free_json(argjson);
             }
-            nn_freemsg(ptr);
+			if(ptr)
+          	  nn_freemsg(ptr);
         }
           
     }
