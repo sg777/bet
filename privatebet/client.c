@@ -3091,7 +3091,7 @@ void BET_p2p_clientloop_test(void * _ptr)
 				char *tmp=NULL;
 				if(recvlen>0)
 					tmp=clonestr(ptr);
-                if (( (msgjson= cJSON_Parse(tmp)) != 0 ) && (recvlen>0))
+                if ((recvlen>0)&&( (msgjson= cJSON_Parse(tmp)) != 0 ))
                 {
                     if ( BET_p2p_clientupdate_test(msgjson,bet,Player_VARS_global) < 0 )
                     {
