@@ -3327,7 +3327,7 @@ int32_t BET_p2p_hostcommand(cJSON *argjson,struct privatebet_info *bet,struct pr
 		else if(strcmp(method,"bvv_ready") == 0)
 		{
 			retval=BET_p2p_host_start_init(bet,0);
-			//BET_p2p_host_blinds_info(wsi_global_host);
+			BET_p2p_host_blinds_info(wsi_global_host);
 		}
 		else if(strcmp(method,"init_p") == 0)
 		{
