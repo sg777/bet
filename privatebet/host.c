@@ -2979,7 +2979,8 @@ void BET_dcv_cashier_loop(void *_ptr)
 	int32_t recvlen; cJSON *argjson=NULL; 
 	void *ptr=NULL; 
 	struct privatebet_info *bet = _ptr;
-	
+
+		
 	while ( bet->c_pushsock >= 0 && bet->c_subsock >= 0 )
     {
     	ptr=0;
@@ -2989,7 +2990,6 @@ void BET_dcv_cashier_loop(void *_ptr)
             if ( (argjson= cJSON_Parse(tmp)) != 0 )
             {
             	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson));
-                free_json(argjson);
             }
 			if(tmp)
 				free(tmp);
