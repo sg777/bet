@@ -25,7 +25,7 @@ void BET_cashier_loop(void * _ptr)
 	cJSON *argjson=cJSON_CreateObject();
 	cJSON_AddStringToObject(argjson,"method","cashier");
 	
-	bytes=nn_send(cashier_info->pubsock,cJSON_Print(argjson),strlen(cJSON_Print(argjson)),0);
+	bytes=nn_send(cashier_info->c_pubsock,cJSON_Print(argjson),strlen(cJSON_Print(argjson)),0);
 	if(bytes<0)
 		printf("\nThere is a problem in sending the data");
 	
