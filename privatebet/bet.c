@@ -132,7 +132,7 @@ int main(int argc, char **argv)
 		BET_transportname(0,bindaddr1,hostip,port+1);
 		pullsock = BET_nanosock(1,bindaddr1,NN_PULL);
 
-		for(int i=0;i<no_of_notaries;i++)
+		for(int i=0;i<4;i++)
 		{
 
 			memset(bindaddr,0x00,sizeof(bindaddr));

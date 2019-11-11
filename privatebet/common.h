@@ -85,6 +85,8 @@ extern struct cashier *cashier_info;
 
 extern char notariesIP[10][25];
 
+extern int32_t no_of_notaries;
+
 #endif
 
 
