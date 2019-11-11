@@ -9,7 +9,7 @@ int32_t BET_cashier_backend(cJSON *argjson,struct cashier *cashier_info)
 	int retval=1;
     if ( (method= jstr(argjson,"method")) != 0 )
     {
-    	printf("%s::%d::%s",__FUNCTION__,__LINE__,method);
+    	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,method);
     }	
 	return retval;
 }
