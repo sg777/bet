@@ -1,3 +1,6 @@
+#include "bet.h"
+#include "cashier.h"
+
 struct cashier *cashier_info;
 
 int32_t BET_cashier_backend(cJSON *argjson,struct cashier *cashier_info)
