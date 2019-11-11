@@ -352,8 +352,8 @@ int main(int argc, char **argv)
 		
 		cashier_info=calloc(1,sizeof(struct cashier));
 	
-	    cashier_info->pubsock = c_pubsock;
-	    cashier_info->pullsock = c_pullsock;
+	    cashier_info->c_pubsock = c_pubsock;
+	    cashier_info->c_pullsock = c_pullsock;
 	    if (OS_thread_create(&cashier_t,NULL,(void *)BET_cashier_loop,(void *)cashier_info) != 0 )
 		{
 			printf("\nerror in launching cashier");
