@@ -175,7 +175,7 @@ int main(int argc, char **argv)
 	        exit(-1);
 	    }
 
-	    if ( OS_thread_create(&dcv_cashier_t,NULL,(void *)BET_dcv_cashier_loop,NULL) != 0 )
+	    if ( OS_thread_create(&dcv_cashier_t,NULL,(void *)BET_dcv_cashier_loop,BET_dcv) != 0 )
 	    {
 	        printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_dcv->c_subsock,BET_dcv->c_pushsock);
 	        exit(-1);
@@ -246,7 +246,7 @@ int main(int argc, char **argv)
 				exit(-1);
 			}
 
-			if ( OS_thread_create(&bvv_cashier_t,NULL,(void *)BET_bvv_cashier_loop,NULL) != 0 )
+			if ( OS_thread_create(&bvv_cashier_t,NULL,(void *)BET_bvv_cashier_loop,BET_bvv) != 0 )
 			{
 				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_bvv->c_subsock,BET_bvv->c_pushsock);
 				exit(-1);
@@ -315,7 +315,7 @@ int main(int argc, char **argv)
 			}
 
 			
-			if ( OS_thread_create(&player_cashier_t,NULL,(void *)BET_player_cashier_loop,NULL) != 0 )
+			if ( OS_thread_create(&player_cashier_t,NULL,(void *)BET_player_cashier_loop,BET_player_global) != 0 )
 			{
 				
 				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_player_global->c_subsock,BET_player_global->c_pushsock);
