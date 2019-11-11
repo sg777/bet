@@ -2983,7 +2983,7 @@ void BET_dcv_cashier_loop(void *_ptr)
 	while ( bet->c_pushsock >= 0 && bet->c_subsock >= 0 )
     {
     	ptr=0;
-        if ( (recvlen= nn_recv(bet->subsock,&ptr,NN_MSG,0)) > 0 )
+        if ( (recvlen= nn_recv(bet->c_subsock,&ptr,NN_MSG,0)) > 0 )
         {
         	char *tmp=clonestr(ptr);
             if ( (argjson= cJSON_Parse(tmp)) != 0 )
