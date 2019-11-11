@@ -35,6 +35,7 @@ void BET_cashier_loop(void * _ptr)
 					tmp=clonestr(ptr);
                 if ((recvlen>0) && ((msgjson= cJSON_Parse(tmp)) != 0 ))
                 {
+                	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(msgjson));
                     if ( BET_cashier_backend(msgjson,cashier_info) < 0 )
                     {
                     	printf("\nFAILURE\n");
