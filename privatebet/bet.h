@@ -93,6 +93,7 @@ struct privatebet_info
     char peerids[CARDS777_MAXPLAYERS+1][67];
 	int32_t cardid,turni;
 	int32_t no_of_turns;
+	int32_t c_pushsock,c_subsock,c_pubsock,c_pullsock;
 };
 
 struct privatebet_rawpeerln

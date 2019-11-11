@@ -23,6 +23,8 @@ int32_t BET_p2p_client_init(cJSON *argjson,struct privatebet_info *bet,struct pr
 int32_t BET_p2p_client_join_res(cJSON *argjson,struct privatebet_info *bet,struct privatebet_vars *vars);
 int32_t BET_p2p_client_join(cJSON *argjson,struct privatebet_info *bet,struct privatebet_vars *vars);
 void BET_player_backend_loop(void * _ptr);
+void BET_player_cashier_loop(void * _ptr);
+
 
 int32_t LN_get_channel_status(char *id);
 int32_t BET_p2p_client_player_ready(cJSON *argjson,struct privatebet_info *bet,struct privatebet_vars *vars);
@@ -83,6 +85,7 @@ void LN_connect_to_channel(char *id);
 void LN_connect(char *id);
 
 
+void BET_bvv_cashier_loop(void *_ptr);
 
 
 

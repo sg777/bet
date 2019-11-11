@@ -87,12 +87,16 @@ char *rootAddress="RSdMRYeeouw3hepxNgUzHn34qFhn1tsubb"; //donation Address
 
 int main(int argc, char **argv)
 {
-    uint16_t port = 7797+1,cashier_port=7901;
+    uint16_t port = 7797+1,cashier_pushpull_port=7901,cashier_pubsub_port=7902;
     char bindaddr[128]/*="ipc:///tmp/bet.ipc"*/,bindaddr1[128]/*="ipc:///tmp/bet1.ipc"*/,hostip[20]; 
-	uint32_t i,range,numplayers; int32_t pubsock=-1,subsock=-1,pullsock=-1,pushsock=-1;  
-	pthread_t dcv_t,bvv_t,player_t,dcv_backend,bvv_backend,player_backend,cashier_t;
+	uint32_t i,range,numplayers; 
+	int32_t pubsock=-1,subsock=-1,pullsock=-1,pushsock=-1,c_pushsock,c_subsock,c_pullsock,c_pubsock;  
 
-		
+	pthread_t player_backend_t,player_frontend_t,player_cashier_t;
+	pthread_t dcv_backend_t,dcv_frontend_t,dcv_cashier_t;
+	pthread_t bvv_backend_t,bvv_frontend_t,bvv_cashier_t;
+	pthread_t cashier_t;		
+
 	/*	
 	char *msig="bQJTo8knsbSoU7k9oGADa6qfWGWyJtxC3o";
 	char *toaddress="bGmKoyJEz4ESuJCTjhVkgEb2Qkt8QuiQzQ";
@@ -127,15 +131,29 @@ int main(int argc, char **argv)
 		
 		BET_transportname(0,bindaddr1,hostip,port+1);
 		pullsock = BET_nanosock(1,bindaddr1,NN_PULL);
-			
+		
+
+		memset(bindaddr,0x00,sizeof(bindaddr));
+		memset(bindaddr1,0x00,sizeof(bindaddr1));
+		
+		BET_transportname(0,bindaddr,"159.69.23.31",cashier_pushpull_port);
+		c_pushsock=BET_nanosock(1,bindaddr1,NN_PUSH);
+
+		BET_transportname(0,bindaddr1,"159.69.23.31",cashier_pubsub_port);
+		c_subsock=BET_nanosock(1,bindaddr1,NN_SUB);
+		
 		#endif				  
 		
 	
 		BET_dcv=calloc(1,sizeof(struct privatebet_info));
 		DCV_VARS = calloc(1,sizeof(struct privatebet_vars));
 
-	    BET_dcv->pubsock = pubsock;//BET_nanosock(1,bindaddr,NN_PUB);
-	    BET_dcv->pullsock = pullsock;//BET_nanosock(1,bindaddr1,NN_PULL);
+	    BET_dcv->pubsock = pubsock;
+	    BET_dcv->pullsock = pullsock;
+		BET_dcv->c_pushsock = c_pushsock;
+		BET_dcv->c_subsock = c_subsock;
+
+		
 	    BET_dcv->maxplayers = (Maxplayers < CARDS777_MAXPLAYERS) ? Maxplayers : CARDS777_MAXPLAYERS;
 	    BET_dcv->maxchips = CARDS777_MAXCHIPS;
 	    BET_dcv->chipsize = CARDS777_CHIPSIZE;
@@ -146,24 +164,35 @@ int main(int argc, char **argv)
 		BET_dcv->no_of_turns=0;
 	    BET_betinfo_set(BET_dcv,"demo",range,0,Maxplayers);
 
-		if ( OS_thread_create(&dcv_backend,NULL,(void *) BET_dcv_backend_loop,(void *)BET_dcv) != 0 )
+		if ( OS_thread_create(&dcv_backend_t,NULL,(void *) BET_dcv_backend_loop,(void *)BET_dcv) != 0 )
 	    {
 	        printf("error launching BET_clientloop BET_hostloop");
 	        exit(-1);
 	    }		
-	    if ( OS_thread_create(&dcv_t,NULL,(void *)BET_dcv_frontend_loop,NULL) != 0 )
+	    if ( OS_thread_create(&dcv_frontend_t,NULL,(void *)BET_dcv_frontend_loop,NULL) != 0 )
 	    {
 	        printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_dcv->pubsock,BET_dcv->pullsock);
 	        exit(-1);
 	    }
+
+	    if ( OS_thread_create(&dcv_cashier_t,NULL,(void *)BET_dcv_cashier_loop,NULL) != 0 )
+	    {
+	        printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_dcv->c_subsock,BET_dcv->c_pushsock);
+	        exit(-1);
+	    }
+				
 		
-		
-		if(pthread_join(dcv_backend,NULL))
+		if(pthread_join(dcv_backend_t,NULL))
 		{
 			printf("\nError in joining the main thread for bvvv");
 		}
 
-       	if(pthread_join(dcv_t,NULL))
+       	if(pthread_join(dcv_frontend_t,NULL))
+		{
+			printf("\nError in joining the main thread for dcv");
+		}
+		
+       	if(pthread_join(dcv_cashier_t,NULL))
 		{
 			printf("\nError in joining the main thread for dcv");
 		}
@@ -178,13 +207,26 @@ int main(int argc, char **argv)
 		    BET_transportname(0,bindaddr1,hostip,port+1);
 		    pushsock = BET_nanosock(0,bindaddr1,NN_PUSH);
 
+			memset(bindaddr,0x00,sizeof(bindaddr));
+			memset(bindaddr1,0x00,sizeof(bindaddr1));
+			
+			BET_transportname(0,bindaddr,"159.69.23.31",cashier_pushpull_port);
+			c_pushsock=BET_nanosock(1,bindaddr1,NN_PUSH);
+
+			BET_transportname(0,bindaddr1,"159.69.23.31",cashier_pubsub_port);
+			c_subsock=BET_nanosock(1,bindaddr1,NN_SUB);
+	
+
 		#endif
 		#if 1
             BVV_VARS = calloc(1,sizeof(*BVV_VARS));
 			BET_bvv=calloc(1,sizeof(struct privatebet_info));
-		    BET_bvv->subsock = subsock/*BET_nanosock(0,bindaddr,NN_SUB)*/;
-		    BET_bvv->pushsock = pushsock/*BET_nanosock(0,bindaddr1,NN_PUSH)*/;
-		    BET_bvv->maxplayers = (Maxplayers < CARDS777_MAXPLAYERS) ? Maxplayers : CARDS777_MAXPLAYERS;
+		    BET_bvv->subsock = subsock;
+		    BET_bvv->pushsock = pushsock;
+			BET_bvv->c_subsock=c_subsock;
+			BET_bvv->c_pushsock=c_pushsock;
+
+			BET_bvv->maxplayers = (Maxplayers < CARDS777_MAXPLAYERS) ? Maxplayers : CARDS777_MAXPLAYERS;
 		    BET_bvv->maxchips = CARDS777_MAXCHIPS;
 		    BET_bvv->chipsize = CARDS777_CHIPSIZE;
 			BET_bvv->numplayers=numplayers;
@@ -192,22 +234,34 @@ int main(int argc, char **argv)
 		    BET_betinfo_set(BET_bvv,"demo",range,0,Maxplayers);
 		#endif
 			
-		    if ( OS_thread_create(&bvv_t,NULL,(void *)BET_bvv_backend_loop,(void *)BET_bvv) != 0 )
+		    if ( OS_thread_create(&bvv_backend_t,NULL,(void *)BET_bvv_backend_loop,(void *)BET_bvv) != 0 )
 		    {
 		        printf("error launching BET_clientloop for sub.%d push.%d\n",BET_bvv->subsock,BET_bvv->pushsock);
 		        exit(-1);
 		    }
 			
-			if ( OS_thread_create(&bvv_backend,NULL,(void *)BET_bvv_frontend_loop,NULL) != 0 )
+			if ( OS_thread_create(&bvv_frontend_t,NULL,(void *)BET_bvv_frontend_loop,NULL) != 0 )
 			{
 				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_bvv->subsock,BET_bvv->pushsock);
 				exit(-1);
 			}
-			if(pthread_join(bvv_backend,NULL))
+
+			if ( OS_thread_create(&bvv_cashier_t,NULL,(void *)BET_bvv_cashier_loop,NULL) != 0 )
+			{
+				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_bvv->c_subsock,BET_bvv->c_pushsock);
+				exit(-1);
+			}
+	
+			
+			if(pthread_join(bvv_backend_t,NULL))
 			{
 				printf("\nError in joining the main thread for bvvv");
 			}
-			if(pthread_join(bvv_t,NULL))
+			if(pthread_join(bvv_frontend_t,NULL))
+			{
+				printf("\nError in joining the main thread for bvvv");
+			}
+			if(pthread_join(bvv_cashier_t,NULL))
 			{
 				printf("\nError in joining the main thread for bvvv");
 			}
@@ -220,11 +274,26 @@ int main(int argc, char **argv)
 			BET_transportname(0,bindaddr1,hostip,port+1);
 			pushsock = BET_nanosock(0,bindaddr1,NN_PUSH);
 
+
+			memset(bindaddr,0x00,sizeof(bindaddr));
+			memset(bindaddr1,0x00,sizeof(bindaddr1));
+			
+			BET_transportname(0,bindaddr,"159.69.23.31",cashier_pushpull_port);
+			c_pushsock=BET_nanosock(1,bindaddr1,NN_PUSH);
+
+			BET_transportname(0,bindaddr1,"159.69.23.31",cashier_pubsub_port);
+			c_subsock=BET_nanosock(1,bindaddr1,NN_SUB);
+	
+			
 			Player_VARS_global=calloc(1,sizeof(*Player_VARS_global));
 			
 			BET_player_global=calloc(1,sizeof(struct privatebet_info));
-			BET_player_global->subsock = subsock/*BET_nanosock(0,bindaddr,NN_SUB)*/;
-		    BET_player_global->pushsock = pushsock/*BET_nanosock(0,bindaddr1,NN_PUSH)*/;
+			BET_player_global->subsock = subsock;
+		    BET_player_global->pushsock = pushsock;
+			BET_player_global->c_subsock = c_subsock;
+		    BET_player_global->c_pushsock = c_pushsock;
+
+			
 		    BET_player_global->maxplayers = (Maxplayers < CARDS777_MAXPLAYERS) ? Maxplayers : CARDS777_MAXPLAYERS;
 		    BET_player_global->maxchips = CARDS777_MAXCHIPS;
 		    BET_player_global->chipsize = CARDS777_CHIPSIZE;
@@ -233,45 +302,58 @@ int main(int argc, char **argv)
 
 			
 			
-			if (OS_thread_create(&player_t,NULL,(void *)BET_player_backend_loop,(void *)BET_player_global) != 0 )
+			if (OS_thread_create(&player_backend_t,NULL,(void *)BET_player_backend_loop,(void *)BET_player_global) != 0 )
 			{
 				printf("\nerror in launching BET_p2p_clientloop_test");
 				exit(-1);
 			}
 			
-			if ( OS_thread_create(&player_backend,NULL,(void *)BET_player_frontend_loop,NULL) != 0 )
+			if ( OS_thread_create(&player_frontend_t,NULL,(void *)BET_player_frontend_loop,NULL) != 0 )
 			{
 				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_player_global->subsock,BET_player_global->pushsock);
 				exit(-1);
 			}
 
 			
-			if(pthread_join(player_t,NULL))
+			if ( OS_thread_create(&player_cashier_t,NULL,(void *)BET_player_cashier_loop,NULL) != 0 )
+			{
+				
+				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_player_global->c_subsock,BET_player_global->c_pushsock);
+				exit(-1);
+			}
+			
+			if(pthread_join(player_backend_t,NULL))
 			{
 			printf("\nError in joining the main thread for player");
 			}
 
 			
-			if(pthread_join(player_backend,NULL))
+			if(pthread_join(player_frontend_t,NULL))
 			{
 				printf("\nError in joining the main thread for player %d",i);
 			}
+
+			if(pthread_join(player_cashier_t,NULL))
+			{
+				printf("\nError in joining the main thread for player %d",i);
+			}
+			
 	}
-	#if 0
+	#if 1
 	else if(strcmp(argv[1],"cashier")==0)
 	{
 		
 		
-		BET_transportname(0,bindaddr,hostip,cashier_port);
-		pubsock = BET_nanosock(1,bindaddr,NN_PUB);
+		BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
+		c_pubsock= BET_nanosock(1,bindaddr,NN_PUB);
 		
-		BET_transportname(0,bindaddr1,hostip,cashier_port+1);
-		pullsock = BET_nanosock(1,bindaddr1,NN_PULL);
+		BET_transportname(0,bindaddr1,hostip,cashier_pushpull_port);
+		c_pullsock= BET_nanosock(1,bindaddr1,NN_PULL);
 		
 		cashier_info=calloc(1,sizeof(struct cashier));
 	
-	    cashier_info->pubsock = pubsock;//BET_nanosock(1,bindaddr,NN_PUB);
-	    cashier_info->pullsock = pullsock;//BET_nanosock(1,bindaddr1,NN_PULL);
+	    cashier_info->pubsock = c_pubsock;
+	    cashier_info->pullsock = c_pullsock;
 	    if (OS_thread_create(&cashier_t,NULL,(void *)BET_cashier_loop,(void *)cashier_info) != 0 )
 		{
 			printf("\nerror in launching cashier");

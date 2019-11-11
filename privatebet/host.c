@@ -2974,6 +2974,31 @@ void BET_dcv_frontend_loop(void *_ptr)
 }
 
 
-
+void BET_dcv_cashier_loop(void *_ptr)
+{
+	int32_t recvlen; cJSON *argjson=NULL; 
+	void *ptr=NULL; 
+	struct privatebet_info *bet = _ptr;
+	
+	while ( bet->c_pushsock >= 0 && bet->c_subsock >= 0 )
+    {
+    	ptr=0;
+        if ( (recvlen= nn_recv(bet->subsock,&ptr,NN_MSG,0)) > 0 )
+        {
+        	char *tmp=clonestr(ptr);
+            if ( (argjson= cJSON_Parse(tmp)) != 0 )
+            {
+            	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson));
+                free_json(argjson);
+            }
+			if(tmp)
+				free(tmp);
+			if(ptr)
+            	nn_freemsg(ptr);
+        }
+          
+    }
+	
+}
 
 
