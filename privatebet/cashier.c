@@ -32,11 +32,11 @@ void BET_cashier_loop(void * _ptr)
     while ( flag )
     {
         
-        if ( cashier_info->subsock >= 0 && cashier_info->pushsock >= 0 )
+        if ( cashier_info->c_pubsock >= 0 && cashier_info->c_pullsock >= 0 )
         {
         		ptr=0;
 				char *tmp=NULL;
-	        	recvlen= nn_recv (cashier_info->subsock, &ptr, NN_MSG, 0);
+	        	recvlen= nn_recv (cashier_info->c_pubsock, &ptr, NN_MSG, 0);
 				if(recvlen>0)
 					tmp=clonestr(ptr);
                 if ((recvlen>0) && ((msgjson= cJSON_Parse(tmp)) != 0 ))
