@@ -137,10 +137,10 @@ int main(int argc, char **argv)
 		memset(bindaddr1,0x00,sizeof(bindaddr1));
 		
 		BET_transportname(0,bindaddr,"159.69.23.31",cashier_pushpull_port);
-		c_pushsock=BET_nanosock(1,bindaddr1,NN_PUSH);
+		c_pushsock=BET_nanosock(0,bindaddr1,NN_PUSH);
 
 		BET_transportname(0,bindaddr1,"159.69.23.31",cashier_pubsub_port);
-		c_subsock=BET_nanosock(1,bindaddr1,NN_SUB);
+		c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
 		
 		#endif				  
 		
@@ -211,10 +211,10 @@ int main(int argc, char **argv)
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
 			
 			BET_transportname(0,bindaddr,"159.69.23.31",cashier_pushpull_port);
-			c_pushsock=BET_nanosock(1,bindaddr1,NN_PUSH);
+			c_pushsock=BET_nanosock(0,bindaddr1,NN_PUSH);
 
 			BET_transportname(0,bindaddr1,"159.69.23.31",cashier_pubsub_port);
-			c_subsock=BET_nanosock(1,bindaddr1,NN_SUB);
+			c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
 	
 
 		#endif
@@ -279,10 +279,10 @@ int main(int argc, char **argv)
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
 			
 			BET_transportname(0,bindaddr,"159.69.23.31",cashier_pushpull_port);
-			c_pushsock=BET_nanosock(1,bindaddr1,NN_PUSH);
+			c_pushsock=BET_nanosock(0,bindaddr1,NN_PUSH);
 
 			BET_transportname(0,bindaddr1,"159.69.23.31",cashier_pubsub_port);
-			c_subsock=BET_nanosock(1,bindaddr1,NN_SUB);
+			c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
 	
 			
 			Player_VARS_global=calloc(1,sizeof(*Player_VARS_global));
