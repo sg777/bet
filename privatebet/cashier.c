@@ -15,7 +15,7 @@ void BET_check_notary_status()
 		printf("%s::%d::%s\n",__FUNCTION__,__LINE__,notariesIP[i]);
 	}
 
-	return retval;
+
 }
 
 int32_t BET_send_status(struct cashier *cashier_info)
