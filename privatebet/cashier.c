@@ -4,6 +4,19 @@
 struct cashier *cashier_info;
 
 char notariesIP[10][25]={"159.69.23.28","159.69.23.29","159.69.23.30","159.69.23.31"};
+int32_t no_of_notaries=4;
+
+void BET_check_notary_status()
+{
+	int32_t retval=1;
+
+	for(int i=0;i<no_of_notaries;i++)
+	{
+		printf("%s::%d::%s\n",__FUNCTION__,__LINE__,notariesIP[i]);
+	}
+
+	return retval;
+}
 
 int32_t BET_send_status(struct cashier *cashier_info)
 {
