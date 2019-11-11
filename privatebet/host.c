@@ -2976,9 +2976,17 @@ void BET_dcv_frontend_loop(void *_ptr)
 
 void BET_dcv_cashier_loop(void *_ptr)
 {
-	int32_t recvlen; cJSON *argjson=NULL; 
+	int32_t recvlen,bytes; cJSON *argjson=NULL; 
 	void *ptr=NULL; 
 	struct privatebet_info *bet = _ptr;
+
+	
+	cJSON *argjson1=cJSON_CreateObject();
+	cJSON_AddStringToObject(argjson1,"method","cashier");
+	
+	bytes=nn_send(bet->c_pushsock,cJSON_Print(argjson1),strlen(cJSON_Print(argjson1)),0);
+	if(bytes<0)
+		printf("\nThere is a problem in sending the data");
 
 		
 	while ( bet->c_pushsock >= 0 && bet->c_subsock >= 0 )
