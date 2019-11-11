@@ -722,9 +722,6 @@ void BET_bvv_cashier_loop(void *_ptr)
 	cJSON *argjson; 
 	void *ptr; 
 	struct privatebet_info *bet = _ptr; 
-	struct privatebet_vars *VARS;
-
-	VARS = calloc(1,sizeof(*VARS));
 
 	while ( bet->c_pushsock>= 0 && bet->c_subsock>= 0 )
     {
