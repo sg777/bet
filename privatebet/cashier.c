@@ -3,13 +3,32 @@
 
 struct cashier *cashier_info;
 
+char notariesIP[10][25]={"159.69.23.28","159.69.23.29","159.69.23.30","159.69.23.31"};
+
+int32_t BET_send_status(struct cashier *cashier_info)
+{
+	int32_t retval=1,bytes;
+	char *rendered=NULL;
+	cJSON *liveInfo=cJSON_CreateObject();
+
+	cJSON_AddStringToObject(liveInfo,"method","live");
+	bytes=nn_send(cashier_info->c_pubsock,cJSON_Print(liveInfo),strlen(cJSON_Print(liveInfo)),0);
+	if(bytes<0)
+		retval=-1;
+	
+	return retval;
+}
+
 int32_t BET_cashier_backend(cJSON *argjson,struct cashier *cashier_info)
 {
 	char *method=NULL;
 	int retval=1;
     if ( (method= jstr(argjson,"method")) != 0 )
     {
-    	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,method);
+    	if(strcmp(method,"live")==0)
+		{
+			retval=BET_send_status(cashier_info);
+		}
     }	
 	return retval;
 }
