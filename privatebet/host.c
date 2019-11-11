@@ -2983,7 +2983,8 @@ void BET_dcv_cashier_loop(void *_ptr)
 	
 	cJSON *argjson1=cJSON_CreateObject();
 	cJSON_AddStringToObject(argjson1,"method","cashier");
-	
+
+	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson1));
 	bytes=nn_send(bet->c_pushsock,cJSON_Print(argjson1),strlen(cJSON_Print(argjson1)),0);
 	if(bytes<0)
 		printf("\nThere is a problem in sending the data");
