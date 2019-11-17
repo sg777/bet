@@ -20,7 +20,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
-#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -49,7 +48,7 @@ char* BET_getIPAddress()
 {
 	
 	int fd;
-	 struct ifreq ifr;
+    struct ifreq ifr;
 	
 	 fd = socket(AF_INET, SOCK_DGRAM, 0);
 	
