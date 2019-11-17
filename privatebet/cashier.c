@@ -46,7 +46,6 @@ int32_t BET_cashier_backend(cJSON *argjson,struct cashier *cashier_info)
 	return retval;
 }
 
-#if 1
 void BET_cashier_loop(void * _ptr)
 {
 	int32_t recvlen=0,bytes; 
@@ -84,5 +83,20 @@ void BET_cashier_loop(void * _ptr)
         
     }
 }
+#if 0
+void BET_cashier_thread()
+{
+	char bindaddr[128],bindaddr1[128];
+	int32_t c_pushsock,c_subsock;
+	
+	memset(bindaddr,0x00,sizeof(bindaddr));
+	memset(bindaddr1,0x00,sizeof(bindaddr1));
+	
+	BET_transportname(0,bindaddr,"159.69.23.31",cashier_pushpull_port);
+	c_pushsock=BET_nanosock(0,bindaddr,NN_PUSH);
 
+	BET_transportname(0,bindaddr1,"159.69.23.31",cashier_pubsub_port);
+	c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
+		
+}
 #endif
