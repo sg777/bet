@@ -180,7 +180,9 @@ int main(int argc, char **argv)
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
 
 			strcpy(hostip,BET_getIPAddress());
-		
+			
+			printf("%s::%d::hostip::%s\n",__FUNCTION__,__LINE__,hostip);
+			
 			BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
 			c_pubsock= BET_nanosock(1,bindaddr,NN_PUB);
 			
