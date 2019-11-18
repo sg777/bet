@@ -13,27 +13,14 @@
  *                                                                            *
  ******************************************************************************/
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <netdb.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <sys/time.h>
-#include <stdlib.h>
-#include <memory.h>
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <stdarg.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <netinet/in.h>
-#include <net/if.h>
 #include <arpa/inet.h>
 
 
@@ -47,24 +34,20 @@
 char* BET_getIPAddress()
 {
 	
-	int fd;
-    struct ifreq ifr;
+	char host[256];
+	char *IP;
+	struct hostent *host_entry=NULL;
+	if(gethostname(host, sizeof(host))==-1)
+		goto end;
+
+	if((host_entry = gethostbyname(host))==NULL)
+		goto end;
 	
-	 fd = socket(AF_INET, SOCK_DGRAM, 0);
-	
-	 /* I want to get an IPv4 IP address */
-	 ifr.ifr_addr.sa_family = AF_INET;
-	
-	 /* I want IP address attached to "eth0" */
-	 strncpy(ifr.ifr_name, "eth0", IF_NAMESIZE-1);
-	
-	 ioctl(fd, SIOCGIFADDR, &ifr);
-	
-	 close(fd);
-	
-	 /* display result */
-	 printf("%s\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
-	 return (inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+	IP = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
+
+	printf("Host IP: %s\n", IP);
+	end:
+		return IP;
 }
 
 char *BET_transportname(int32_t bindflag,char *str,char *ipaddr,uint16_t port)
