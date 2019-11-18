@@ -240,10 +240,10 @@ int main(int argc, char **argv)
 			memset(bindaddr,0x00,sizeof(bindaddr));
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
 			
-			BET_transportname(0,bindaddr,"159.69.23.31",cashier_pushpull_port);
+			BET_transportname(0,bindaddr,"159.69.23.30",cashier_pushpull_port);
 			c_pushsock=BET_nanosock(0,bindaddr,NN_PUSH);
 
-			BET_transportname(0,bindaddr1,"159.69.23.31",cashier_pubsub_port);
+			BET_transportname(0,bindaddr1,"159.69.23.30",cashier_pubsub_port);
 			c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
 	
 
@@ -340,10 +340,10 @@ int main(int argc, char **argv)
 			memset(bindaddr,0x00,sizeof(bindaddr));
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
 			
-			BET_transportname(0,bindaddr,"159.69.23.31",cashier_pushpull_port);
+			BET_transportname(0,bindaddr,"159.69.23.30",cashier_pushpull_port);
 			c_pushsock=BET_nanosock(0,bindaddr,NN_PUSH);
 
-			BET_transportname(0,bindaddr1,"159.69.23.31",cashier_pubsub_port);
+			BET_transportname(0,bindaddr1,"159.69.23.30",cashier_pubsub_port);
 			c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
 	
 			
