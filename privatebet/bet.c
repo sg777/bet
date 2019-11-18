@@ -184,8 +184,8 @@ int main(int argc, char **argv)
 			memset(bindaddr,0x00,sizeof(bindaddr));
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
 
-			hostip=BET_getIPAddress();
-			
+			strcpy(hostip,BET_getIPAddress());
+		
 			BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
 			c_pubsock= BET_nanosock(1,bindaddr,NN_PUB);
 			
@@ -285,7 +285,7 @@ int main(int argc, char **argv)
 				memset(bindaddr,0x00,sizeof(bindaddr));
 				memset(bindaddr1,0x00,sizeof(bindaddr1));
 			
-				hostip=BET_getIPAddress();
+				strcpy(hostip,BET_getIPAddress());
 				
 				BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
 				c_pubsock= BET_nanosock(1,bindaddr,NN_PUB);
@@ -385,8 +385,7 @@ int main(int argc, char **argv)
 				memset(bindaddr,0x00,sizeof(bindaddr));
 				memset(bindaddr1,0x00,sizeof(bindaddr1));
 			
-				hostip=BET_getIPAddress();
-				
+				strcpy(hostip,BET_getIPAddress());
 				BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
 				c_pubsock= BET_nanosock(1,bindaddr,NN_PUB);
 				
