@@ -199,13 +199,14 @@ int main(int argc, char **argv)
 			}
 		#endif
 
-		
+		BET_check_notary_status();
+		/*
 	    if ( OS_thread_create(&dcv_cashier_t,NULL,(void *)BET_dcv_cashier_loop,(void *)BET_dcv) != 0 )
 	    {
 	        printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_dcv->c_subsock,BET_dcv->c_pushsock);
 	        exit(-1);
 	    }
-		
+		*/
 		if(pthread_join(dcv_backend_t,NULL))
 		{
 			printf("\nError in joining the main thread for bvvv");
@@ -215,12 +216,12 @@ int main(int argc, char **argv)
 		{
 			printf("\nError in joining the main thread for dcv");
 		}
-		
+		/*
        	if(pthread_join(dcv_cashier_t,NULL))
 		{
 			printf("\nError in joining the main thread for dcv");
 		}
-		
+		*/
 		if(pthread_join(cashier_t,NULL))
 		{
 		printf("\nError in joining the main thread for cashier");
@@ -302,7 +303,6 @@ int main(int argc, char **argv)
 				
 				
 			#endif
-			BET_check_notary_status();
 			if ( OS_thread_create(&bvv_cashier_t,NULL,(void *)BET_bvv_cashier_loop,(void *)BET_bvv) != 0 )
 			{
 				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_bvv->c_subsock,BET_bvv->c_pushsock);
