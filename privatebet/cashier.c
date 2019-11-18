@@ -32,6 +32,8 @@ void BET_check_notary_status()
 		cashier_info->c_subsock = c_subsock;
 		cashier_info->c_pushsock = c_pushsock;
 
+		printf("%s::%d::c_subsock::%d::c_pushsock::%d\n",__FUNCTION__,__LINE__,c_subsock,c_pushsock);
+		
 		if (OS_thread_create(&cashier_t[i],NULL,(void *)BET_cashier_client_loop,(void *)cashier_info) != 0 )
 		{
 			printf("\nerror in launching cashier");
