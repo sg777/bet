@@ -96,7 +96,7 @@ int main(int argc, char **argv)
 	pthread_t dcv_backend_t,dcv_frontend_t,dcv_cashier_t;
 	pthread_t bvv_backend_t,bvv_frontend_t,bvv_cashier_t;
 	pthread_t cashier_t;		
-
+	BET_getIPAddress();
 	/*	
 	char *msig="bQJTo8knsbSoU7k9oGADa6qfWGWyJtxC3o";
 	char *toaddress="bGmKoyJEz4ESuJCTjhVkgEb2Qkt8QuiQzQ";

@@ -12,6 +12,7 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
+#define _DEFAULT_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +46,6 @@ char* BET_getIPAddress()
 	
 	IP = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
 
-	printf("Host IP: %s\n", IP);
 	end:
 		return IP;
 }
