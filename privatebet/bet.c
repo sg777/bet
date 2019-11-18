@@ -173,11 +173,6 @@ int main(int argc, char **argv)
 	        exit(-1);
 	    }
 
-	    if ( OS_thread_create(&dcv_cashier_t,NULL,(void *)BET_dcv_cashier_loop,(void *)BET_dcv) != 0 )
-	    {
-	        printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_dcv->c_subsock,BET_dcv->c_pushsock);
-	        exit(-1);
-	    }
 
 		#if 1
 			memset(hostip,0x00,sizeof(hostip));
@@ -203,11 +198,14 @@ int main(int argc, char **argv)
 			}
 			
 			
-			if(pthread_join(cashier_t,NULL))
-			{
-			printf("\nError in joining the main thread for cashier");
-			}
 		#endif
+
+		
+	    if ( OS_thread_create(&dcv_cashier_t,NULL,(void *)BET_dcv_cashier_loop,(void *)BET_dcv) != 0 )
+	    {
+	        printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_dcv->c_subsock,BET_dcv->c_pushsock);
+	        exit(-1);
+	    }
 		
 		if(pthread_join(dcv_backend_t,NULL))
 		{
@@ -222,6 +220,11 @@ int main(int argc, char **argv)
        	if(pthread_join(dcv_cashier_t,NULL))
 		{
 			printf("\nError in joining the main thread for dcv");
+		}
+		
+		if(pthread_join(cashier_t,NULL))
+		{
+		printf("\nError in joining the main thread for cashier");
 		}
 	}
 	else if((argc==3)&&(strcmp(argv[1],"bvv")==0))
@@ -273,11 +276,6 @@ int main(int argc, char **argv)
 				exit(-1);
 			}
 
-			if ( OS_thread_create(&bvv_cashier_t,NULL,(void *)BET_bvv_cashier_loop,(void *)BET_bvv) != 0 )
-			{
-				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_bvv->c_subsock,BET_bvv->c_pushsock);
-				exit(-1);
-			}
 
 			
 			#if 1
@@ -304,12 +302,14 @@ int main(int argc, char **argv)
 				}
 				
 				
-				if(pthread_join(cashier_t,NULL))
-				{
-				printf("\nError in joining the main thread for cashier");
-				}
 			#endif
-					
+			
+			if ( OS_thread_create(&bvv_cashier_t,NULL,(void *)BET_bvv_cashier_loop,(void *)BET_bvv) != 0 )
+			{
+				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_bvv->c_subsock,BET_bvv->c_pushsock);
+				exit(-1);
+			}
+			
 			if(pthread_join(bvv_backend_t,NULL))
 			{
 				printf("\nError in joining the main thread for bvvv");
@@ -321,6 +321,11 @@ int main(int argc, char **argv)
 			if(pthread_join(bvv_cashier_t,NULL))
 			{
 				printf("\nError in joining the main thread for bvvv");
+			}
+			
+			if(pthread_join(cashier_t,NULL))
+			{
+			printf("\nError in joining the main thread for cashier");
 			}
 	}
 	else if((argc==3)&&(strcmp(argv[1],"player")==0)) 
@@ -372,12 +377,6 @@ int main(int argc, char **argv)
 			}
 
 			
-			if ( OS_thread_create(&player_cashier_t,NULL,(void *)BET_player_cashier_loop,(void *)BET_player_global) != 0 )
-			{
-				
-				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_player_global->c_subsock,BET_player_global->c_pushsock);
-				exit(-1);
-			}
 
 			
 			#if 1
@@ -403,11 +402,14 @@ int main(int argc, char **argv)
 				}
 				
 				
-				if(pthread_join(cashier_t,NULL))
-				{
-				printf("\nError in joining the main thread for cashier");
-				}
 			#endif
+			
+			if ( OS_thread_create(&player_cashier_t,NULL,(void *)BET_player_cashier_loop,(void *)BET_player_global) != 0 )
+			{
+				
+				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_player_global->c_subsock,BET_player_global->c_pushsock);
+				exit(-1);
+			}
 
 			if(pthread_join(player_backend_t,NULL))
 			{
@@ -425,6 +427,10 @@ int main(int argc, char **argv)
 				printf("\nError in joining the main thread for player %d",i);
 			}
 			
+			if(pthread_join(cashier_t,NULL))
+			{
+			printf("\nError in joining the main thread for cashier");
+			}
 	}
 	#if 1
 	else if(strcmp(argv[1],"cashier")==0)
