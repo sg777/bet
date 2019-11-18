@@ -178,7 +178,36 @@ int main(int argc, char **argv)
 	        printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_dcv->c_subsock,BET_dcv->c_pushsock);
 	        exit(-1);
 	    }
-				
+
+		#if 1
+			memset(hostip,0x00,sizeof(hostip));
+			memset(bindaddr,0x00,sizeof(bindaddr));
+			memset(bindaddr1,0x00,sizeof(bindaddr1));
+
+			hostip=BET_getIPAddress();
+			
+			BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
+			c_pubsock= BET_nanosock(1,bindaddr,NN_PUB);
+			
+			BET_transportname(0,bindaddr1,hostip,cashier_pushpull_port);
+			c_pullsock= BET_nanosock(1,bindaddr1,NN_PULL);
+			
+			cashier_info=calloc(1,sizeof(struct cashier));
+		
+		    cashier_info->c_pubsock = c_pubsock;
+		    cashier_info->c_pullsock = c_pullsock;
+		    if (OS_thread_create(&cashier_t,NULL,(void *)BET_cashier_loop,(void *)cashier_info) != 0 )
+			{
+				printf("\nerror in launching cashier");
+				exit(-1);
+			}
+			
+			
+			if(pthread_join(cashier_t,NULL))
+			{
+			printf("\nError in joining the main thread for cashier");
+			}
+		#endif
 		
 		if(pthread_join(dcv_backend_t,NULL))
 		{
@@ -249,8 +278,38 @@ int main(int argc, char **argv)
 				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_bvv->c_subsock,BET_bvv->c_pushsock);
 				exit(-1);
 			}
-	
+
 			
+			#if 1
+				memset(hostip,0x00,sizeof(hostip));
+				memset(bindaddr,0x00,sizeof(bindaddr));
+				memset(bindaddr1,0x00,sizeof(bindaddr1));
+			
+				hostip=BET_getIPAddress();
+				
+				BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
+				c_pubsock= BET_nanosock(1,bindaddr,NN_PUB);
+				
+				BET_transportname(0,bindaddr1,hostip,cashier_pushpull_port);
+				c_pullsock= BET_nanosock(1,bindaddr1,NN_PULL);
+				
+				cashier_info=calloc(1,sizeof(struct cashier));
+			
+				cashier_info->c_pubsock = c_pubsock;
+				cashier_info->c_pullsock = c_pullsock;
+				if (OS_thread_create(&cashier_t,NULL,(void *)BET_cashier_loop,(void *)cashier_info) != 0 )
+				{
+					printf("\nerror in launching cashier");
+					exit(-1);
+				}
+				
+				
+				if(pthread_join(cashier_t,NULL))
+				{
+				printf("\nError in joining the main thread for cashier");
+				}
+			#endif
+					
 			if(pthread_join(bvv_backend_t,NULL))
 			{
 				printf("\nError in joining the main thread for bvvv");
@@ -319,7 +378,38 @@ int main(int argc, char **argv)
 				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_player_global->c_subsock,BET_player_global->c_pushsock);
 				exit(-1);
 			}
+
 			
+			#if 1
+				memset(hostip,0x00,sizeof(hostip));
+				memset(bindaddr,0x00,sizeof(bindaddr));
+				memset(bindaddr1,0x00,sizeof(bindaddr1));
+			
+				hostip=BET_getIPAddress();
+				
+				BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
+				c_pubsock= BET_nanosock(1,bindaddr,NN_PUB);
+				
+				BET_transportname(0,bindaddr1,hostip,cashier_pushpull_port);
+				c_pullsock= BET_nanosock(1,bindaddr1,NN_PULL);
+				
+				cashier_info=calloc(1,sizeof(struct cashier));
+			
+				cashier_info->c_pubsock = c_pubsock;
+				cashier_info->c_pullsock = c_pullsock;
+				if (OS_thread_create(&cashier_t,NULL,(void *)BET_cashier_loop,(void *)cashier_info) != 0 )
+				{
+					printf("\nerror in launching cashier");
+					exit(-1);
+				}
+				
+				
+				if(pthread_join(cashier_t,NULL))
+				{
+				printf("\nError in joining the main thread for cashier");
+				}
+			#endif
+
 			if(pthread_join(player_backend_t,NULL))
 			{
 			printf("\nError in joining the main thread for player");

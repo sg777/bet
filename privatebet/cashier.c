@@ -53,6 +53,7 @@ void BET_cashier_loop(void * _ptr)
 	cJSON *msgjson=NULL; struct cashier* cashier_info= _ptr;
     uint8_t flag=1;
 
+	printf("cashier server node started\n");
 	
     while ( flag )
     {
