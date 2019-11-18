@@ -1,5 +1,6 @@
 #include "bet.h"
 #include "cashier.h"
+#include "network.h"
 
 struct cashier *cashier_info;
 
@@ -8,13 +9,38 @@ int32_t no_of_notaries=4;
 
 void BET_check_notary_status()
 {
-	int32_t retval=1;
-
+	int32_t c_subsock,c_pushsock,retval=1;
+	
+    uint16_t port = 7797+1,cashier_pushpull_port=7901,cashier_pubsub_port=7902;
+    char bindaddr[128]/*="ipc:///tmp/bet.ipc"*/,bindaddr1[128]/*="ipc:///tmp/bet1.ipc"*/,hostip[20]; 
+	pthread_t cashier_t[4];
+	struct cashier *cashier_info;
+	cashier_info=calloc(1,sizeof(struct cashier));
+		
 	for(int i=0;i<no_of_notaries;i++)
 	{
-		printf("%s::%d::%s\n",__FUNCTION__,__LINE__,notariesIP[i]);
-	}
+		memset(cashier_info,0x00,sizeof(struct cashier));
 
+		BET_transportname(0,bindaddr,notariesIP[i],cashier_pubsub_port);
+		c_subsock= BET_nanosock(1,bindaddr,NN_PUB);
+		
+		BET_transportname(0,bindaddr1,notariesIP[i],cashier_pushpull_port);
+		c_pushsock= BET_nanosock(1,bindaddr1,NN_PULL);
+
+		cashier_info=calloc(1,sizeof(struct cashier));
+		
+		cashier_info->c_subsock = c_subsock;
+		cashier_info->c_pushsock = c_pushsock;
+
+		if (OS_thread_create(&cashier_t[i],NULL,(void *)BET_cashier_client_loop,(void *)cashier_info) != 0 )
+		{
+			printf("\nerror in launching cashier");
+			exit(-1);
+		}
+		
+	}
+	
+	
 
 }
 
@@ -45,6 +71,44 @@ int32_t BET_cashier_backend(cJSON *argjson,struct cashier *cashier_info)
     }	
 	return retval;
 }
+
+
+
+void BET_cashier_client_loop(void * _ptr)
+{
+	int32_t recvlen=0,bytes; 
+	void *ptr=NULL; 
+	cJSON *argjson=NULL; struct cashier* cashier_info= _ptr;
+	cJSON *argjson1=NULL;
+
+	argjson1=cJSON_CreateObject();
+	cJSON_AddStringToObject(argjson1,"method","live");
+
+	bytes=nn_send(cashier_info->c_pushsock,cJSON_Print(argjson1),strlen(cJSON_Print(argjson1)),0);
+	if(bytes<0)
+		printf("%s::%d::There is a problem in sending data\n",__FUNCTION__,__LINE__);
+	
+	while ( cashier_info->c_pushsock>= 0 && cashier_info->c_subsock>= 0 )
+    {
+		ptr=0;
+        if ( (recvlen= nn_recv(cashier_info->c_subsock,&ptr,NN_MSG,0)) > 0 )
+        {
+
+		  	char *tmp=clonestr(ptr);
+            if ( (argjson= cJSON_Parse(tmp)) != 0 )
+            {
+            	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson));
+                free_json(argjson);
+            }
+			if(tmp)
+				free(tmp);
+			if(ptr)
+            	nn_freemsg(ptr);
+        }
+
+    }
+}
+
 
 void BET_cashier_loop(void * _ptr)
 {
@@ -84,20 +148,3 @@ void BET_cashier_loop(void * _ptr)
         
     }
 }
-#if 0
-void BET_cashier_thread()
-{
-	char bindaddr[128],bindaddr1[128];
-	int32_t c_pushsock,c_subsock;
-	
-	memset(bindaddr,0x00,sizeof(bindaddr));
-	memset(bindaddr1,0x00,sizeof(bindaddr1));
-	
-	BET_transportname(0,bindaddr,"159.69.23.31",cashier_pushpull_port);
-	c_pushsock=BET_nanosock(0,bindaddr,NN_PUSH);
-
-	BET_transportname(0,bindaddr1,"159.69.23.31",cashier_pubsub_port);
-	c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
-		
-}
-#endif

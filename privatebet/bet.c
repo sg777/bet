@@ -181,7 +181,6 @@ int main(int argc, char **argv)
 
 			strcpy(hostip,BET_getIPAddress());
 			
-			printf("%s::%d::hostip::%s\n",__FUNCTION__,__LINE__,hostip);
 			
 			BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
 			c_pubsock= BET_nanosock(1,bindaddr,NN_PUB);
@@ -198,8 +197,6 @@ int main(int argc, char **argv)
 				printf("\nerror in launching cashier");
 				exit(-1);
 			}
-			
-			
 		#endif
 
 		
@@ -305,7 +302,7 @@ int main(int argc, char **argv)
 				
 				
 			#endif
-			
+			BET_check_notary_status();
 			if ( OS_thread_create(&bvv_cashier_t,NULL,(void *)BET_bvv_cashier_loop,(void *)BET_bvv) != 0 )
 			{
 				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_bvv->c_subsock,BET_bvv->c_pushsock);
