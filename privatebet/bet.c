@@ -134,12 +134,16 @@ int main(int argc, char **argv)
 
 		memset(bindaddr,0x00,sizeof(bindaddr));
 		memset(bindaddr1,0x00,sizeof(bindaddr1));
+
 		
-		BET_transportname(0,bindaddr,"159.69.23.30",cashier_pushpull_port);
+		BET_transportname(0,bindaddr,BET_getIPAddress(),cashier_pushpull_port);
 		c_pushsock=BET_nanosock(0,bindaddr,NN_PUSH);
 
-		BET_transportname(0,bindaddr1,"159.69.23.30",cashier_pubsub_port);
+		BET_transportname(0,bindaddr1,BET_getIPAddress(),cashier_pubsub_port);
 		c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
+
+		printf("%s::%d::%s::%s\n",__FUNCTION__,__LINE__,bindaddr,bindaddr1);
+		
 		#endif				  
 		
 	
@@ -199,7 +203,7 @@ int main(int argc, char **argv)
 			}
 		#endif
 
-		BET_check_notary_status();
+		//BET_check_notary_status();
 		/*
 	    if ( OS_thread_create(&dcv_cashier_t,NULL,(void *)BET_dcv_cashier_loop,(void *)BET_dcv) != 0 )
 	    {
