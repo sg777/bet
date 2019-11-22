@@ -142,7 +142,6 @@ int main(int argc, char **argv)
 		BET_transportname(0,bindaddr1,BET_getIPAddress(),cashier_pubsub_port);
 		c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
 
-		printf("%s::%d::%s::%s\n",__FUNCTION__,__LINE__,bindaddr,bindaddr1);
 		
 		#endif				  
 		
@@ -178,7 +177,7 @@ int main(int argc, char **argv)
 	    }
 
 
-		#if 1
+		#if 0
 			memset(hostip,0x00,sizeof(hostip));
 			memset(bindaddr,0x00,sizeof(bindaddr));
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
@@ -225,15 +224,15 @@ int main(int argc, char **argv)
 		{
 			printf("\nError in joining the main thread for dcv");
 		}
-		*/
+		
 		if(pthread_join(cashier_t,NULL))
 		{
 		printf("\nError in joining the main thread for cashier");
 		}
+		*/
 	}
 	else if((argc==3)&&(strcmp(argv[1],"bvv")==0))
 	{
-		#if 1
 			/* This code is for sockets*/
 			BET_transportname(0,bindaddr,hostip,port);
 		    subsock= BET_nanosock(0,bindaddr,NN_SUB);
@@ -244,15 +243,13 @@ int main(int argc, char **argv)
 			memset(bindaddr,0x00,sizeof(bindaddr));
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
 			
-			BET_transportname(0,bindaddr,"159.69.23.30",cashier_pushpull_port);
+			BET_transportname(0,bindaddr,BET_getIPAddress(),cashier_pushpull_port);
 			c_pushsock=BET_nanosock(0,bindaddr,NN_PUSH);
 
-			BET_transportname(0,bindaddr1,"159.69.23.30",cashier_pubsub_port);
+			BET_transportname(0,bindaddr1,BET_getIPAddress(),cashier_pubsub_port);
 			c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
 	
 
-		#endif
-		#if 1
             BVV_VARS = calloc(1,sizeof(*BVV_VARS));
 			BET_bvv=calloc(1,sizeof(struct privatebet_info));
 		    BET_bvv->subsock = subsock;
@@ -266,7 +263,7 @@ int main(int argc, char **argv)
 			BET_bvv->numplayers=numplayers;
 			BET_bvv->myplayerid=-1;
 		    BET_betinfo_set(BET_bvv,"demo",range,0,Maxplayers);
-		#endif
+
 			
 		    if ( OS_thread_create(&bvv_backend_t,NULL,(void *)BET_bvv_backend_loop,(void *)BET_bvv) != 0 )
 		    {
@@ -282,7 +279,7 @@ int main(int argc, char **argv)
 
 
 			
-			#if 1
+			#if 0
 				memset(hostip,0x00,sizeof(hostip));
 				memset(bindaddr,0x00,sizeof(bindaddr));
 				memset(bindaddr1,0x00,sizeof(bindaddr1));
@@ -307,12 +304,13 @@ int main(int argc, char **argv)
 				
 				
 			#endif
+			/*
 			if ( OS_thread_create(&bvv_cashier_t,NULL,(void *)BET_bvv_cashier_loop,(void *)BET_bvv) != 0 )
 			{
 				printf("error launching BET_hostloop for pub.%d pull.%d\n",BET_bvv->c_subsock,BET_bvv->c_pushsock);
 				exit(-1);
 			}
-			
+			*/
 			if(pthread_join(bvv_backend_t,NULL))
 			{
 				printf("\nError in joining the main thread for bvvv");
@@ -321,6 +319,7 @@ int main(int argc, char **argv)
 			{
 				printf("\nError in joining the main thread for bvvv");
 			}
+			/*
 			if(pthread_join(bvv_cashier_t,NULL))
 			{
 				printf("\nError in joining the main thread for bvvv");
@@ -330,6 +329,7 @@ int main(int argc, char **argv)
 			{
 			printf("\nError in joining the main thread for cashier");
 			}
+			*/
 	}
 	else if((argc==3)&&(strcmp(argv[1],"player")==0)) 
 	{
@@ -343,10 +343,10 @@ int main(int argc, char **argv)
 			memset(bindaddr,0x00,sizeof(bindaddr));
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
 			
-			BET_transportname(0,bindaddr,"159.69.23.30",cashier_pushpull_port);
+			BET_transportname(0,bindaddr,BET_getIPAddress(),cashier_pushpull_port);
 			c_pushsock=BET_nanosock(0,bindaddr,NN_PUSH);
 
-			BET_transportname(0,bindaddr1,"159.69.23.30",cashier_pubsub_port);
+			BET_transportname(0,bindaddr1,BET_getIPAddress(),cashier_pubsub_port);
 			c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
 	
 			
@@ -380,9 +380,7 @@ int main(int argc, char **argv)
 			}
 
 			
-
-			
-			#if 1
+			#if 0
 				memset(hostip,0x00,sizeof(hostip));
 				memset(bindaddr,0x00,sizeof(bindaddr));
 				memset(bindaddr1,0x00,sizeof(bindaddr1));
@@ -424,7 +422,7 @@ int main(int argc, char **argv)
 			{
 				printf("\nError in joining the main thread for player %d",i);
 			}
-
+			/*
 			if(pthread_join(player_cashier_t,NULL))
 			{
 				printf("\nError in joining the main thread for player %d",i);
@@ -434,6 +432,7 @@ int main(int argc, char **argv)
 			{
 			printf("\nError in joining the main thread for cashier");
 			}
+			*/
 	}
 	#if 1
 	else if(strcmp(argv[1],"cashier")==0)
