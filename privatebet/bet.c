@@ -123,8 +123,6 @@ int main(int argc, char **argv)
 	if((argc>=2)&&(strcmp(argv[1],"dcv")==0))
 	{
 		
-		#if 1
-		/* This code is for sockets*/
 		
 		BET_transportname(0,bindaddr,hostip,port);
 		pubsock = BET_nanosock(1,bindaddr,NN_PUB);
@@ -132,28 +130,12 @@ int main(int argc, char **argv)
 		BET_transportname(0,bindaddr1,hostip,port+1);
 		pullsock = BET_nanosock(1,bindaddr1,NN_PULL);
 
-		memset(bindaddr,0x00,sizeof(bindaddr));
-		memset(bindaddr1,0x00,sizeof(bindaddr1));
-
-		
-		BET_transportname(0,bindaddr,BET_getIPAddress(),cashier_pushpull_port);
-		c_pushsock=BET_nanosock(0,bindaddr,NN_PUSH);
-
-		BET_transportname(0,bindaddr1,BET_getIPAddress(),cashier_pubsub_port);
-		c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
-
-		
-		#endif				  
-		
-	
 		BET_dcv=calloc(1,sizeof(struct privatebet_info));
 		DCV_VARS = calloc(1,sizeof(struct privatebet_vars));
 
+		
 	    BET_dcv->pubsock = pubsock;
 	    BET_dcv->pullsock = pullsock;
-		BET_dcv->c_pushsock = c_pushsock;
-		BET_dcv->c_subsock = c_subsock;
-
 		
 	    BET_dcv->maxplayers = (Maxplayers < CARDS777_MAXPLAYERS) ? Maxplayers : CARDS777_MAXPLAYERS;
 	    BET_dcv->maxchips = CARDS777_MAXCHIPS;
@@ -227,22 +209,10 @@ int main(int argc, char **argv)
 		    BET_transportname(0,bindaddr1,hostip,port+1);
 		    pushsock = BET_nanosock(0,bindaddr1,NN_PUSH);
 
-			memset(bindaddr,0x00,sizeof(bindaddr));
-			memset(bindaddr1,0x00,sizeof(bindaddr1));
-			
-			BET_transportname(0,bindaddr,BET_getIPAddress(),cashier_pushpull_port);
-			c_pushsock=BET_nanosock(0,bindaddr,NN_PUSH);
-
-			BET_transportname(0,bindaddr1,BET_getIPAddress(),cashier_pubsub_port);
-			c_subsock=BET_nanosock(0,bindaddr1,NN_SUB);
-	
-
             BVV_VARS = calloc(1,sizeof(*BVV_VARS));
 			BET_bvv=calloc(1,sizeof(struct privatebet_info));
 		    BET_bvv->subsock = subsock;
 		    BET_bvv->pushsock = pushsock;
-			BET_bvv->c_subsock=c_subsock;
-			BET_bvv->c_pushsock=c_pushsock;
 
 			BET_bvv->maxplayers = (Maxplayers < CARDS777_MAXPLAYERS) ? Maxplayers : CARDS777_MAXPLAYERS;
 		    BET_bvv->maxchips = CARDS777_MAXCHIPS;
@@ -313,24 +283,11 @@ int main(int argc, char **argv)
 			BET_transportname(0,bindaddr1,hostip,port+1);
 			pushsock = BET_nanosock(0,bindaddr1,NN_PUSH);
 
-
-			memset(bindaddr,0x00,sizeof(bindaddr));
-			memset(bindaddr1,0x00,sizeof(bindaddr1));
-			
-			BET_transportname(0,bindaddr,BET_getIPAddress(),cashier_pushpull_port);
-			c_pushsock=BET_nanosock(0,bindaddr,NN_PULL);
-
-			BET_transportname(0,bindaddr1,BET_getIPAddress(),cashier_pubsub_port);
-			c_subsock=BET_nanosock(0,bindaddr1,NN_PUB);
-	
-			
 			Player_VARS_global=calloc(1,sizeof(*Player_VARS_global));
 			
 			BET_player_global=calloc(1,sizeof(struct privatebet_info));
 			BET_player_global->subsock = subsock;
 		    BET_player_global->pushsock = pushsock;
-			BET_player_global->c_subsock = c_subsock;
-		    BET_player_global->c_pushsock = c_pushsock;
 
 			
 		    BET_player_global->maxplayers = (Maxplayers < CARDS777_MAXPLAYERS) ? Maxplayers : CARDS777_MAXPLAYERS;
