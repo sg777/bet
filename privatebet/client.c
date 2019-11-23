@@ -2339,39 +2339,6 @@ void BET_player_backend_loop(void * _ptr)
 }
 
 
-void BET_player_cashier_loop(void * _ptr)
-{
-	int32_t recvlen=0; 
-	void *ptr=NULL; 
-	cJSON *msgjson=NULL; struct privatebet_info *bet = _ptr;
-    uint8_t flag=1;
-
-	
-    while ( flag )
-    {
-        
-        if ( bet->c_subsock >= 0 && bet->c_pushsock >= 0 )
-        {
-        		ptr=0;
-				char *tmp=NULL;
-	        	recvlen= nn_recv (bet->c_subsock, &ptr, NN_MSG, 0);
-				if(recvlen>0)
-					tmp=clonestr(ptr);
-                if ((recvlen>0) && ((msgjson= cJSON_Parse(tmp)) != 0 ))
-                {
-                	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(msgjson));
-                    if(tmp)
-						free(tmp);
-					if(ptr)
-						nn_freemsg(ptr);
-					
-                }
-                
-        }
-        
-    }
-}
-
 /*
 The below API's are relate to BVV and Player functionalities
 */
