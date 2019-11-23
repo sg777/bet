@@ -78,18 +78,13 @@ int32_t BET_cashier_backend(cJSON *argjson,struct cashier *cashier_info)
 
 void BET_cashier_client_loop(void * _ptr)
 {
+	
 	int32_t recvlen=0,bytes; 
 	void *ptr=NULL; 
 	cJSON *argjson=NULL; struct cashier* cashier_info= _ptr;
-	cJSON *argjson1=NULL;
 
-	argjson1=cJSON_CreateObject();
-	cJSON_AddStringToObject(argjson1,"method","live");
-
-	bytes=nn_send(cashier_info->c_pushsock,cJSON_Print(argjson1),strlen(cJSON_Print(argjson1)),0);
-	if(bytes<0)
-		printf("%s::%d::There is a problem in sending data\n",__FUNCTION__,__LINE__);
-	
+	printf("%s::%d::cashier client started\n",__FUNCTION__,__LINE__);
+		
 	while ( cashier_info->c_pushsock>= 0 && cashier_info->c_subsock>= 0 )
     {
 		ptr=0;
@@ -112,7 +107,7 @@ void BET_cashier_client_loop(void * _ptr)
 }
 
 
-void BET_cashier_loop(void * _ptr)
+void BET_cashier_server_loop(void * _ptr)
 {
 	int32_t recvlen=0,bytes; 
 	void *ptr=NULL; 
