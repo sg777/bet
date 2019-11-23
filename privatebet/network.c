@@ -36,9 +36,6 @@
 char* BET_getIPAddress()
 {
 	
-	char host[256];
-	char *IP;
-	struct hostent *host_entry=NULL;
 	struct ifreq ifr;
 	int fd;
 	unsigned char ip_address[15];
@@ -48,22 +45,8 @@ char* BET_getIPAddress()
 	memcpy(ifr.ifr_name, "eth0", IFNAMSIZ-1);
 	ioctl(fd, SIOCGIFADDR, &ifr);
 	close(fd);
-	   strcpy(ip_address,inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
-	        
-	       printf("System IP Address is: %s\n",ip_address);
-	  return (inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));     
-	#if 0
-	if(gethostname(host, sizeof(host))==-1)
-		goto end;
-
-	if((host_entry = gethostbyname(host))==NULL)
-		goto end;
-	
-	IP = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
-
-	end:
-		return IP;
-	#endif	
+	strcpy(ip_address,inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+	return (inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));     
 }
 
 char *BET_transportname(int32_t bindflag,char *str,char *ipaddr,uint16_t port)
