@@ -177,7 +177,7 @@ int main(int argc, char **argv)
 	    }
 
 
-		#if 0
+		#if 1
 			memset(hostip,0x00,sizeof(hostip));
 			memset(bindaddr,0x00,sizeof(bindaddr));
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
@@ -224,12 +224,12 @@ int main(int argc, char **argv)
 		{
 			printf("\nError in joining the main thread for dcv");
 		}
-		
+		*/
 		if(pthread_join(cashier_t,NULL))
 		{
 		printf("\nError in joining the main thread for cashier");
 		}
-		*/
+		
 	}
 	else if((argc==3)&&(strcmp(argv[1],"bvv")==0))
 	{
@@ -279,7 +279,7 @@ int main(int argc, char **argv)
 
 
 			
-			#if 0
+			#if 1
 				memset(hostip,0x00,sizeof(hostip));
 				memset(bindaddr,0x00,sizeof(bindaddr));
 				memset(bindaddr1,0x00,sizeof(bindaddr1));
@@ -324,12 +324,12 @@ int main(int argc, char **argv)
 			{
 				printf("\nError in joining the main thread for bvvv");
 			}
-			
+			*/
 			if(pthread_join(cashier_t,NULL))
 			{
 			printf("\nError in joining the main thread for cashier");
 			}
-			*/
+			
 	}
 	else if((argc==3)&&(strcmp(argv[1],"player")==0)) 
 	{
@@ -380,7 +380,7 @@ int main(int argc, char **argv)
 			}
 
 			
-			#if 0
+			#if 1
 				memset(hostip,0x00,sizeof(hostip));
 				memset(bindaddr,0x00,sizeof(bindaddr));
 				memset(bindaddr1,0x00,sizeof(bindaddr1));
@@ -427,18 +427,18 @@ int main(int argc, char **argv)
 			{
 				printf("\nError in joining the main thread for player %d",i);
 			}
-			
+			*/
 			if(pthread_join(cashier_t,NULL))
 			{
 			printf("\nError in joining the main thread for cashier");
 			}
-			*/
+			
 	}
 	#if 1
 	else if(strcmp(argv[1],"cashier")==0)
 	{
 		
-		
+		strcpy(hostip,BET_getIPAddress());
 		BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
 		c_pubsock= BET_nanosock(1,bindaddr,NN_PUB);
 		
