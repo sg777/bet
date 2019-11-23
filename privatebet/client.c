@@ -715,45 +715,6 @@ int32_t BET_bvv_backend(cJSON *argjson,struct privatebet_info *bet,struct privat
 }
 
 
-
-void BET_bvv_cashier_loop(void *_ptr)
-{
-	int32_t recvlen,bytes; 
-	cJSON *argjson; 
-	void *ptr; 
-	struct privatebet_info *bet = _ptr; 
-
-	cJSON *argjson1=cJSON_CreateObject();
-	cJSON_AddStringToObject(argjson1,"method","cashier");
-
-	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson1));
-	bytes=nn_send(bet->c_pushsock,cJSON_Print(argjson1),strlen(cJSON_Print(argjson1)),0);
-	if(bytes<0)
-		printf("\nThere is a problem in sending the data");
-		
-
-	while ( bet->c_pushsock>= 0 && bet->c_subsock>= 0 )
-    {
-		ptr=0;
-        if ( (recvlen= nn_recv(bet->c_subsock,&ptr,NN_MSG,0)) > 0 )
-        {
-
-		  	char *tmp=clonestr(ptr);
-            if ( (argjson= cJSON_Parse(tmp)) != 0 )
-            {
-            	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson));
-                free_json(argjson);
-            }
-			if(tmp)
-				free(tmp);
-			if(ptr)
-            	nn_freemsg(ptr);
-        }
-
-    }
-}
-
-
 bits256 BET_p2p_decode_card(cJSON *argjson,struct privatebet_info *bet,struct privatebet_vars *vars,int32_t cardid)
 {
 	int32_t numplayers,M,flag=0;

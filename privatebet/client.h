@@ -85,7 +85,6 @@ void LN_connect_to_channel(char *id);
 void LN_connect(char *id);
 
 
-void BET_bvv_cashier_loop(void *_ptr);
 
 
 
