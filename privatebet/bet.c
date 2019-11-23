@@ -317,6 +317,8 @@ int main(int argc, char **argv)
 				memset(bindaddr1,0x00,sizeof(bindaddr1));
 			
 				strcpy(hostip,BET_getIPAddress());
+				printf("hostip::%s\n",hostip);
+				
 				BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
 				c_pubsock= BET_nanosock(0,bindaddr,NN_SUB);
 				

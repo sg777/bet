@@ -83,7 +83,7 @@ void BET_cashier_client_loop(void * _ptr)
 	void *ptr=NULL; 
 	cJSON *argjson=NULL; struct cashier* cashier_info= _ptr;
 
-	printf("%s::%d::cashier client started\n",__FUNCTION__,__LINE__);
+	printf("\n%s::%d::cashier client started\n",__FUNCTION__,__LINE__);
 		
 	while ( cashier_info->c_pushsock>= 0 && cashier_info->c_subsock>= 0 )
     {
