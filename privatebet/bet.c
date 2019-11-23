@@ -168,10 +168,10 @@ int main(int argc, char **argv)
 			
 			
 			BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
-			c_subsock= BET_nanosock(1,bindaddr,NN_SUB);
+			c_subsock= BET_nanosock(0,bindaddr,NN_SUB);
 			
 			BET_transportname(0,bindaddr1,hostip,cashier_pushpull_port);
-			c_pushsock= BET_nanosock(1,bindaddr1,NN_PUSH);
+			c_pushsock= BET_nanosock(0,bindaddr1,NN_PUSH);
 			
 			cashier_info=calloc(1,sizeof(struct cashier));
 		
@@ -244,10 +244,10 @@ int main(int argc, char **argv)
 				strcpy(hostip,BET_getIPAddress());
 				
 				BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
-				c_pubsock= BET_nanosock(1,bindaddr,NN_SUB);
+				c_pubsock= BET_nanosock(0,bindaddr,NN_SUB);
 				
 				BET_transportname(0,bindaddr1,hostip,cashier_pushpull_port);
-				c_pullsock= BET_nanosock(1,bindaddr1,NN_PUSH);
+				c_pullsock= BET_nanosock(0,bindaddr1,NN_PUSH);
 				
 				cashier_info=calloc(1,sizeof(struct cashier));
 			
@@ -318,10 +318,10 @@ int main(int argc, char **argv)
 			
 				strcpy(hostip,BET_getIPAddress());
 				BET_transportname(0,bindaddr,hostip,cashier_pubsub_port);
-				c_pubsock= BET_nanosock(1,bindaddr,NN_SUB);
+				c_pubsock= BET_nanosock(0,bindaddr,NN_SUB);
 				
 				BET_transportname(0,bindaddr1,hostip,cashier_pushpull_port);
-				c_pullsock= BET_nanosock(1,bindaddr1,NN_PUSH);
+				c_pullsock= BET_nanosock(0,bindaddr1,NN_PUSH);
 				
 				cashier_info=calloc(1,sizeof(struct cashier));
 			
