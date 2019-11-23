@@ -23,7 +23,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+#include <net/if.h>
+#include <sys/ioctl.h>
 
 #include "bet.h"
 #include "common.h"
@@ -38,6 +39,20 @@ char* BET_getIPAddress()
 	char host[256];
 	char *IP;
 	struct hostent *host_entry=NULL;
+	struct ifreq ifr;
+	int fd;
+	unsigned char ip_address[15];
+
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	ifr.ifr_addr.sa_family = AF_INET;
+	memcpy(ifr.ifr_name, "eth0", IFNAMSIZ-1);
+	ioctl(fd, SIOCGIFADDR, &ifr);
+	close(fd);
+	   strcpy(ip_address,inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+	        
+	       printf("System IP Address is: %s\n",ip_address);
+	  return (inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));     
+	#if 0
 	if(gethostname(host, sizeof(host))==-1)
 		goto end;
 
@@ -48,6 +63,7 @@ char* BET_getIPAddress()
 
 	end:
 		return IP;
+	#endif	
 }
 
 char *BET_transportname(int32_t bindflag,char *str,char *ipaddr,uint16_t port)
