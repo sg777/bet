@@ -22,10 +22,10 @@ void BET_check_notary_status()
 		memset(cashier_info,0x00,sizeof(struct cashier));
 
 		BET_transportname(0,bindaddr,notariesIP[i],cashier_pubsub_port);
-		c_subsock= BET_nanosock(1,bindaddr,NN_SUB);
+		c_subsock= BET_nanosock(0,bindaddr,NN_SUB);
 		
 		BET_transportname(0,bindaddr1,notariesIP[i],cashier_pushpull_port);
-		c_pushsock= BET_nanosock(1,bindaddr1,NN_PUSH);
+		c_pushsock= BET_nanosock(0,bindaddr1,NN_PUSH);
 
 		cashier_info=calloc(1,sizeof(struct cashier));
 		
