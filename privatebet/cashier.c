@@ -17,10 +17,10 @@ void BET_check_notary_status()
 	pthread_t cashier_t[4];
 	struct cashier *cashier_info;
 	cashier_info=calloc(1,sizeof(struct cashier));
-	printf("%s::%d::active notaries::%d\n",__FUNCTION__,__LINE__,live_notaries);
-	
+
 	for(int i=0;i<no_of_notaries;i++)
 	{
+		int temp=live_notaries;
 		memset(cashier_info,0x00,sizeof(struct cashier));
 
 		BET_transportname(0,bindaddr,notariesIP[i],cashier_pubsub_port);
@@ -34,9 +34,7 @@ void BET_check_notary_status()
 		cashier_info->c_subsock = c_subsock;
 		cashier_info->c_pushsock = c_pushsock;
 
-		printf("%s::%d::c_subsock::%d::c_pushsock::%d\n",__FUNCTION__,__LINE__,c_subsock,c_pushsock);
-		
-		if (OS_thread_create(&cashier_t[i],NULL,(void *)BET_cashier_client_loop,(void *)cashier_info) != 0 )
+		if (OS_thread_create(&cashier_t[i],NULL,(void *)BET_cashier_status_loop,(void *)cashier_info) != 0 )
 		{
 			printf("\nerror in launching cashier");
 			exit(-1);
@@ -46,8 +44,12 @@ void BET_check_notary_status()
 		{
 		printf("\nError in joining the main thread for cashier");
 		}
+		
+		if(temp==live_notaries)
+			printf("%s::%d::Notary ::%s is not live\n",__FUNCTION__,__LINE__,notariesIP[i]);
+		else
+			printf("%s::%d::Notary ::%s is live\n",__FUNCTION__,__LINE__,notariesIP[i]);
 	}
-	printf("%s::%d::active notaries::%d\n",__FUNCTION__,__LINE__,live_notaries);
 }
 
 int32_t BET_send_status(struct cashier *cashier_info)
@@ -80,9 +82,24 @@ int32_t BET_cashier_backend(cJSON *argjson,struct cashier *cashier_info)
 	return retval;
 }
 
+int32_t BET_cashier_client_backend(cJSON *argjson,struct cashier *cashier_info)
+{
+	char *method=NULL;
+	int retval=1;
+	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson));
+    if ( (method= jstr(argjson,"method")) != 0 )
+    {
+    	if(strcmp(method,"live")==0)
+		{
+			retval=BET_send_status(cashier_info);
+		}
+    }	
+	return retval;
+}
 
 
-void BET_cashier_client_loop(void * _ptr)
+
+void BET_cashier_status_loop(void * _ptr)
 {
 	
 	int32_t recvlen=0,bytes; 
@@ -96,7 +113,7 @@ void BET_cashier_client_loop(void * _ptr)
 	bytes=nn_send(cashier_info->c_pushsock,cJSON_Print(liveInfo),strlen(cJSON_Print(liveInfo)),0);
 
 	if(bytes<0)
-		printf("\nThere is a problem in sending data::%s::%d\n",__FUNCTION__,__LINE__);
+		goto end;
 	
 
 	while ( cashier_info->c_pushsock>= 0 && cashier_info->c_subsock>= 0 )
@@ -122,6 +139,46 @@ void BET_cashier_client_loop(void * _ptr)
         }
 
     }
+	end:
+		printf("\nThere is a problem in sending data::%s::%d\n",__FUNCTION__,__LINE__);
+}
+
+
+void BET_cashier_client_loop(void * _ptr)
+{
+	
+	int32_t recvlen=0,bytes; 
+	void *ptr=NULL; 
+	cJSON *argjson=NULL; struct cashier* cashier_info= _ptr;
+
+	printf("%s::%d::cahsier client started\n",__FUNCTION__,__LINE__);	
+
+	while ( cashier_info->c_pushsock>= 0 && cashier_info->c_subsock>= 0 )
+    {
+		ptr=0;
+        if ( (recvlen= nn_recv(cashier_info->c_subsock,&ptr,NN_MSG,0)) > 0 )
+        {
+
+		  	char *tmp=clonestr(ptr);
+            if ( (argjson= cJSON_Parse(tmp)) != 0 )
+            {
+                if ( BET_cashier_client_backend(argjson,cashier_info) < 0 )
+                {
+                	printf("\nFAILURE\n");
+                	// do something here, possibly this could be because unknown commnad or because of encountering a special case which state machine fails to handle
+                }           
+  				
+				free_json(argjson);
+            }
+			if(tmp)
+				free(tmp);
+			if(ptr)
+            	nn_freemsg(ptr);
+        }
+
+    }
+	end:
+		printf("\nThere is a problem in sending data::%s::%d\n",__FUNCTION__,__LINE__);
 }
 
 
