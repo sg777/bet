@@ -112,33 +112,33 @@ void BET_cashier_status_loop(void * _ptr)
 	bytes=nn_send(cashier_info->c_pushsock,cJSON_Print(liveInfo),strlen(cJSON_Print(liveInfo)),0);
 
 	if(bytes<0)
-		goto end;
-	
-
-	while ( cashier_info->c_pushsock>= 0 && cashier_info->c_subsock>= 0 )
-    {
-		ptr=0;
-        if ( (recvlen= nn_recv(cashier_info->c_subsock,&ptr,NN_MSG,0)) > 0 )
-        {
-
-		  	char *tmp=clonestr(ptr);
-            if ( (argjson= cJSON_Parse(tmp)) != 0 )
-            {
-				if(strcmp(jstr(argjson,"method"),"live")==0)
-					live_notaries++;
+		printf("%s::%d::Failed to send data\n",__FUNCTION__,__LINE__);
+	else
+	{
+		while ( cashier_info->c_pushsock>= 0 && cashier_info->c_subsock>= 0 )
+		{
+			ptr=0;
+			if ( (recvlen= nn_recv(cashier_info->c_subsock,&ptr,NN_MSG,0)) > 0 )
+			{
+		
+				char *tmp=clonestr(ptr);
+				if ( (argjson= cJSON_Parse(tmp)) != 0 )
+				{
+					if(strcmp(jstr(argjson,"method"),"live")==0)
+						live_notaries++;
+					
+					free_json(argjson);
+					break;
+				}
+				if(tmp)
+					free(tmp);
+				if(ptr)
+					nn_freemsg(ptr);
+			}
+		
+		}
 				
-				free_json(argjson);
-				break;
-            }
-			if(tmp)
-				free(tmp);
-			if(ptr)
-            	nn_freemsg(ptr);
-        }
-
-    }
-	end:
-		//Do Nothing
+	}
 }
 
 
