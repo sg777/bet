@@ -59,7 +59,6 @@ int32_t BET_send_status(struct cashier *cashier_info)
 	cJSON *liveInfo=cJSON_CreateObject();
 
 	cJSON_AddStringToObject(liveInfo,"method","live");
-	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(liveInfo));
 	bytes=nn_send(cashier_info->c_pubsock,cJSON_Print(liveInfo),strlen(cJSON_Print(liveInfo)),0);
 	if(bytes<0)
 		retval=-1;
@@ -201,7 +200,6 @@ void BET_cashier_server_loop(void * _ptr)
 					tmp=clonestr(ptr);
                 if ((recvlen>0) && ((msgjson= cJSON_Parse(tmp)) != 0 ))
                 {
-                	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(msgjson));
                     if ( BET_cashier_backend(msgjson,cashier_info) < 0 )
                     {
                     	printf("\nFAILURE\n");
