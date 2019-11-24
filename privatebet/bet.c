@@ -159,7 +159,7 @@ int main(int argc, char **argv)
 	    }
 
 
-		#if 1
+		#if 0
 			memset(hostip,0x00,sizeof(hostip));
 			memset(bindaddr,0x00,sizeof(bindaddr));
 			memset(bindaddr1,0x00,sizeof(bindaddr1));
@@ -183,7 +183,7 @@ int main(int argc, char **argv)
 				exit(-1);
 			}
 		#endif
-
+		BET_check_notary_status();
 	
 		if(pthread_join(dcv_backend_t,NULL))
 		{
@@ -194,11 +194,12 @@ int main(int argc, char **argv)
 		{
 			printf("\nError in joining the main thread for dcv");
 		}
-		
+		/*
 		if(pthread_join(cashier_t,NULL))
 		{
 		printf("\nError in joining the main thread for cashier");
 		}
+		*/
 	}
 	else if((argc==3)&&(strcmp(argv[1],"bvv")==0))
 	{
