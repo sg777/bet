@@ -22,10 +22,10 @@ void BET_check_notary_status()
 		memset(cashier_info,0x00,sizeof(struct cashier));
 
 		BET_transportname(0,bindaddr,notariesIP[i],cashier_pubsub_port);
-		c_subsock= BET_nanosock(1,bindaddr,NN_PUB);
+		c_subsock= BET_nanosock(1,bindaddr,NN_SUB);
 		
 		BET_transportname(0,bindaddr1,notariesIP[i],cashier_pushpull_port);
-		c_pushsock= BET_nanosock(1,bindaddr1,NN_PULL);
+		c_pushsock= BET_nanosock(1,bindaddr1,NN_PUSH);
 
 		cashier_info=calloc(1,sizeof(struct cashier));
 		
@@ -39,9 +39,15 @@ void BET_check_notary_status()
 			printf("\nerror in launching cashier");
 			exit(-1);
 		}
-		
 	}
 	
+	for(int i=0;i<no_of_notaries;i++)
+	{
+		if(pthread_join(cashier_t[i],NULL))
+		{
+		printf("\nError in joining the main thread for cashier");
+		}
+	}	
 	
 
 }
@@ -82,6 +88,15 @@ void BET_cashier_client_loop(void * _ptr)
 	int32_t recvlen=0,bytes; 
 	void *ptr=NULL; 
 	cJSON *argjson=NULL; struct cashier* cashier_info= _ptr;
+	
+	cJSON *liveInfo=cJSON_CreateObject();
+	cJSON_AddStringToObject(liveInfo,"method","live");
+
+	bytes=nn_send(cashier_info->c_pushsock,cJSON_Print(liveInfo),strlen(cJSON_Print(liveInfo)),0);
+
+	if(bytes<0)
+		printf("\nThere is a problem in sending data::%s::%d\n",__FUNCTION__,__LINE__);
+	
 
 	printf("\n%s::%d::cashier client started\n",__FUNCTION__,__LINE__);
 		
