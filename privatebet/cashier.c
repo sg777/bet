@@ -109,7 +109,6 @@ void BET_cashier_status_loop(void * _ptr)
 	cJSON *liveInfo=cJSON_CreateObject();
 	cJSON_AddStringToObject(liveInfo,"method","live");
 
-	printf("\n%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(liveInfo));
 	bytes=nn_send(cashier_info->c_pushsock,cJSON_Print(liveInfo),strlen(cJSON_Print(liveInfo)),0);
 
 	if(bytes<0)
@@ -125,7 +124,6 @@ void BET_cashier_status_loop(void * _ptr)
 		  	char *tmp=clonestr(ptr);
             if ( (argjson= cJSON_Parse(tmp)) != 0 )
             {
-            	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson));
 				if(strcmp(jstr(argjson,"method"),"live")==0)
 					live_notaries++;
 				
@@ -140,7 +138,7 @@ void BET_cashier_status_loop(void * _ptr)
 
     }
 	end:
-		printf("\nThere is a problem in sending data::%s::%d\n",__FUNCTION__,__LINE__);
+		//Do Nothing
 }
 
 
