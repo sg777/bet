@@ -39,17 +39,13 @@ void BET_check_notary_status()
 			printf("\nerror in launching cashier");
 			exit(-1);
 		}
-	}
-	
-	for(int i=0;i<no_of_notaries;i++)
-	{
+		
 		if(pthread_join(cashier_t[i],NULL))
 		{
 		printf("\nError in joining the main thread for cashier");
 		}
-	}	
+	}
 	
-
 }
 
 int32_t BET_send_status(struct cashier *cashier_info)
@@ -92,14 +88,13 @@ void BET_cashier_client_loop(void * _ptr)
 	cJSON *liveInfo=cJSON_CreateObject();
 	cJSON_AddStringToObject(liveInfo,"method","live");
 
+	printf("\n%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(liveInfo));
 	bytes=nn_send(cashier_info->c_pushsock,cJSON_Print(liveInfo),strlen(cJSON_Print(liveInfo)),0);
 
 	if(bytes<0)
 		printf("\nThere is a problem in sending data::%s::%d\n",__FUNCTION__,__LINE__);
 	
 
-	printf("\n%s::%d::cashier client started\n",__FUNCTION__,__LINE__);
-		
 	while ( cashier_info->c_pushsock>= 0 && cashier_info->c_subsock>= 0 )
     {
 		ptr=0;
@@ -111,6 +106,7 @@ void BET_cashier_client_loop(void * _ptr)
             {
             	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson));
                 free_json(argjson);
+				break;
             }
 			if(tmp)
 				free(tmp);
