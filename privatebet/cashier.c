@@ -6,6 +6,7 @@ struct cashier *cashier_info;
 
 char notariesIP[10][25]={"159.69.23.28","159.69.23.29","159.69.23.30","159.69.23.31"};
 int32_t no_of_notaries=4;
+int32_t live_notaries=0;
 
 void BET_check_notary_status()
 {
@@ -16,7 +17,8 @@ void BET_check_notary_status()
 	pthread_t cashier_t[4];
 	struct cashier *cashier_info;
 	cashier_info=calloc(1,sizeof(struct cashier));
-		
+	printf("%s::%d::active notaries::%d\n",__FUNCTION__,__LINE__,live_notaries);
+	
 	for(int i=0;i<no_of_notaries;i++)
 	{
 		memset(cashier_info,0x00,sizeof(struct cashier));
@@ -45,7 +47,7 @@ void BET_check_notary_status()
 		printf("\nError in joining the main thread for cashier");
 		}
 	}
-	
+	printf("%s::%d::active notaries::%d\n",__FUNCTION__,__LINE__,live_notaries);
 }
 
 int32_t BET_send_status(struct cashier *cashier_info)
@@ -107,7 +109,10 @@ void BET_cashier_client_loop(void * _ptr)
             if ( (argjson= cJSON_Parse(tmp)) != 0 )
             {
             	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson));
-                free_json(argjson);
+				if(strcmp(jstr(argjson,"method"),"live")==0)
+					live_notaries++;
+				
+				free_json(argjson);
 				break;
             }
 			if(tmp)
