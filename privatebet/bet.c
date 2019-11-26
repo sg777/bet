@@ -104,6 +104,7 @@ int main(int argc, char **argv)
 	cJSON *temp=BET_createrawmultisigtransaction(0.025,toaddress,msig);
 	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(temp));
 	*/
+	BET_transferfunds(0.1995,"bGmKoyJEz4ESuJCTjhVkgEb2Qkt8QuiQzQ");
     #if 1
 	if(argc>2)
 		strcpy(hostip,argv[2]);

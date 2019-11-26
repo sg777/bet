@@ -1,12 +1,16 @@
 #include "bet.h"
 #include "cashier.h"
 #include "network.h"
+#include "common.h"
 
 struct cashier *cashier_info;
 
-char notariesIP[10][25]={"159.69.23.28","159.69.23.29","159.69.23.30","159.69.23.31"};
+char notrCHIPSAddr[4][64]={"bQepVNtzfjMaBJdaaCq68trQDAPDgKnwrD","bSa7CrTXykfPZ6yhThjXAoQ8r4H7muiPPC","bGmKoyJEz4ESuJCTjhVkgEb2Qkt8QuiQzQ","bR7BXnWT1yVSP9aB57pq22XN2WYNpGgDrD"};
+char notariesIP[4][25]={"159.69.23.28","159.69.23.29","159.69.23.30","159.69.23.31"};
 int32_t no_of_notaries=4;
 int32_t live_notaries=0;
+
+char *msigAddr="bQJTo8knsbSoU7k9oGADa6qfWGWyJtxC3o";
 
 void BET_check_notary_status()
 {
