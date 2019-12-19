@@ -2041,6 +2041,7 @@ int lws_callback_http_bvv(struct lws *wsi, enum lws_callback_reasons reason,
 		        break;
 			case LWS_CALLBACK_ESTABLISHED:
 				wsi_global_bvv=wsi;
+				printf("%s:%d::LWS_CALLBACK_ESTABLISHED\n",__FUNCTION__,__LINE__);
 				break;
         }
         return 0;
