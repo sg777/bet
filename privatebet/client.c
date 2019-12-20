@@ -2092,6 +2092,8 @@ void BET_bvv_frontend_loop(void* _ptr)
     dcv_info.mounts = &mount_bvv;
     dcv_info.protocols = protocols_bvv;
 
+	dcv_info.ssl_options_set=2;
+	
 	dcv_info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT |
         LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
 
