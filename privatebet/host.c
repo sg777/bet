@@ -2945,7 +2945,8 @@ void BET_dcv_frontend_loop(void *_ptr)
 {
 	struct lws_context_creation_info dcv_info;
 	struct lws_context *dcv_context=NULL;
-	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
+	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE | LLL_INFO | LLL_PARSER | 
+		LLL_HEADER | LLL_EXT | LLL_CLIENT | LLL_LATENCY | LLL_DEBUG | LLL_THREAD;
 
 	printf("\n%s::%d",__FUNCTION__,__LINE__);
 	lws_set_log_level(logs, NULL);

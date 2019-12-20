@@ -1985,8 +1985,10 @@ void BET_player_frontend_loop(void* _ptr)
 {
 	struct lws_context_creation_info dcv_info;
 	struct lws_context *dcv_context=NULL;
-	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
-
+	
+	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE | LLL_INFO | LLL_PARSER | 
+		LLL_HEADER | LLL_EXT | LLL_CLIENT | LLL_LATENCY | LLL_DEBUG | LLL_THREAD;
+	
 	//signal(SIGINT,player_sigint_handler);
 	lws_set_log_level(logs, NULL);
 	
@@ -2082,7 +2084,17 @@ void BET_bvv_frontend_loop(void* _ptr)
 {
 	struct lws_context_creation_info dcv_info;
 	struct lws_context *dcv_context;
-	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
+
+	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE | LLL_INFO | LLL_PARSER | 
+		LLL_HEADER | LLL_EXT | LLL_CLIENT | LLL_LATENCY | LLL_DEBUG | LLL_THREAD;
+
+
+	/* for LLL_ verbosity above NOTICE to be built into lws,
+	 * lws must have been configured and built with
+	 * -DCMAKE_BUILD_TYPE=DEBUG instead of =RELEASE */
+	/* | LLL_INFO */ /* | LLL_PARSER */ /* | LLL_HEADER */
+	/* | LLL_EXT */ /* | LLL_CLIENT */ /* | LLL_LATENCY */
+	/* | LLL_DEBUG */ /* | LLL_THREAD */;
 
 
 	lws_set_log_level(logs, NULL);
@@ -2092,9 +2104,8 @@ void BET_bvv_frontend_loop(void* _ptr)
     dcv_info.mounts = &mount_bvv;
     dcv_info.protocols = protocols_bvv;
 
-	
-	dcv_info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;/* |
-        LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;*/
+		dcv_info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT |
+        LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
 
 	dcv_info.ssl_cert_filepath="localhost-100y.cert";
 	dcv_info.ssl_private_key_filepath="localhost-100y.key";
