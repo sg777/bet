@@ -346,6 +346,7 @@ int32_t bet_bvv_backend(cJSON *argjson, struct privatebet_info *bet, struct priv
 			bet_bvv_reset(bet, vars);
 			retval = bet_bvv_join_init(bet);
 		} else if (strcmp(method, "config_data") == 0) {
+			printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson));
 			max_players = jint(argjson, "max_players");
 			chips_tx_fee = jdouble(argjson, "chips_tx_fee");
 			table_stack_in_chips = jdouble(argjson, "table_stack_in_chips");
