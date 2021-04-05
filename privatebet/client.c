@@ -346,7 +346,6 @@ int32_t bet_bvv_backend(cJSON *argjson, struct privatebet_info *bet, struct priv
 			bet_bvv_reset(bet, vars);
 			retval = bet_bvv_join_init(bet);
 		} else if (strcmp(method, "config_data") == 0) {
-			printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(argjson));
 			max_players = jint(argjson, "max_players");
 			chips_tx_fee = jdouble(argjson, "chips_tx_fee");
 			table_stack_in_chips = jdouble(argjson, "table_stack_in_chips");
@@ -1839,7 +1838,6 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 				cJSON *seats_info = cJSON_CreateObject();
 				cJSON_AddStringToObject(seats_info, "method", "seats");
 				cJSON_AddItemToObject(seats_info, "seats", cJSON_GetObjectItem(argjson, "seats"));
-				printf("%s::%d::%s\n", __FUNCTION__, __LINE__, cJSON_Print(seats_info));
 				player_lws_write(seats_info);
 			}
 		} else if (strcmp(method, "config_data") == 0) {
