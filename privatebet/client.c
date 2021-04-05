@@ -132,7 +132,7 @@ void player_lws_write(cJSON *data)
 					sleep(1);
 				}
 			}
-			printf("%s::%d::Writing data::%s\n", __FUNCTION__, __LINE__, cJSON_Print(data));
+			//printf("%s::%d::Writing data::%s\n", __FUNCTION__, __LINE__, cJSON_Print(data));
 			memset(player_gui_data, 0, sizeof(player_gui_data));
 			strncpy(player_gui_data, cJSON_Print(data), strlen(cJSON_Print(data)));
 			data_exists = 1;
@@ -1694,7 +1694,6 @@ static void bet_update_seat_info(cJSON *argjson)
 	seats_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(seats_info, "method", "seats");
 	cJSON_AddItemToObject(seats_info, "seats", cJSON_GetObjectItem(argjson, "seats"));
-	printf("%s::%d::%s\n", __FUNCTION__, __LINE__, cJSON_Print(seats_info));
 	player_lws_write(seats_info);
 }
 
@@ -1714,7 +1713,6 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 		printf("%s::%d::%s\n", __FUNCTION__, __LINE__, method);
 
 		if (strcmp(method, "join_res") == 0) {
-			printf("%s::%d::%s\n", __FUNCTION__, __LINE__, cJSON_Print(argjson));
 			bet_update_seat_info(argjson);
 			if (strcmp(jstr(argjson, "req_identifier"), req_identifier) == 0) {
 				bet_push_join_info(argjson);
