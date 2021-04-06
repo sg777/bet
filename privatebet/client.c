@@ -213,6 +213,7 @@ int32_t bet_bvv_init(cJSON *argjson, struct privatebet_info *bet, struct private
 		}
 	}
 	rendered = cJSON_Print(bvv_init_info);
+	printf("%s::%d::%s\n",__FUNCTION__,__LINE__,cJSON_Print(bvv_init_info));
 	bytes = nn_send(bet->pushsock, rendered, strlen(rendered), 0);
 
 	if (bytes < 0)
@@ -624,14 +625,16 @@ void display_cards()
 
 	hole_card_info = cJSON_CreateArray();
 	for (int32_t i = 0; ((i < no_of_hole_cards) && (i < number_cards_drawn)); i++) {
-		cJSON_AddItemToArray(hole_card_info, cJSON_CreateString(cards[player_card_values[i]]));
+		//cJSON_AddItemToArray(hole_card_info, cJSON_CreateString(cards[player_card_values[i]]));
+		cJSON_AddItemToArray(hole_card_info, cJSON_CreateString("AD"));
 	}
 
 	cJSON_AddItemToObject(init_card_info, "holecards", hole_card_info);
 
 	board_card_info = cJSON_CreateArray();
 	for (int32_t i = no_of_hole_cards; ((i < hand_size) && (i < number_cards_drawn)); i++) {
-		cJSON_AddItemToArray(board_card_info, cJSON_CreateString(cards[player_card_values[i]]));
+		//cJSON_AddItemToArray(board_card_info, cJSON_CreateString(cards[player_card_values[i]]));
+		cJSON_AddItemToArray(board_card_info, cJSON_CreateString("AD"));
 	}
 
 	cJSON_AddItemToObject(init_card_info, "board", board_card_info);
@@ -910,7 +913,7 @@ int32_t bet_client_init(cJSON *argjson, struct privatebet_info *bet, struct priv
 		cJSON_AddItemToArray(cjson_player_cards,
 				     cJSON_CreateString(bits256_str(str, player_info.cardpubkeys[i])));
 	}
-	//printf("%s::%d::init_p::%s\n",__FUNCTION__,__LINE__,cJSON_Print(init_p));
+	printf("%s::%d::init_p::%s\n",__FUNCTION__,__LINE__,cJSON_Print(init_p));
 	rendered = cJSON_Print(init_p);
 	bytes = nn_send(bet->pushsock, rendered, strlen(rendered), 0);
 	if (bytes < 0) {
