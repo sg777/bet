@@ -353,7 +353,7 @@ cJSON *chips_transfer_funds_with_data(double amount, char *address, char *data)
 
 	raw_tx = calloc(arg_size, sizeof(char));
 	strncpy(raw_tx, cJSON_str(chips_create_raw_tx_with_data(amount, address, data)), arg_size);
-	dlg_info("raw_tx::%s\n", cJSON_Print(raw_tx));
+	dlg_info("raw_tx::%s\n", raw_tx);
 	signed_tx = cJSON_CreateObject();
 	signed_tx = chips_sign_raw_tx_with_wallet(raw_tx);
 
@@ -361,6 +361,7 @@ cJSON *chips_transfer_funds_with_data(double amount, char *address, char *data)
 	if (jstr(signed_tx, "error") == NULL) {
 		tx_info = cJSON_CreateObject();
 		tx_info = chips_send_raw_tx(signed_tx);
+		dlg_info("tx_info::%s", cJSON_Print(tx_info));
 		if (jstr(tx_info, "error") == NULL) {
 			return tx_info;
 		}
