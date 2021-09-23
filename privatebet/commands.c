@@ -578,6 +578,8 @@ cJSON *chips_create_raw_tx_with_data(double amount, char *address, char *data)
 		snprintf(params[0], arg_size, "\'%s\'", cJSON_Print(tx_list));
 		snprintf(params[1], arg_size, "\'%s\'", cJSON_Print(address_info));
 		argv = bet_copy_args(argc, "chips-cli", "createrawtransaction", params[0], params[1]);
+		dlg_info("params[0]::%s",params[0]);
+		dlg_info("params[1]::%s",params[1]);
 		tx = cJSON_CreateObject();
 		make_command(argc, argv, &tx);
 		bet_dealloc_args(argc, &argv);
