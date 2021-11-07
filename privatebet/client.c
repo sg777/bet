@@ -1665,6 +1665,7 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 	if (strcmp(jstr(argjson, "method"), "reset") == 0) {
 		reset_lock = 0;
 		retval = bet_player_reset(bet, vars);
+		bet_player_wallet_info();
 	}
 	if (reset_lock == 1) {
 		return retval;
