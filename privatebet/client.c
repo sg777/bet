@@ -1664,8 +1664,7 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 
 	if (strcmp(jstr(argjson, "method"), "reset") == 0) {
 		reset_lock = 0;
-		retval = bet_player_reset(bet, vars);
-		bet_player_wallet_info();
+		retval = bet_player_reset(bet, vars);		
 	}
 	if (reset_lock == 1) {
 		return retval;
@@ -1752,6 +1751,7 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 			}
 		} else if (strcmp(method, "tx_status") == 0) {
 			if (strcmp(req_identifier, jstr(argjson, "id")) == 0) {
+				bet_player_wallet_info();
 				vars->player_funds = jint(argjson, "player_funds");
 				if (jint(argjson, "tx_validity") == 1) {
 					dlg_info("Dealer verified the TX made by the player");
