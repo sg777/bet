@@ -1037,7 +1037,7 @@ int32_t bet_client_join(cJSON *argjson, struct privatebet_info *bet)
 
 		address = cJSON_CreateObject();
 		address = cJSON_GetArrayItem(addresses, 0);
-
+		dlg_info("%d %d", strlen(jstr(channel_info, "id")), strlen(jstr(address, "address")));
 		strcat(uri, jstr(address, "address"));
 		cJSON_AddStringToObject(joininfo, "uri", uri);
 		cJSON_AddNumberToObject(joininfo, "gui_playerID", (jint(argjson, "gui_playerID") - 1));
