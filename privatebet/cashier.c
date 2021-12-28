@@ -886,7 +886,7 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	struct timeval tv={3,0};
     struct event_base *base = event_base_new();	
 
-	ev = event_new(base, c_subsock, EV_TIMEOUT|EV_READ|EV_PERSIST, cb_func,
+	ev = event_new(base, c_subsock, EV_TIMEOUT|EV_READ, cb_func,
            method_name);
 
 	event_add(ev, &tv);
