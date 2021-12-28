@@ -855,7 +855,7 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 {
 	int32_t c_subsock, c_pushsock, bytes/*, recvlen*/;
 	char bind_sub_addr[128] = { 0 }, bind_push_addr[128] = { 0 };
-	void *ptr;
+	//void *ptr;
 	cJSON *response_info = NULL;
 
 	memset(bind_sub_addr, 0x00, sizeof(bind_sub_addr));
