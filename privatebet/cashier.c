@@ -853,7 +853,7 @@ void cb_func(evutil_socket_t c_subsock, short what, void *arg)
 
 cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *method_name)
 {
-	int32_t c_subsock, c_pushsock, bytes, recvlen;
+	int32_t c_subsock, c_pushsock, bytes/*, recvlen*/;
 	char bind_sub_addr[128] = { 0 }, bind_push_addr[128] = { 0 };
 	void *ptr;
 	cJSON *response_info = NULL;
