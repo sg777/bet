@@ -786,6 +786,19 @@ char *bet_send_message_to_notary(cJSON *argjson, char *notary_node_ip)
 	return NULL;
 }
 
+static void say_hello(int fd, short event, void *arg){
+    struct event *ev = arg;
+    struct timeval tv;
+
+
+    printf("Hello\n");
+    tv.tv_sec = 3;
+    tv.tv_usec = 0;
+
+    evtimer_add(ev, &tv);
+}
+
+
 cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *method_name)
 {
 	int32_t c_subsock, c_pushsock, bytes, recvlen;
@@ -802,6 +815,20 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	bet_tcp_sock_address(0, bind_push_addr, cashier_ip, cashier_push_pull_port);
 	c_pushsock = bet_nanosock(0, bind_push_addr, NN_PUSH);
 
+	
+	struct event ev;
+	struct timeval tv;
+	
+	tv.tv_sec = 3;
+	tv.tv_usec = 0;
+	
+	event_init();
+	evtimer_set(&ev,say_hello,NULL);
+	evtimer_add(&ev, &tv);
+	event_dispatch();
+	
+
+	dlg_info("%s", cJSON_Print(argjson));
 	bytes = nn_send(c_pushsock, cJSON_Print(argjson), strlen(cJSON_Print(argjson)), 0);
 	if (bytes < 0) {
 		dlg_warn("The cashier node :: %s is not reachable", cashier_ip);
