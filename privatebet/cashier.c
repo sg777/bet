@@ -822,7 +822,8 @@ void cb_func(evutil_socket_t c_subsock, short what, void *arg)
 		const char *method_name = arg;
 		void *ptr;
 		cJSON *response_info = NULL;
-		
+
+		#if 0
         printf("Got an event on socket %d:%s%s%s%s [%s]\n",
             (int) c_subsock,
             (what&EV_TIMEOUT) ? " timeout" : "",
@@ -830,25 +831,32 @@ void cb_func(evutil_socket_t c_subsock, short what, void *arg)
             (what&EV_WRITE)   ? " write" : "",
             (what&EV_SIGNAL)  ? " signal" : "",
             method_name);
+		#endif
 		
-		while (c_subsock >= 0) {
-			ptr = 0;
-			if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
-				char *tmp = clonestr(ptr);
-				if ((response_info = cJSON_Parse(tmp)) != 0) {
-					if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
-						(strcmp(jstr(response_info, "id"), unique_id) == 0)) {
-						break;
+		if(what&EV_TIMEOUT) {
+			dlg_info("Timeout occured");
+		}
+		else if(what&EV_READ) {
+			dlg_info("Read occured");
+			while (c_subsock >= 0) {
+				ptr = 0;
+				if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
+					char *tmp = clonestr(ptr);
+					if ((response_info = cJSON_Parse(tmp)) != 0) {
+						if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
+							(strcmp(jstr(response_info, "id"), unique_id) == 0)) {
+							break;
+						}
 					}
+					if (tmp)
+						free(tmp);
+					if (ptr)
+						nn_freemsg(ptr);
 				}
-				if (tmp)
-					free(tmp);
-				if (ptr)
-					nn_freemsg(ptr);
-			}
+			}	
+			dlg_info("%s", cJSON_Print(response_info));
+			nn_close(c_subsock);
 		}	
-		dlg_info("%s", cJSON_Print(response_info));
-		nn_close(c_subsock);
 }
 
 cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *method_name)
