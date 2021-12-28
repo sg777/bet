@@ -787,15 +787,14 @@ char *bet_send_message_to_notary(cJSON *argjson, char *notary_node_ip)
 }
 
 static void say_hello(int fd, short event, void *arg){
-    struct event *ev = arg;
-    struct timeval tv;
+    //struct event *ev = arg;
+    //struct timeval tv;
 
 
-    printf("Hello\n");
-    tv.tv_sec = 3;
-    tv.tv_usec = 0;
-
-    evtimer_add(ev, &tv);
+    printf("Wait for a second\n");
+    //tv.tv_sec = 3;
+    //tv.tv_usec = 0;
+	
 }
 
 
@@ -819,15 +818,14 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	struct event ev;
 	struct timeval tv;
 	
-	tv.tv_sec = 3;
+	tv.tv_sec = 1;
 	tv.tv_usec = 0;
 	
 	event_init();
-	evtimer_set(&ev,say_hello,NULL);
+	evtimer_set(&ev,say_hello,&ev);
 	evtimer_add(&ev, &tv);
 	event_dispatch();
 	
-	dlg_info("Hello World");
 	dlg_info("%s", cJSON_Print(argjson));
 	bytes = nn_send(c_pushsock, cJSON_Print(argjson), strlen(cJSON_Print(argjson)), 0);
 	if (bytes < 0) {
