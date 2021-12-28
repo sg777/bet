@@ -29,6 +29,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <event.h>
+#include <event2/event.h>
 
 #include "../crypto777/OS_portable.h"
 
