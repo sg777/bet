@@ -795,7 +795,7 @@ static void say_hello(int fd, short event, void *arg){
     tv.tv_sec = 3;
     tv.tv_usec = 0;
 
-    //evtimer_add(ev, &tv);
+    evtimer_add(ev, &tv);
 }
 
 
