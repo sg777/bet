@@ -827,7 +827,7 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	evtimer_add(&ev, &tv);
 	event_dispatch();
 	
-
+	dlg_info("Hello World");
 	dlg_info("%s", cJSON_Print(argjson));
 	bytes = nn_send(c_pushsock, cJSON_Print(argjson), strlen(cJSON_Print(argjson)), 0);
 	if (bytes < 0) {
