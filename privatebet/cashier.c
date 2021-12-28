@@ -816,6 +816,17 @@ void run_base_with_ticks(struct event_base *base)
   }
 }
 
+void cb_func(evutil_socket_t fd, short what, void *arg)
+{
+        const char *data = arg;
+        printf("Got an event on socket %d:%s%s%s%s [%s]",
+            (int) fd,
+            (what&EV_TIMEOUT) ? " timeout" : "",
+            (what&EV_READ)    ? " read" : "",
+            (what&EV_WRITE)   ? " write" : "",
+            (what&EV_SIGNAL)  ? " signal" : "",
+            data);
+}
 
 cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *method_name)
 {
@@ -833,42 +844,39 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	bet_tcp_sock_address(0, bind_push_addr, cashier_ip, cashier_push_pull_port);
 	c_pushsock = bet_nanosock(0, bind_push_addr, NN_PUSH);
 
-	
-	struct event ev;
-	struct timeval tv;
-	
-	tv.tv_sec = 1;
-	tv.tv_usec = 0;
-	
-	event_init();
-	evtimer_set(&ev,say_hello,&ev);
-	evtimer_add(&ev, &tv);
-	event_dispatch();
-	
 	dlg_info("%s", cJSON_Print(argjson));
 	bytes = nn_send(c_pushsock, cJSON_Print(argjson), strlen(cJSON_Print(argjson)), 0);
 	if (bytes < 0) {
 		dlg_warn("The cashier node :: %s is not reachable", cashier_ip);
 		return NULL;
-	} else {
-		while (c_pushsock >= 0 && c_subsock >= 0) {
-			ptr = 0;
-			if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
-				char *tmp = clonestr(ptr);
-				if ((response_info = cJSON_Parse(tmp)) != 0) {
-					if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
-					    (strcmp(jstr(response_info, "id"), unique_id) == 0)) {
-						break;
-					}
-				}
-				if (tmp)
-					free(tmp);
-				if (ptr)
-					nn_freemsg(ptr);
-			}
-		}
-	}
+	} 
+	
+	struct event ev;
+	struct timeval tv={3,0};
+    struct event_base *base = event_base_new();	
 
+	ev = event_new(base, c_subsock, EV_TIMEOUT|EV_READ|EV_PERSIST, cb_func,
+           (char*)"Reading event");
+
+	event_add(ev, &tv);
+    event_base_dispatch(base);
+
+	while (c_pushsock >= 0 && c_subsock >= 0) {
+		ptr = 0;
+		if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
+			char *tmp = clonestr(ptr);
+			if ((response_info = cJSON_Parse(tmp)) != 0) {
+				if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
+				    (strcmp(jstr(response_info, "id"), unique_id) == 0)) {
+					break;
+				}
+			}
+			if (tmp)
+				free(tmp);
+			if (ptr)
+				nn_freemsg(ptr);
+		}
+	}	
 	nn_close(c_pushsock);
 	nn_close(c_subsock);
 
