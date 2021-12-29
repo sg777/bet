@@ -816,12 +816,12 @@ void run_base_with_ticks(struct event_base *base)
   }
 }
 
+static cJSON *response_info = NULL;
 void cb_func(evutil_socket_t c_subsock, short what, void *arg)
 {
 		int32_t recvlen;
 		const char *method_name = arg;
 		void *ptr;
-		cJSON *response_info = NULL;
 
 		#if 0
         printf("Got an event on socket %d:%s%s%s%s [%s]\n",
@@ -838,7 +838,7 @@ void cb_func(evutil_socket_t c_subsock, short what, void *arg)
 		}
 		else if(what&EV_READ) {
 			dlg_info("Read occured");
-			while (c_subsock >= 0) {
+			if (c_subsock >= 0) {
 				ptr = 0;
 				if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
 					char *tmp = clonestr(ptr);
@@ -853,8 +853,7 @@ void cb_func(evutil_socket_t c_subsock, short what, void *arg)
 					if (ptr)
 						nn_freemsg(ptr);
 				}
-			}	
-			dlg_info("%s", cJSON_Print(response_info));
+			}		
 			nn_close(c_subsock);
 		}	
 }
@@ -864,7 +863,7 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	int32_t c_subsock, c_pushsock, bytes/*, recvlen*/;
 	char bind_sub_addr[128] = { 0 }, bind_push_addr[128] = { 0 };
 	//void *ptr;
-	cJSON *response_info = NULL;
+	//cJSON *response_info = NULL;
 
 	memset(bind_sub_addr, 0x00, sizeof(bind_sub_addr));
 	memset(bind_push_addr, 0x00, sizeof(bind_push_addr));
@@ -892,6 +891,8 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	event_add(ev, &tv);
     event_base_dispatch(base);
 
+	dlg_info("%s", cJSON_Print(response_info));
+	
 	#if 0
 	while (c_pushsock >= 0 && c_subsock >= 0) {
 		ptr = 0;
