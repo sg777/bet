@@ -885,13 +885,13 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	dlg_info("Request::%s", cJSON_Print(argjson));
 
 	struct event *ev;
-	struct timeval tv={3,0};
+	//struct timeval tv={3,0};
     struct event_base *base = event_base_new();	
 
 	ev = event_new(base, c_subsock, EV_READ, cb_func,
            method_name);
 
-	event_add(ev, &tv);
+	event_add(ev, NULL);
     event_base_dispatch(base);
 
 	
