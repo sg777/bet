@@ -845,7 +845,9 @@ void cb_func(evutil_socket_t c_subsock, short what, void *arg)
 					if ((response_info = cJSON_Parse(tmp)) != 0) {
 						if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
 							(strcmp(jstr(response_info, "id"), unique_id) == 0)) {
-							break;
+							// Do nothing						
+							//break;
+							
 						}
 					}
 					if (tmp)
@@ -854,6 +856,7 @@ void cb_func(evutil_socket_t c_subsock, short what, void *arg)
 						nn_freemsg(ptr);
 				}
 			}		
+				
 			nn_close(c_subsock);
 		}	
 }
