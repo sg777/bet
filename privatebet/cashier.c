@@ -882,7 +882,7 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 		dlg_warn("The cashier node :: %s is not reachable", cashier_ip);
 		return NULL;
 	} 
-	dlg_info("%s", cJSON_Print(argjson));
+	dlg_info("Request::%s", cJSON_Print(argjson));
 
 	struct event *ev;
 	struct timeval tv={3,0};
@@ -894,7 +894,8 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	event_add(ev, &tv);
     event_base_dispatch(base);
 
-	dlg_info("%s", cJSON_Print(response_info));
+	
+	dlg_info("Response::%s", cJSON_Print(response_info));
 	
 	#if 0
 	while (c_pushsock >= 0 && c_subsock >= 0) {
