@@ -129,16 +129,19 @@ void bet_check_cashier_nodes()
 	}
 }
 
+int32_t global_index_of_cashier = 0;
+
 void bet_check_cashiers_status()
 {
 	cJSON *live_info = NULL;
 
 	live_info = cJSON_CreateObject();
-	cJSON_AddStringToObject(live_info, "method", "live1");
+	cJSON_AddStringToObject(live_info, "method", "live");
 	cJSON_AddStringToObject(live_info, "id", unique_id);
 
 	live_notaries = 0;
 	for (int32_t i = 0; i < no_of_notaries; i++) {
+		global_index_of_cashier = i;
 		cJSON *temp = bet_msg_cashier_with_response_id(live_info, notary_node_ips[i], "live");
 		if ((temp) && (strcmp(jstr(temp, "method"), "live") == 0)) {
 			notary_status[i] = 1;
@@ -786,58 +789,17 @@ char *bet_send_message_to_notary(cJSON *argjson, char *notary_node_ip)
 	return NULL;
 }
 
-static void say_hello(int fd, short event, void *arg){
-    //struct event *ev = arg;
-    //struct timeval tv;
 
-
-    printf("Wait for a second\n");
-    //tv.tv_sec = 3;
-    //tv.tv_usec = 0;
-	
-}
-
-void run_base_with_ticks(struct event_base *base)
-{
-  struct timeval ten_sec;
-
-  ten_sec.tv_sec = 10;
-  ten_sec.tv_usec = 0;
-
-  /* Now we run the event_base for a series of 10-second intervals, printing
-     "Tick" after each.  For a much better way to implement a 10-second
-     timer, see the section below about persistent timer events. */
-  while (1) {
-     /* This schedules an exit ten seconds from now. */
-     event_base_loopexit(base, &ten_sec);
-
-     event_base_dispatch(base);
-     puts("Tick");
-  }
-}
-
-static cJSON *response_info = NULL;
-void cb_func(evutil_socket_t c_subsock, short what, void *arg)
+void cb_read(evutil_socket_t c_subsock, short what, void *arg)
 {
 		int32_t recvlen;
 		const char *method_name = arg;
 		void *ptr;
+		cJSON *response_info = NULL;
 
-		#if 0
-        printf("Got an event on socket %d:%s%s%s%s [%s]\n",
-            (int) c_subsock,
-            (what&EV_TIMEOUT) ? " timeout" : "",
-            (what&EV_READ)    ? " read" : "",
-            (what&EV_WRITE)   ? " write" : "",
-            (what&EV_SIGNAL)  ? " signal" : "",
-            method_name);
-		#endif
-		
 		if(what&EV_TIMEOUT) {
-			dlg_info("Timeout occured");
-		}
-		else if(what&EV_READ) {
-			dlg_info("Read occured");
+			notary_status[global_index_of_cashier] = 0;
+		} else if(what&EV_TIMEOUT) {
 			if (c_subsock >= 0) {
 				ptr = 0;
 				if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
@@ -845,9 +807,11 @@ void cb_func(evutil_socket_t c_subsock, short what, void *arg)
 					if ((response_info = cJSON_Parse(tmp)) != 0) {
 						if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
 							(strcmp(jstr(response_info, "id"), unique_id) == 0)) {
-							// Do nothing						
-							//break;
-							
+								if(strcmp(method_name, "live") == 0) {
+									notary_status[global_index_of_cashier] = 1;
+									live_notaries++;
+									dlg_info("Response::%s", cJSON_Print(response_info));
+								}
 						}
 					}
 					if (tmp)
@@ -856,17 +820,15 @@ void cb_func(evutil_socket_t c_subsock, short what, void *arg)
 						nn_freemsg(ptr);
 				}
 			}		
-				
-			nn_close(c_subsock);
-		}	
+		}
 }
 
 cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *method_name)
 {
 	int32_t c_subsock, c_pushsock, bytes/*, recvlen*/;
 	char bind_sub_addr[128] = { 0 }, bind_push_addr[128] = { 0 };
-	//void *ptr;
-	//cJSON *response_info = NULL;
+	void *ptr;
+	cJSON *response_info = NULL;
 
 	memset(bind_sub_addr, 0x00, sizeof(bind_sub_addr));
 	memset(bind_push_addr, 0x00, sizeof(bind_push_addr));
@@ -884,38 +846,38 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	} 
 	dlg_info("Request::%s", cJSON_Print(argjson));
 
-	struct event *ev;
-	struct timeval tv={3,0};
-    struct event_base *base = event_base_new();	
+	if(strcmp(method_name, "live") == 0) {
+		struct event *ev;
+		struct timeval tv={3,0};
+	    struct event_base *base = event_base_new();	
 
-	ev = event_new(base, c_subsock, EV_READ, say_hello,
-           method_name);
+		ev = event_new(base, c_subsock, EV_READ, cb_read,
+	           method_name);
 
-	event_add(ev, NULL);
-	event_base_loopexit(base, &tv);
-    event_base_dispatch(base);
-	
-	printf("\n No read was happened");
-	//dlg_info("Response::%s", cJSON_Print(response_info));
-	
-	#if 0
-	while (c_pushsock >= 0 && c_subsock >= 0) {
-		ptr = 0;
-		if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
-			char *tmp = clonestr(ptr);
-			if ((response_info = cJSON_Parse(tmp)) != 0) {
-				if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
-				    (strcmp(jstr(response_info, "id"), unique_id) == 0)) {
-					break;
+		event_add(ev, NULL);
+		event_base_loopexit(base, &tv);
+	    event_base_dispatch(base);
+	}
+	else {
+		#if 1
+		while (c_pushsock >= 0 && c_subsock >= 0) {
+			ptr = 0;
+			if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
+				char *tmp = clonestr(ptr);
+				if ((response_info = cJSON_Parse(tmp)) != 0) {
+					if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
+					    (strcmp(jstr(response_info, "id"), unique_id) == 0)) {
+						break;
+					}
 				}
+				if (tmp)
+					free(tmp);
+				if (ptr)
+					nn_freemsg(ptr);
 			}
-			if (tmp)
-				free(tmp);
-			if (ptr)
-				nn_freemsg(ptr);
-		}
-	}	
-	#endif
+		}	
+		#endif
+	}
 	nn_close(c_pushsock);
 	nn_close(c_subsock);
 
