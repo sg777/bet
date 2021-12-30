@@ -885,18 +885,18 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	dlg_info("Request::%s", cJSON_Print(argjson));
 
 	struct event *ev;
-	//struct timeval tv={3,0};
+	struct timeval tv={3,0};
     struct event_base *base = event_base_new();	
 
-	evutil_make_socket_nonblocking(c_subsock);
-	ev = event_new(base, c_subsock, EV_READ, cb_func,
+	ev = event_new(base, c_subsock, EV_READ, say_hello,
            method_name);
 
 	event_add(ev, NULL);
+	event_base_loopexit(base, &tv);
     event_base_dispatch(base);
-
 	
-	dlg_info("Response::%s", cJSON_Print(response_info));
+	printf("\n No read was happened");
+	//dlg_info("Response::%s", cJSON_Print(response_info));
 	
 	#if 0
 	while (c_pushsock >= 0 && c_subsock >= 0) {
