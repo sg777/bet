@@ -799,7 +799,7 @@ void cb_read(evutil_socket_t c_subsock, short what, void *arg)
 
 		if(what&EV_TIMEOUT) {
 			notary_status[global_index_of_cashier] = 0;
-		} else if(what&EV_TIMEOUT) {
+		} else if(what&EV_READ) {
 			if (c_subsock >= 0) {
 				ptr = 0;
 				if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
@@ -851,8 +851,7 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 		struct timeval tv={3,0};
 	    struct event_base *base = event_base_new();	
 
-		ev = event_new(base, c_subsock, EV_READ, cb_read,
-	           method_name);
+		ev = event_new(base, c_subsock, EV_READ, cb_read, method_name);
 
 		event_add(ev, NULL);
 		event_base_loopexit(base, &tv);
