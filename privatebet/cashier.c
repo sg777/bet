@@ -800,11 +800,13 @@ void cb_read(evutil_socket_t c_subsock, short what, void *arg)
 		if(what&EV_TIMEOUT) {
 			notary_status[global_index_of_cashier] = 0;
 		} else if(what&EV_READ) {
+			printf("Read event triggered\n");
 			if (c_subsock >= 0) {
 				ptr = 0;
 				if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
 					char *tmp = clonestr(ptr);
 					if ((response_info = cJSON_Parse(tmp)) != 0) {
+						dlg_info("%s", cJSON_Print(response_info));
 						if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
 							(strcmp(jstr(response_info, "id"), unique_id) == 0)) {
 								if(strcmp(method_name, "live") == 0) {
