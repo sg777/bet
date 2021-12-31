@@ -809,12 +809,10 @@ void cb_read(evutil_socket_t c_subsock, short what, void *arg)
 						dlg_info("%s", cJSON_Print(response_info));
 						if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
 							(strcmp(jstr(response_info, "id"), unique_id) == 0)) {
-								if(strcmp(method_name, "live") == 0) {
-									notary_status[global_index_of_cashier] = 1;
-									live_notaries++;
-									dlg_info("Response::%s", cJSON_Print(response_info));
-								}
-						}
+								notary_status[global_index_of_cashier] = 1;
+								live_notaries++;
+								dlg_info("Response::%s", cJSON_Print(response_info));
+							}
 					}
 					if (tmp)
 						free(tmp);
@@ -846,6 +844,7 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 		dlg_warn("The cashier node :: %s is not reachable", cashier_ip);
 		return NULL;
 	} 
+	dlg_info("cahsier node ip::%s", cashier_ip);
 	dlg_info("Request::%s", cJSON_Print(argjson));
 
 	if(strcmp(method_name, "live") == 0) {
@@ -855,8 +854,8 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 
 		ev = event_new(base, c_subsock, EV_READ, cb_read, method_name);
 
-		event_add(ev, NULL);
-		event_base_loopexit(base, &tv);
+		event_add(ev, &tv);
+		//event_base_loopexit(base, &tv);
 	    event_base_dispatch(base);
 	}
 	else {
