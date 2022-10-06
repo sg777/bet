@@ -505,7 +505,7 @@ cJSON *chips_spendable_tx()
 
 	argc = 4;
 	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, blockchain_cli, "listunspent", ">", temp_file);
+	argv = bet_copy_args(argc, blockchain_cli, "listunspent 1", ">", temp_file);
 	make_command(argc, argv, &listunspent_info);
 	bet_dealloc_args(argc, &argv);
 
@@ -544,7 +544,7 @@ cJSON *chips_create_raw_tx_with_data(double amount_to_transfer, char *address, c
 	amount_to_transfer += chips_tx_fee;
 
 	argc = 4;
-	argv = bet_copy_args(argc, blockchain_cli, "listunspent", ">", utxo_temp_file);
+	argv = bet_copy_args(argc, blockchain_cli, "listunspent 1", ">", utxo_temp_file);
 	listunspent_info = cJSON_CreateArray();
 	make_command(argc, argv, &listunspent_info);
 	bet_dealloc_args(argc, &argv);
@@ -728,7 +728,7 @@ int32_t chips_check_if_tx_unspent(char *input_tx)
 
 	argc = 4;
 	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, blockchain_cli, "listunspent", ">", temp_file);
+	argv = bet_copy_args(argc, blockchain_cli, "listunspent 1", ">", temp_file);
 
 	run_command(argc, argv);
 	tx_exists = chips_check_tx_exists(temp_file, input_tx);
@@ -789,7 +789,7 @@ cJSON *chips_create_tx_from_tx_list(char *to_addr, int32_t no_of_txs, char tx_id
 	to_addr_info = cJSON_CreateObject();
 	tx_list = cJSON_CreateArray();
 	argc = 4;
-	argv = bet_copy_args(argc, blockchain_cli, "listunspent", ">", temp_file);
+	argv = bet_copy_args(argc, blockchain_cli, "listunspent 1", ">", temp_file);
 	listunspent_info = cJSON_CreateObject();
 	make_command(argc, argv, &listunspent_info);
 	bet_dealloc_args(argc, &argv);
@@ -1532,7 +1532,7 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		if (strlen(data) == 0) {
 			if (strcmp(argv[1], "importaddress") == 0) {
 				// Do nothing
-			} else if (strcmp(argv[1], "listunspent") == 0) {
+			} else if (strcmp(argv[1], "listunspent 1") == 0) {
 				chips_read_valid_unspent(argv[3], argjson);
 			} else {
 				retval = ERR_CHIPS_COMMAND;
