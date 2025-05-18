@@ -30,7 +30,6 @@
 #include "misc.h"
 #include "help.h"
 #include "err.h"
-#include "bet_version.h"
 #include "switchs.h"
 #include "vdxf.h"
 #include "player.h"
@@ -540,9 +539,6 @@ static void bet_start(int argc, char **argv)
 		if (argc == 4) {
 			do_split_tx_amount(atof(argv[2]), atoi(argv[3]));
 		}
-	} else if ((strcmp(argv[1], "v") == 0) || (strcmp(argv[1], "-v") == 0) || (strcmp(argv[1], "version") == 0) ||
-		   (strcmp(argv[1], "--version") == 0)) {
-		printf("%s\n", BET_VERSION);
 	} else if (strcmp(argv[1], "withdraw") == 0) {
 		if (argc == 4) {
 			cJSON *tx = NULL;
