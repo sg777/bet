@@ -45,7 +45,7 @@ The `player2` tx's:
 Player1 joins the table by making the payin_tx `23b6f1b8170bf62397222a233f949e4672e1bfd57e919aa407ff8d357f8b67cf` and in the data part of this tx contains the info about cashier nodes and info needed to resolve the disputes in case.
 
 ```
-~/bet/privatebet$ ./bet extract_tx_data 23b6f1b8170bf62397222a233f949e4672e1bfd57e919aa407ff8d357f8b67cf
+~/bet/src$ ./bet extract_tx_data 23b6f1b8170bf62397222a233f949e4672e1bfd57e919aa407ff8d357f8b67cf
 [bet.c:bet_start:449] Data part of tx 
  {
 	"table_id":	"7e6520211912ac0e1e5c593c93c50991a3408d9adc983b6f81a5d319c1ddda89",
@@ -59,7 +59,7 @@ Player1 joins the table by making the payin_tx `23b6f1b8170bf62397222a233f949e46
 
 Same goes for player2
 ```
-~/bet/privatebet$ ./bet extract_tx_data 3e0d381b3d8fd3811b48717c9fef26b97eec91b5520536ab7ea25b60d440b201
+~/bet/src$ ./bet extract_tx_data 3e0d381b3d8fd3811b48717c9fef26b97eec91b5520536ab7ea25b60d440b201
 [bet.c:bet_start:449] Data part of tx 
  {
 	"table_id":	"7e6520211912ac0e1e5c593c93c50991a3408d9adc983b6f81a5d319c1ddda89",
@@ -93,7 +93,7 @@ Now lets go through the player moves during each round of betting
 
 Player1 - Small blind
 ```
-~/bet/privatebet$ ./bet extract_tx_data 07a5e8b04a3b9165e188650af3e387af2387fc9fee55980f9b97dea4913d758e
+~/bet/src$ ./bet extract_tx_data 07a5e8b04a3b9165e188650af3e387af2387fc9fee55980f9b97dea4913d758e
 [bet.c:bet_start:449] Data part of tx 
 {
 	"method":	"bet",
@@ -107,7 +107,7 @@ Player1 - Small blind
 
 Player2 - Big blind
 ```
-~/bet/privatebet$ ./bet extract_tx_data a287c5baa97a60523917a3ef69ec59370176ca38195c3a2759a1e0f56584f113
+~/bet/src$ ./bet extract_tx_data a287c5baa97a60523917a3ef69ec59370176ca38195c3a2759a1e0f56584f113
 [bet.c:bet_start:449] Data part of tx 
 { 
 	"method":	"bet",
@@ -121,7 +121,7 @@ Player2 - Big blind
 
 Player1 - Call
 ```
-~/bet/privatebet$ ./bet extract_tx_data 3f02176f3eb1ca4975e5022ef98d01d5dd6de1f1eb5078539efabf7df4707d8f
+~/bet/src$ ./bet extract_tx_data 3f02176f3eb1ca4975e5022ef98d01d5dd6de1f1eb5078539efabf7df4707d8f
 [bet.c:bet_start:449] Data part of tx 
 {
 	"method":	"bet",
@@ -135,7 +135,7 @@ Player1 - Call
 
 Player2- Check
 ```
-~/bet/privatebet$ ./bet extract_tx_data 71d5406f00f52954e24071d7f95e79b9c1bbb07c4d968a7385aedfdf911477db
+~/bet/src$ ./bet extract_tx_data 71d5406f00f52954e24071d7f95e79b9c1bbb07c4d968a7385aedfdf911477db
 [bet.c:bet_start:449] Data part of tx 
 {
 	"method":	"bet",
@@ -153,7 +153,7 @@ Player2- Check
 
 Player2 - Raise
 ```
-~/bet/privatebet$ ./bet extract_tx_data ea55e851a5f5cde07fe67d079dbf3c315eacb75f639a7f0bd2b0dc2c832826db
+~/bet/src$ ./bet extract_tx_data ea55e851a5f5cde07fe67d079dbf3c315eacb75f639a7f0bd2b0dc2c832826db
 [bet.c:bet_start:449] Data part of tx 
 {
 	"method":	"bet",
@@ -167,7 +167,7 @@ Player2 - Raise
 
 Player1 - Call
 ```
-~/bet/privatebet$ ./bet extract_tx_data 7d58e742acbb2b3bc5a1bba0ca36887d80ca52455ea487eaa4154061b6b62680
+~/bet/src$ ./bet extract_tx_data 7d58e742acbb2b3bc5a1bba0ca36887d80ca52455ea487eaa4154061b6b62680
 [bet.c:bet_start:449] Data part of tx 
 {
 	"method":	"bet",
@@ -182,7 +182,7 @@ Player1 - Call
 #### 3rd round betting
 Player2 - Check
 ```
-~/bet/privatebet$ ./bet extract_tx_data 7326071fdfdabbdaa500b1a010c995e3c5d4ffbcf961451074f316fe65e10fb5
+~/bet/src$ ./bet extract_tx_data 7326071fdfdabbdaa500b1a010c995e3c5d4ffbcf961451074f316fe65e10fb5
 [bet.c:bet_start:449] Data part of tx 
 {
 	"method":	"bet",
@@ -196,7 +196,7 @@ Player2 - Check
 
 Player1 - Check
 ```
-~/bet/privatebet$ ./bet extract_tx_data 7ba82e800b6c9a22a3b576e85fd326a19bbb550dbc0107960f99cfe63504ab25
+~/bet/src$ ./bet extract_tx_data 7ba82e800b6c9a22a3b576e85fd326a19bbb550dbc0107960f99cfe63504ab25
 [bet.c:bet_start:449] Data part of tx 
 {
 	"method":	"bet",
@@ -212,7 +212,7 @@ Player1 - Check
 
 Player2 - Raise
 ```
-~/bet/privatebet$ ./bet extract_tx_data 58ec6cbcef7a223405d77b78e6fbf0425d2c3333105a586f99160f479e4ca26b
+~/bet/src$ ./bet extract_tx_data 58ec6cbcef7a223405d77b78e6fbf0425d2c3333105a586f99160f479e4ca26b
 [bet.c:bet_start:449] Data part of tx 
 {
 	"method":	"bet",
@@ -226,7 +226,7 @@ Player2 - Raise
 
 Player1 - Call
 ```
-~/bet/privatebet$ ./bet extract_tx_data d420a2a2639dfcec5ba2a37e303ca86c6bb6861787f780580e1ee911941c5df9
+~/bet/src$ ./bet extract_tx_data d420a2a2639dfcec5ba2a37e303ca86c6bb6861787f780580e1ee911941c5df9
 [bet.c:bet_start:449] Data part of tx 
 {
 	"method":	"bet",
@@ -242,7 +242,7 @@ Player1 - Call
 
 Payout tx
 ```
-~/bet/privatebet$ ./bet extract_tx_data 8c0c074f0dac06f7675926a4ad3e6abe51a7f0ad28a417e0d23090550b3a6a28
+~/bet/src$ ./bet extract_tx_data 8c0c074f0dac06f7675926a4ad3e6abe51a7f0ad28a417e0d23090550b3a6a28
 [bet.c:bet_start:449] Data part of tx 
  {
 	"table_id":	"7e6520211912ac0e1e5c593c93c50991a3408d9adc983b6f81a5d319c1ddda89",

@@ -76,10 +76,10 @@ printf "\n\n"
 
 printf "2. Run bet (player OR dealer).\n\n"
 printf "DEALER \n"
-printf "cd ~/bet/privatebet && ./bet dcv 45.77.139.155"
+printf "cd ~/bet/src && ./bet dcv 45.77.139.155"
 printf "\n\n"
 printf "PLAYER \n"
-printf "cd ~/bet/privatebet && ./bet player\n\n"
+printf "cd ~/bet/src && ./bet player\n\n"
 
 
 

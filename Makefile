@@ -243,10 +243,10 @@ $(ALL_OBJS): $(ALL_GEN_HEADERS) $(EXTERNAL_HEADERS) Makefile
 
 # Now ALL_PROGRAMS is fully populated, we can expand it.
 build_dep:
-	make --directory crypto777
+	make --directory libs/crypto777
 	# make --directory external/jsmn
 build_dep1:
-	make --directory privatebet
+	make --directory src
 all-programs: $(ALL_PROGRAMS) build_dep build_dep1
 all-test-programs: $(ALL_FUZZ_TARGETS)
 
@@ -266,10 +266,10 @@ clean: obsclean
 	$(RM) $(CDUMP_OBJS) $(ALL_OBJS)
 	$(RM) $(ALL_PROGRAMS)
 	$(RM) $(ALL_FUZZ_TARGETS)
-	make --directory privatebet clean
+	make --directory src clean
 	make --directory external/jsmn clean
 	make --directory external/libwally-core clean
-	make --directory crypto777 clean
+	make --directory libs/crypto777 clean
 	find . -name '*gcda' -delete
 	find . -name '*gcno' -delete
 	find . -name '*.nccout' -delete

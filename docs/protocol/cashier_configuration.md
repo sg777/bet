@@ -1,5 +1,5 @@
 ## Configuring the cashier nodes
-These are the nodes elected by the community and these nodes play very crucial role in establishing the trust in the ecosystem. The configuration details of these nodes are found in `cashier_nodes.ini` which is located at the path `~/bet/privatebet/config`. Since these nodes are elected by the CHIPS community so changes to this cashier configuration file is not allowed. 
+These are the nodes elected by the community and these nodes play very crucial role in establishing the trust in the ecosystem. The configuration details of these nodes are found in `cashier_nodes.ini` which is located at the path `~/bet/src/config`. Since these nodes are elected by the CHIPS community so changes to this cashier configuration file is not allowed. 
 
 Since there isn't any election for the cashier nodes is happened so no checks on the cashier nodes enforced either on the player or dealer side yet, so for now anyone can configure their own cashier nodes. 
 

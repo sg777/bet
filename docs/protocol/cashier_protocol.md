@@ -4,7 +4,7 @@ This document discusses about how the funds locked and released during the game 
 
 Notary nodes are the nodes which are elected and trusted by the network. The idea of having notary nodes to lock and release the funds is to remove the control over the funds from the dealer.
 
-Once if the node is trusted and elected as a notary, it runs the cashier protocol server side. The implementation of cashier portocol is present inside the `privatebet` directory.
+Once if the node is trusted and elected as a notary, it runs the cashier protocol server side. The implementation of cashier portocol is present inside the `src` directory.
 
 ### Steps to run a notary node with cashier protocol
 ```

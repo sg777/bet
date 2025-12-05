@@ -8,7 +8,7 @@ In this article we findout the details about how the players discover the dealer
 3. Player fetch this info from the cashiers
 
 ### Dealer advertising its presence
-In the system the cashier nodes are predetermined ones and this info is stored in the `cashier_nodes.json` file which is present at the path `/bet/privatebet/config`. And the contents of this file looks as below:
+In the system the cashier nodes are predetermined ones and this info is stored in the `cashier_nodes.json` file which is present at the path `/bet/src/config`. And the contents of this file looks as below:
 ```
 [{
 		"pubkey":	"0377653051fe9dd919ad2d70422f692a43c46ac72fcfe2dfd3302ec30dd16aaf40",
@@ -28,7 +28,7 @@ So when the dealer starts this information is already been available to the deal
 Here is  how we run the dealer
 ```
 cd
-cd bet/privatebet
+cd bet/src
 ./bet dcv ipv4_address_of_this_node
 ```
 And this dealer info is advertised to all the cashier nodes, the json content of the message which the dealer sends to cashier nodes looks as below:
