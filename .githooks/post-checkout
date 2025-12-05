@@ -1,0 +1,6 @@
+#!/bin/sh
+# Automatically configure git to ignore dirty submodules in diffs
+# This ensures all developers have consistent git diff behavior
+
+git config diff.ignoreSubmodules dirty 2>/dev/null || true
+
