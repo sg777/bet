@@ -381,9 +381,7 @@ static void common_init()
 {
 	OS_init();
 	libgfshare_init();
-	if (bet_ln_config == BET_WITH_LN) {
-		check_ln_chips_sync();
-	}
+	// Lightning Network support removed - no longer used
 	bet_sqlite3_init();
 	bet_parse_cashier_config_ini_file();
 }

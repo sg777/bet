@@ -217,11 +217,15 @@ int32_t bet_dcv_frontend(struct lws *wsi, cJSON *argjson)
 		}
 	} else if (strcmp(method, "get_bal_info") == 0) {
 		cJSON *bal_info = cJSON_CreateObject();
-		bal_info = bet_get_chips_ln_bal_info();
+		cJSON_AddStringToObject(bal_info, "method", "bal_info");
+		cJSON_AddNumberToObject(bal_info, "chips_bal", chips_get_balance());
+		// Lightning Network support removed - ln_bal field removed
 		lws_write(wsi, (unsigned char *)cJSON_Print(bal_info), strlen(cJSON_Print(bal_info)), 0);
 	} else if (strcmp(method, "get_addr_info") == 0) {
 		cJSON *addr_info = cJSON_CreateObject();
-		addr_info = bet_get_chips_ln_addr_info();
+		cJSON_AddStringToObject(addr_info, "method", "addr_info");
+		cJSON_AddStringToObject(addr_info, "chips_addr", chips_get_new_address());
+		// Lightning Network support removed - ln_addr field removed
 		lws_write(wsi, (unsigned char *)cJSON_Print(addr_info), strlen(cJSON_Print(addr_info)), 0);
 	} else {
 		dlg_warn("Unknown Method::%s\n", method);
@@ -437,12 +441,7 @@ int32_t bet_player_join_req(cJSON *argjson, struct privatebet_info *bet, struct 
 	bet->numplayers = ++players_joined;
 	dcv_info.peerpubkeys[jint(argjson, "gui_playerID")] = jbits256(argjson, "pubkey");
 
-	if (bet_ln_config == BET_WITH_LN) {
-		strcpy((char *)dcv_info.uri[jint(argjson, "gui_playerID")], jstr(argjson, "uri"));
-		uri = (char *)malloc(ln_uri_length * sizeof(char));
-		type = ln_get_uri(&uri);
-		dlg_info("%s::\n%s", type, uri);
-	}
+	// Lightning Network support removed - uri handling no longer used
 
 	player_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(player_info, "method", "join_res");
@@ -450,10 +449,7 @@ int32_t bet_player_join_req(cJSON *argjson, struct privatebet_info *bet, struct 
 	cJSON_AddNumberToObject(player_info, "playerid", jint(argjson, "gui_playerID"));
 	jaddbits256(player_info, "pubkey", jbits256(argjson, "pubkey"));
 
-	if (bet_ln_config == BET_WITH_LN) {
-		cJSON_AddStringToObject(player_info, "uri", uri);
-		cJSON_AddStringToObject(player_info, "type", type);
-	}
+	// Lightning Network support removed - uri/type fields no longer added
 
 	cJSON_AddNumberToObject(player_info, "dealer", dealerPosition);
 	cJSON_AddNumberToObject(player_info, "pos_status", pos_on_table_empty);
@@ -1222,81 +1218,18 @@ int32_t bet_evaluate_hand(struct privatebet_info *bet, struct privatebet_vars *v
 	return retval;
 }
 
+// Lightning Network code removed - bet_ln_check() no longer used
 int32_t bet_ln_check(struct privatebet_info *bet)
 {
-	char channel_id[100];
-	int32_t retval = OK, channel_state;
-	char uri[100];
-
-	for (int32_t i = 0; i < bet_dcv->maxplayers; i++) {
-		strcpy(uri, (const char *)dcv_info.uri[i]);
-		strcpy(channel_id, strtok(uri, "@"));
-
-		while ((channel_state = ln_get_channel_status(channel_id)) != CHANNELD_NORMAL) {
-			dlg_info("Channel state::%d\n", channel_state);
-			if (channel_state == CHANNELD_AWAITING_LOCKIN) {
-				dlg_info("CHANNELD AWAITING LOCKIN\r");
-				fflush(stdout);
-				sleep(1);
-			} else if ((channel_state != CHANNELD_AWAITING_LOCKIN) && (channel_state != CHANNELD_NORMAL)) {
-				dlg_warn("Player: %d -> DCV LN Channel is not established, current channel_state=%d\n",
-					 i, channel_state);
-				sleep(1);
-			}
-		}
-		dlg_info("Player %d --> DCV channel ready\n", i);
-	}
-	return retval;
+	// Lightning Network support removed
+	return OK;
 }
 
+// Lightning Network code removed - bet_award_winner() no longer uses LN
 static int32_t bet_award_winner(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
 {
-	int32_t argc, retval = OK;
-	char **argv = NULL, channel_id[100], *invoice = NULL;
-	cJSON *pay_response = NULL, *invoice_info = NULL, *fund_channel_info = NULL;
-
-	argc = 4;
-	bet_alloc_args(argc, &argv);
-	strcpy(channel_id, strtok((char *)dcv_info.uri[jint(argjson, "playerid")], "@"));
-	if (ln_get_channel_status(channel_id) != CHANNELD_NORMAL) {
-		argv = bet_copy_args(argc, "lightning-cli", "fundchannel", channel_id, "500000");
-
-		fund_channel_info = cJSON_CreateObject();
-		retval = make_command(argc, argv, &fund_channel_info);
-		if (retval != OK) {
-			dlg_error("%s", bet_err_str(retval));
-			goto end;
-		}
-		dlg_info("Fund channel response:%s\n", cJSON_Print(fund_channel_info));
-		int state;
-		while ((state = ln_get_channel_status(channel_id)) != CHANNELD_NORMAL) {
-			if (state == CHANNELD_AWAITING_LOCKIN) {
-				dlg_info("CHANNELD_AWAITING_LOCKIN");
-			} else
-				dlg_info("LN Channel state::%d\n", state);
-
-			dlg_info("LN Channel state::%d\n", state);
-			sleep(10);
-		}
-		dlg_info("LN Channel state::%d\n", state);
-	}
-	invoice = jstr(argjson, "invoice");
-	invoice_info = cJSON_Parse(invoice);
-
-	bet_dealloc_args(argc, &argv);
-	argc = 3;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, "lightning-cli", "pay", jstr(invoice_info, "bolt11"));
-	pay_response = cJSON_CreateObject();
-	retval = make_command(argc, argv, &pay_response);
-	if (retval != OK) {
-		dlg_error("%s", bet_err_str(retval));
-		goto end;
-	}
-
-end:
-	bet_dealloc_args(argc, &argv);
-	return retval;
+	// Lightning Network support removed - award winner functionality simplified
+	return OK;
 }
 static void bet_push_joinInfo(cJSON *argjson, int32_t numplayers)
 {
@@ -1524,13 +1457,7 @@ static int32_t bet_dcv_process_join_req(cJSON *argjson, struct privatebet_info *
 					 OK;
 
 			heartbeat_on = 1;
-			if (bet_ln_config == BET_WITH_LN) {
-				retval = bet_ln_check(bet);
-				if (retval < 0) {
-					dlg_error("Issue in establishing the LN channels");
-					return retval;
-				}
-			}
+			// Lightning Network support removed - LN channel check no longer used
 			retval = bet_check_bvv_ready(bet);
 		}
 	}

@@ -213,7 +213,9 @@ void bet_player_paymentloop(void *_ptr)
 			if (((msgjson = cJSON_Parse(ptr)) != 0) && (recvlen > 0)) {
 				if ((method = jstr(msgjson, "method")) != 0) {
 					if (strcmp(method, "invoice") == 0) {
-						retval = ln_pay_invoice(msgjson, bet, NULL);
+						// Lightning Network support removed - invoice payment no longer supported
+						dlg_warn("Lightning Network invoice payment is no longer supported");
+						retval = ERR_LN;
 						if (retval == -1) {
 							dlg_warn("LN invoice payment is not completed");
 						}

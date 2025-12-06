@@ -385,26 +385,7 @@ end:
 	return tmp;
 }
 
-int32_t ln_pay_invoice(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
-{
-	int argc, player_id, retval = OK;
-	char **argv = NULL, *invoice = NULL;
-	cJSON *invoice_info = NULL, *pay_response = NULL;
-
-	player_id = jint(argjson, "playerID");
-	invoice = jstr(argjson, "invoice");
-	invoice_info = cJSON_Parse(invoice);
-
-	if (player_id == bet->myplayerid) {
-		argc = 3;
-		bet_alloc_args(argc, &argv);
-		argv = bet_copy_args(argc, "lightning-cli", "pay", jstr(invoice_info, "bolt11"));
-		pay_response = cJSON_CreateObject();
-		retval = make_command(argc, argv, &pay_response);
-	}
-	bet_dealloc_args(argc, &argv);
-	return retval;
-}
+// Lightning Network code removed - ln_pay_invoice() no longer used
 
 static int32_t bet_player_betting_invoice(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
 {
@@ -772,27 +753,7 @@ int32_t bet_client_init(cJSON *argjson, struct privatebet_info *bet, struct priv
 	return retval;
 }
 
-static int32_t bet_establish_ln_channel_with_dealer(cJSON *argjson)
-{
-	int32_t channel_state, retval = OK;
-	char channel_id[ln_uri_length], uri[ln_uri_length];
-
-	if ((retval = ln_check_if_address_isof_type(jstr(argjson, "type"))) != OK)
-		return retval;
-
-	strcpy(uri, jstr(argjson, "uri"));
-	strcpy(channel_id, strtok(jstr(argjson, "uri"), "@"));
-	channel_state = ln_get_channel_status(channel_id);
-	if ((channel_state != CHANNELD_AWAITING_LOCKIN) && (channel_state != CHANNELD_NORMAL)) {
-		if ((retval = ln_establish_channel(uri)) != OK)
-			return retval;
-	} else if (0 == channel_state) {
-		dlg_info("There isn't any pre-established channel with the dealer, so creating one now");
-		strcpy(uri, jstr(argjson, "uri"));
-		retval = ln_check_peer_and_connect(uri);
-	}
-	return retval;
-}
+// Lightning Network code removed - bet_establish_ln_channel_with_dealer() no longer used
 
 int32_t bet_client_join_res(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
 {
@@ -804,13 +765,7 @@ int32_t bet_client_join_res(cJSON *argjson, struct privatebet_info *bet, struct 
 		bet->myplayerid = jint(argjson, "playerid");
 		dlg_info("%s", cJSON_Print(argjson));
 
-		if (bet_ln_config == BET_WITH_LN) {
-			retval = bet_establish_ln_channel_with_dealer(argjson);
-			if (retval != OK) {
-				dlg_error("%s", bet_err_str(retval));
-				return retval;
-			}
-		}
+		// Lightning Network support removed - channel establishment no longer used
 
 		init_card_info = cJSON_CreateObject();
 		cJSON_AddNumberToObject(init_card_info, "dealer", jint(argjson, "dealer"));
@@ -849,11 +804,7 @@ int32_t bet_client_join(cJSON *argjson, struct privatebet_info *bet)
 	cJSON_AddStringToObject(joininfo, "method", "join_req");
 	jaddbits256(joininfo, "pubkey", key.prod);
 
-	if (bet_ln_config == BET_WITH_LN) {
-		uri = (char *)malloc(ln_uri_length * sizeof(char));
-		ln_get_uri(&uri);
-		cJSON_AddStringToObject(joininfo, "uri", uri);
-	}
+	// Lightning Network support removed - uri field no longer added
 
 	cJSON_AddNumberToObject(joininfo, "gui_playerID", (jint(argjson, "gui_playerID") - 1));
 	cJSON_AddStringToObject(joininfo, "req_identifier", req_identifier);
@@ -969,7 +920,13 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 			retval = bet_player_round_betting(argjson, bet_player, player_vars);
 			break;
 		cases("get_bal_info")
-			player_lws_write(bet_get_chips_ln_bal_info());
+			{
+				cJSON *bal_info = cJSON_CreateObject();
+				cJSON_AddStringToObject(bal_info, "method", "bal_info");
+				cJSON_AddNumberToObject(bal_info, "chips_bal", chips_get_balance());
+				// Lightning Network support removed - ln_bal field removed
+				player_lws_write(bal_info);
+			}
 			break;
 		cases("player_join")
 			retval = bet_player_process_player_join(argjson);
@@ -1686,7 +1643,9 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 				retval = bet_client_receive_share(argjson, bet, vars);
 			}
 		} else if (strcmp(method, "invoice") == 0) {
-			retval = ln_pay_invoice(argjson, bet, vars);
+			// Lightning Network support removed - invoice payment no longer supported
+			dlg_warn("Lightning Network invoice payment is no longer supported");
+			retval = ERR_LN;
 		} else if (strcmp(method, "bettingInvoice") == 0) {
 			retval = bet_player_betting_invoice(argjson, bet, vars);
 		} else if (strcmp(method, "winner") == 0) {
@@ -1702,7 +1661,8 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 		} else if (strcmp(method, "reset") == 0) {
 			retval = bet_player_reset(bet, vars);
 		} else if (strcmp(method, "seats") == 0) {
-			cJSON_AddNumberToObject(argjson, "playerFunds", ln_listfunds());
+			// Lightning Network support removed - using chips balance instead
+			cJSON_AddNumberToObject(argjson, "playerFunds", (int64_t)(chips_get_balance() * satoshis));
 			player_lws_write(argjson);
 		} else if (strcmp(method, "finalInfo") == 0) {
 			player_lws_write(argjson);
