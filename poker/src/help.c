@@ -24,119 +24,154 @@ void bet_command_info()
 	// Define command sections with their descriptions
 	typedef struct {
 		const char *section;
+		const char *description;
 		const char *commands[10]; // Array of command strings
 		int cmd_count; // Number of commands in this section
 	} CommandSection;
 
 	// Define all command sections
 	CommandSection sections[] = {
-		{ "==Dealer==",
+		{ "Dealer", "Start and manage dealer nodes",
 		  {
-			  "dcv <ipv4_address>     Start the dealer node",
+			  "  dcv <ipv4_address>              Start the dealer node",
 		  },
 		  1 },
-		{ "==Player==",
+		{ "Player", "Start player nodes",
 		  {
-			  "player                 Start the player node",
+			  "  player                           Start the player node",
 		  },
 		  1 },
-		{ "==Cashier==",
+		{ "Cashier", "Start cashier nodes",
 		  {
-			  "cashierd cashier <ipv4_address>  Start the cashier node",
+			  "  cashierd cashier <ipv4_address>  Start the cashier node",
 		  },
 		  1 },
-		{ "==Dealer Registration==",
+		{ "Dealer Registration", "Manage dealer registration",
 		  {
-			  "register_dealer <dealer_id>      Register a new dealer",
-			  "deregister_dealer <dealer_id>    Deregister an existing dealer",
-			  "raise_registration_dispute <dealer_id> <action>  Raise a dealer registration dispute",
+			  "  register_dealer <dealer_id>       Register a new dealer",
+			  "  deregister_dealer <dealer_id>     Deregister an existing dealer",
+			  "  raise_registration_dispute <dealer_id> <action>  Raise a dispute",
 		  },
 		  3 },
-		{ "==DRP (Dispute Resolution Protocol)==",
+		{ "DRP (Dispute Resolution Protocol)", "Resolve game disputes",
 		  {
-			  "game info <fail|success>         Display game information",
-			  "game solve                       Resolve all disputes",
-			  "game dispute <tx_id>             Resolve specific dispute",
+			  "  game info <fail|success>         Display game information",
+			  "  game solve                       Resolve all disputes",
+			  "  game dispute <tx_id>              Resolve specific dispute",
 		  },
 		  3 },
-		{ "==Wallet==",
+		{ "Wallet", "Manage funds and transactions",
 		  {
-			  "withdraw <amount> <chips_address>  Withdraw specific amount",
-			  "withdraw all <chips_address>       Withdraw all funds",
-			  "spendable                          List spendable transactions",
-			  "consolidate                        Consolidate funds",
-			  "tx_split <m> <n>                   Split transaction (m into n parts)",
-			  "extract_tx_data <tx_id>            Extract transaction data",
+			  "  withdraw <amount> <chips_address>  Withdraw specific amount",
+			  "  withdraw all <chips_address>       Withdraw all funds",
+			  "  spendable                         List spendable transactions",
+			  "  consolidate                        Consolidate funds",
+			  "  tx_split <m> <n>                  Split transaction (m into n parts)",
+			  "  extract_tx_data <tx_id>           Extract transaction data",
 		  },
 		  6 },
-		{ "==Blockchain Scanner==",
+		{ "Blockchain Scanner", "Scan blockchain for game data",
 		  {
-			  "scan                               Scan blockchain for game info",
+			  "  scan                              Scan blockchain for game info",
 		  },
 		  1 },
-		{ "==VDXF ID Commands==",
+		{ "VDXF ID Commands", "Manage Verus ID information",
 		  {
-			  "print_id <id_name> <type>          Print ID information",
-			  "print <id_name> <key_name>         Print specific key information",
-			  "add_dealer <dealer_id>             Add a dealer",
-			  "list_dealers                       List all dealers",
-			  "list_tables                        List all tables",
-			  "reset_id                           Reset ID information",
+			  "  print_id <id_name> <type>         Print ID information",
+			  "  print <id_name> <key_name>        Print specific key information",
+			  "  add_dealer <dealer_id>            Add a dealer",
+			  "  list_dealers                       List all dealers",
+			  "  list_tables                        List all tables",
+			  "  reset_id                           Reset ID information",
 		  },
 		  6 },
-		{ "==Help==",
+		{ "Help", "Get detailed command help",
 		  {
-			  "help <command>         Get detailed help for a command",
-			  "                       Supported commands: cashier, dealer, player, game,",
-			  "                       spendable, scan, withdraw, verus, vdxf",
+			  "  help <command>                    Get detailed help for a command",
+			  "",
+			  "  Supported commands: cashier, dealer, player, game, spendable,",
+			  "  scan, withdraw, verus, vdxf",
 		  },
-		  3 }
+		  4 }
 	};
 
-	// Build the help text
-	char *help_text = strdup("\nAvailable Commands:\n");
+	// Calculate total size needed - allocate a large enough buffer
+	size_t total_size = 5000; // Large buffer to avoid overflow
+	char *help_text = malloc(total_size);
 	if (!help_text) {
 		dlg_error("Memory allocation failed");
 		return;
 	}
+	
+	size_t pos = 0;
+	int written;
+	
+	// Add header
+	written = snprintf(help_text + pos, total_size - pos,
+		"\n"
+		"==================================================================\n"
+		"                    Available Commands\n"
+		"==================================================================\n\n");
+	if (written > 0 && (size_t)written < total_size - pos) {
+		pos += written;
+	}
 
 	// Add each section and its commands
 	for (size_t i = 0; i < sizeof(sections) / sizeof(sections[0]); i++) {
-		// Add section header
-		char *temp = malloc(strlen(help_text) + strlen(sections[i].section) + 3);
-		if (!temp) {
-			free(help_text);
-			dlg_error("Memory allocation failed");
-			return;
+		// Add section header with separator
+		written = snprintf(help_text + pos, total_size - pos,
+			"------------------------------------------------------------------\n");
+		if (written > 0 && (size_t)written < total_size - pos) {
+			pos += written;
 		}
-		sprintf(temp, "%s\n%s\n", help_text, sections[i].section);
-		free(help_text);
-		help_text = temp;
+		
+		written = snprintf(help_text + pos, total_size - pos,
+			"  %s - %s\n", sections[i].section, sections[i].description);
+		if (written > 0 && (size_t)written < total_size - pos) {
+			pos += written;
+		}
+		
+		written = snprintf(help_text + pos, total_size - pos,
+			"------------------------------------------------------------------\n");
+		if (written > 0 && (size_t)written < total_size - pos) {
+			pos += written;
+		}
 
 		// Add commands
 		for (int j = 0; j < sections[i].cmd_count; j++) {
-			temp = malloc(strlen(help_text) + strlen(sections[i].commands[j]) + 3);
-			if (!temp) {
-				free(help_text);
-				dlg_error("Memory allocation failed");
-				return;
+			if (strlen(sections[i].commands[j]) > 0) {
+				written = snprintf(help_text + pos, total_size - pos,
+					"%s\n", sections[i].commands[j]);
+			} else {
+				written = snprintf(help_text + pos, total_size - pos, "\n");
 			}
-			sprintf(temp, "%s%s\n", help_text, sections[i].commands[j]);
-			free(help_text);
-			help_text = temp;
+			if (written > 0 && (size_t)written < total_size - pos) {
+				pos += written;
+			}
+		}
+		
+		// Add spacing between sections
+		if (i < sizeof(sections) / sizeof(sections[0]) - 1) {
+			written = snprintf(help_text + pos, total_size - pos, "\n");
+			if (written > 0 && (size_t)written < total_size - pos) {
+				pos += written;
+			}
 		}
 	}
 
 	// Add final help message
-	char *temp = malloc(strlen(help_text) + 100);
-	if (!temp) {
-		free(help_text);
-		dlg_error("Memory allocation failed");
-		return;
+	written = snprintf(help_text + pos, total_size - pos,
+		"\n"
+		"------------------------------------------------------------------\n"
+		"  Quick Help\n"
+		"------------------------------------------------------------------\n"
+		"  For detailed information about a specific command, use:\n"
+		"\n"
+		"    ./bet help <command>\n"
+		"\n");
+	if (written > 0 && (size_t)written < total_size - pos) {
+		pos += written;
 	}
-	sprintf(temp, "%s\nFor more information about a specific command, use: ./bet help <command>\n", help_text);
-	free(help_text);
-	help_text = temp;
 
 	// Display the help text
 	dlg_info("%s", help_text);
