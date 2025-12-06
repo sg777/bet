@@ -1615,11 +1615,6 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 	}
 	data[new_size - 1] = '\0';
 	
-	// Close pipe and check for errors in output (Verus exceptions, etc.)
-	// Note: We check output first, then close, to avoid double-close issues
-	int exit_status = pclose(fp);
-	fp = NULL; // Set to NULL so we don't close it again
-	
 	// Check for error messages in output (Verus exceptions, etc.)
 	// This catches "UNKNOWN EXCEPTION" and other error patterns
 	if (strstr(data, "UNKNOWN EXCEPTION") != NULL) {
@@ -1639,9 +1634,26 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		goto end;
 	}
 	
+	// Close pipe and check exit status
+	int exit_status = pclose(fp);
+	fp = NULL; // Set to NULL so we don't close it again
+	
 	// Check exit status - if command failed and we got no data, it's an error
-	// Note: exit_status from pclose is the wait status, need to extract exit code
-	// For simplicity, we check if exit_status != 0 (which indicates failure)
+	// Note: pclose returns -1 on error, or the wait status on success
+	// WEXITSTATUS would extract exit code, but we check != 0 for simplicity
+	if (exit_status == -1) {
+		dlg_error("Error closing pipe for command: %s", command);
+		if (strcmp(argv[0], blockchain_cli) == 0) {
+			retval = ERR_CHIPS_COMMAND;
+		} else if (strcmp(argv[0], "lightning-cli") == 0) {
+			retval = ERR_LN_COMMAND;
+		} else {
+			retval = ERR_COMMAND_FAILED;
+		}
+		goto end;
+	}
+	
+	// If exit status indicates failure and we got no data, it's an error
 	if (exit_status != 0 && strlen(data) == 0) {
 		dlg_error("Command failed with exit status %d: %s", exit_status, command);
 		if (strcmp(argv[0], blockchain_cli) == 0) {
@@ -1729,9 +1741,21 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 				if (data[strlen(data) - 1] == '\n')
 					data[strlen(data) - 1] = '\0';
 				cJSON_AddStringToObject(*argjson, "op_id", data);
+			} else if (strcmp(argv[1], "getbalance") == 0) {
+				// getbalance returns a plain number string, not JSON
+				if (data[strlen(data) - 1] == '\n')
+					data[strlen(data) - 1] = '\0';
+				*argjson = cJSON_CreateString(data);
 			} else {
 				*argjson = cJSON_Parse(data);
-				cJSON_AddNumberToObject(*argjson, "code", 0);
+				if (*argjson == NULL) {
+					// If parsing fails, create an error object
+					*argjson = cJSON_CreateObject();
+					cJSON_AddStringToObject(*argjson, "error", "Failed to parse JSON response");
+					retval = ERR_JSON_PARSING;
+				} else {
+					cJSON_AddNumberToObject(*argjson, "code", 0);
+				}
 			}
 		}
 	}
