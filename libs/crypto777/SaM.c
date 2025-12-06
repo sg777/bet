@@ -39,7 +39,7 @@
 //#include "bits777.c"
 //#include "utils777.c"
 #include <stdlib.h>
-#include "../includes/curve25519.h"
+#include "../../includes/curve25519.h"
 #define MAX_INPUT_SIZE ((int32_t)(65536 - sizeof(bits256) - 2*sizeof(uint32_t)))
 
 struct SaM_info {  bits384 bits; TRIT trits[SAM_STATE_SIZE],hash[SAM_HASH_SIZE]; };

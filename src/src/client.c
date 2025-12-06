@@ -18,9 +18,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "../includes/cJSON.h"
-#include "../includes/ppapi/c/pp_stdint.h"
-#include "../log/macrologger.h"
+#include "../../includes/cJSON.h"
+#include "../../includes/ppapi/c/pp_stdint.h"
+#include "../../log/macrologger.h"
 #include "bet.h"
 #include "cards777.h"
 #include "client.h"

@@ -1,6 +1,6 @@
 #include "misc.h"
-#include "../includes/curl/curl.h"
-#include "../includes/curl/easy.h"
+#include "../../includes/curl/curl.h"
+#include "../../includes/curl/easy.h"
 
 int32_t hexstr_to_str(char *input, char *output)
 {

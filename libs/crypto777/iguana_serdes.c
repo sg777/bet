@@ -15,7 +15,7 @@
 
 #ifndef FROM_JS
 #include "OS_portable.h"
-#include "../includes/curve25519.h"
+#include "../../includes/curve25519.h"
 
 // threadsafe 
 int32_t iguana_rwnum(int32_t rwflag,uint8_t *serialized,int32_t len,void *endianedp)

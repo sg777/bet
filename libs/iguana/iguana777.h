@@ -74,9 +74,9 @@
 #else*/
 //#ifdef __APPLE__
 // #if defined(__APPLE__) || defined(WIN32) || defined(USE_STATIC_NANOMSG)
-#include "../external/nng/include/nng/compat/nanomsg/nn.h"
-#include "../external/nng/include/nng/compat/nanomsg/bus.h"
-#include "../external/nng/include/nng/compat/nanomsg/pubsub.h"
+#include "../../external/nng/include/nng/compat/nanomsg/nn.h"
+#include "../../external/nng/include/nng/compat/nanomsg/bus.h"
+#include "../../external/nng/include/nng/compat/nanomsg/pubsub.h"
 #include "../external/nng/include/nng/compat/nanomsg/pipeline.h"
 #include "../external/nng/include/nng/compat/nanomsg/reqrep.h"
 #include "../external/nng/include/nng/compat/nanomsg/tcp.h"
@@ -93,12 +93,12 @@ struct supernet_info;
 struct exchange_info;
 
 #include "../crypto777/OS_portable.h"
-#include "../datachain/datachain.h"
+#include "../../datachain/datachain.h"
 
-#include "../includes/iguana_defines.h"
-#include "../includes/iguana_types.h"
-#include "../includes/iguana_structs.h"
-#include "../basilisk/basilisk.h"
+#include "../../includes/iguana_defines.h"
+#include "../../includes/iguana_types.h"
+#include "../../includes/iguana_structs.h"
+#include "../../basilisk/basilisk.h"
 #include "dPoW.h"
 
 struct supernet_address

@@ -28,20 +28,20 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "../crypto777/OS_portable.h"
+#include "../../libs/crypto777/OS_portable.h"
 
 #include <libwebsockets.h>
 
-#include "../external/dlg/include/dlg/dlg.h"
-#include "../external/iniparser/src/iniparser.h"
+#include "../../external/dlg/include/dlg/dlg.h"
+#include "../../external/iniparser/src/iniparser.h"
 
-#include "../external/nng/include/nng/compat/nanomsg/bus.h"
-#include "../external/nng/include/nng/compat/nanomsg/nn.h"
-#include "../external/nng/include/nng/compat/nanomsg/pair.h"
-#include "../external/nng/include/nng/compat/nanomsg/pipeline.h"
-#include "../external/nng/include/nng/compat/nanomsg/pubsub.h"
-#include "../external/nng/include/nng/compat/nanomsg/reqrep.h"
-#include "../external/nng/include/nng/compat/nanomsg/tcp.h"
+#include "../../external/nng/include/nng/compat/nanomsg/bus.h"
+#include "../../external/nng/include/nng/compat/nanomsg/nn.h"
+#include "../../external/nng/include/nng/compat/nanomsg/pair.h"
+#include "../../external/nng/include/nng/compat/nanomsg/pipeline.h"
+#include "../../external/nng/include/nng/compat/nanomsg/pubsub.h"
+#include "../../external/nng/include/nng/compat/nanomsg/reqrep.h"
+#include "../../external/nng/include/nng/compat/nanomsg/tcp.h"
 
 #include "common.h"
 #include "vdxf.h"

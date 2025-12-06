@@ -13,8 +13,8 @@
  *                                                                            *
  ******************************************************************************/
 #include "bet.h"
-#include "../includes/curl/curl.h"
-#include "../log/macrologger.h"
+#include "../../includes/curl/curl.h"
+#include "../../log/macrologger.h"
 #include "cards777.h"
 #include "cashier.h"
 #include "client.h"

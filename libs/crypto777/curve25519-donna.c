@@ -47,7 +47,7 @@
 
 #include <string.h>
 #include <stdint.h>
-#include "../includes/curve25519.h"
+#include "../../includes/curve25519.h"
 
 #ifdef _MSC_VER
 #define inline __inline

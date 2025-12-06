@@ -20,7 +20,7 @@
 #define crypto777_ramcoder_h
 #include <stdio.h>
 #include "../crypto777/OS_portable.h"
-#include "../includes/curve25519.h"
+#include "../../includes/curve25519.h"
 
 
 #define RAMMASK_BIT(x) ((uint16_t)(1 << ((8 * sizeof(uint16_t)) - (1 + (x)))))
