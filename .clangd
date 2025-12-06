@@ -1,0 +1,4 @@
+CompileFlags:
+  Add: [-std=c99, -I/root/bet/poker/include]
+  Remove: [-m*]
+
