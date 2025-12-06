@@ -377,111 +377,129 @@ static char *bet_pick_dealer()
 void bet_start(int argc, char **argv)
 {
 	int32_t retval = OK;
+	const char *cmd = (argc < 2) ? NULL : argv[1];
 
+	// No command provided - show help
 	if (argc < 2) {
 		bet_command_info();
 		return;
 	}
 
-	if ((strcmp(argv[1], "newblock") == 0) && (argc == 3)) {
+	// Handle newblock command (early return, no initialization needed)
+	if (strcmp(cmd, "newblock") == 0 && argc == 3) {
 		process_block(argv[2]);
 		return;
 	}
 
+	// Initialize common components for other commands
 	bet_set_unique_id();
 	bet_parse_blockchain_config_ini_file();
 
-	if ((strcmp(argv[1], "add_dealer") == 0) && (argc == 3)) {
+	// Dealer management commands
+	if (strcmp(cmd, "add_dealer") == 0 && argc == 3) {
 		retval = add_dealer(argv[2]);
-	} else if ((strcmp(argv[1], "register_dealer") == 0) && (argc == 3)) {
+	} else if (strcmp(cmd, "register_dealer") == 0 && argc == 3) {
 		retval = register_dealer(argv[2]);
-	} else if ((strcmp(argv[1], "deregister_dealer") == 0) && (argc == 3)) {
+	} else if (strcmp(cmd, "deregister_dealer") == 0 && argc == 3) {
 		retval = deregister_dealer(argv[2]);
-	} else if ((strcmp(argv[1], "c") == 0) || (strcmp(argv[1], "cashier") == 0)) {
-		dlg_info("Starting cashier node");
-		bet_node_type = cashier;
-		cashier_game_init("sg777_t");
-	} else if (strcmp(argv[1], "consolidate") == 0) {
-		cJSON *tx = NULL;
-		double amount = chips_get_balance() - chips_tx_fee;
-		tx = chips_transfer_funds(amount, chips_get_new_address());
-		if (tx)
-			dlg_info("Consolidated tx::%s", cJSON_Print(tx));
-	} else if ((strcmp(argv[1], "d") == 0) || (strcmp(argv[1], "dcv") == 0) || (strcmp(argv[1], "dealer") == 0)) {
-		bet_node_type = dealer;
-		retval = bet_parse_verus_dealer();
-	} else if (strcmp(argv[1], "extract_tx_data") == 0) {
-		if (argc == 3) {
-			cJSON *temp = NULL;
-			temp = chips_extract_tx_data_in_JSON(argv[2]);
-			if (temp)
-				dlg_info("%s", cJSON_Print(temp));
-		} else {
-			bet_help_extract_tx_data_command_usage();
-		}
-	} else if (strcmp(argv[1], "game") == 0) {
-		playing_nodes_init();
-		bet_handle_game(argc, argv);
-	} else if ((strcmp(argv[1], "h") == 0) || (strcmp(argv[1], "-h") == 0) || (strcmp(argv[1], "help") == 0) ||
-		   (strcmp(argv[1], "--help") == 0)) {
-		if (argc == 3) {
-			bet_help_command(argv[2]);
-		} else {
-			bet_command_info();
-		}
-	} else if (strcmp(argv[1], "list_dealers") == 0) {
-		cJSON *dealers = list_dealers();
-		if (dealers) {
-			dlg_info("Dealers ::%s", cJSON_Print(dealers));
-		}
-	} else if (strcmp(argv[1], "list_tables") == 0) {
-		list_tables();
-	} else if ((strcmp(argv[1], "p") == 0) || (strcmp(argv[1], "player") == 0)) {
-		bet_node_type = player;
-		retval = handle_verus_player();
-	} else if ((strcmp(argv[1], "print") == 0) && (argc > 3)) {
-		print_vdxf_info(argc, argv);
-	} else if ((strcmp(argv[1], "print_id") == 0) && (argc > 3)) {
-		print_id_info(argc, argv);
-	} else if ((strcmp(argv[1], "print_table_key") == 0) && (argc >= 3)) {
-		print_table_key_info(argc, argv);
-	} else if ((strcmp(argv[1], "reset_id") == 0) && (argc == 3)) {
-		if (id_cansignfor(argv[2], 0, &retval)) {
-			cJSON *out = update_cmm(argv[2], NULL);
-			dlg_info("%s", cJSON_Print(out));
-		}
-	} else if (strcmp(argv[1], "scan") == 0) {
-		bet_sqlite3_init();
-		scan_games_info();
-	} else if (strcmp(argv[1], "spendable") == 0) {
-		cJSON *spendable_tx = chips_spendable_tx();
-		dlg_info("CHIPS Spendable tx's :: %s\n", cJSON_Print(spendable_tx));
-	} else if (strcmp(argv[1], "tx_split") == 0) {
-		if (argc == 4) {
-			do_split_tx_amount(atof(argv[2]), atoi(argv[3]));
-		}
-	} else if (strcmp(argv[1], "withdraw") == 0) {
-		if (argc == 4) {
-			cJSON *tx = NULL;
-			double amount = 0;
-			if (strcmp(argv[2], "all") == 0) {
-				amount = chips_get_balance() - chips_tx_fee;
-			} else {
-				amount = atof(argv[2]);
-			}
-			tx = chips_transfer_funds(amount, argv[3]);
-			if (tx)
-				dlg_info("tx details::%s", cJSON_Print(tx));
-		} else {
-			bet_help_withdraw_command_usage();
-		}
-	} else if (strcmp(argv[1], "raise_registration_dispute") == 0) {
+	} else if (strcmp(cmd, "raise_registration_dispute") == 0) {
 		if (argc != 4) {
 			dlg_error("Usage: %s raise_registration_dispute <dealer_id> <action>", argv[0]);
 			return;
 		}
 		raise_dealer_registration_dispute(argv[2], argv[3]);
-	} else {
+	}
+	// Node type commands
+	else if (strcmp(cmd, "c") == 0 || strcmp(cmd, "cashier") == 0) {
+		dlg_info("Starting cashier node");
+		bet_node_type = cashier;
+		cashier_game_init("sg777_t");
+	} else if (strcmp(cmd, "d") == 0 || strcmp(cmd, "dcv") == 0 || strcmp(cmd, "dealer") == 0) {
+		bet_node_type = dealer;
+		retval = bet_parse_verus_dealer();
+	} else if (strcmp(cmd, "p") == 0 || strcmp(cmd, "player") == 0) {
+		bet_node_type = player;
+		retval = handle_verus_player();
+	}
+	// Game commands
+	else if (strcmp(cmd, "game") == 0) {
+		playing_nodes_init();
+		bet_handle_game(argc, argv);
+	} else if (strcmp(cmd, "list_dealers") == 0) {
+		cJSON *dealers = list_dealers();
+		if (dealers) {
+			dlg_info("Dealers ::%s", cJSON_Print(dealers));
+		}
+	} else if (strcmp(cmd, "list_tables") == 0) {
+		list_tables();
+	}
+	// Transaction commands
+	else if (strcmp(cmd, "consolidate") == 0) {
+		cJSON *tx = NULL;
+		double amount = chips_get_balance() - chips_tx_fee;
+		tx = chips_transfer_funds(amount, chips_get_new_address());
+		if (tx) {
+			dlg_info("Consolidated tx::%s", cJSON_Print(tx));
+		}
+	} else if (strcmp(cmd, "withdraw") == 0) {
+		if (argc == 4) {
+			cJSON *tx = NULL;
+			double amount = (strcmp(argv[2], "all") == 0) 
+				? chips_get_balance() - chips_tx_fee 
+				: atof(argv[2]);
+			tx = chips_transfer_funds(amount, argv[3]);
+			if (tx) {
+				dlg_info("tx details::%s", cJSON_Print(tx));
+			}
+		} else {
+			bet_help_withdraw_command_usage();
+		}
+	} else if (strcmp(cmd, "tx_split") == 0 && argc == 4) {
+		do_split_tx_amount(atof(argv[2]), atoi(argv[3]));
+	} else if (strcmp(cmd, "spendable") == 0) {
+		cJSON *spendable_tx = chips_spendable_tx();
+		dlg_info("CHIPS Spendable tx's :: %s\n", cJSON_Print(spendable_tx));
+	}
+	// Data extraction and scanning
+	else if (strcmp(cmd, "extract_tx_data") == 0) {
+		if (argc == 3) {
+			cJSON *temp = chips_extract_tx_data_in_JSON(argv[2]);
+			if (temp) {
+				dlg_info("%s", cJSON_Print(temp));
+			}
+		} else {
+			bet_help_extract_tx_data_command_usage();
+		}
+	} else if (strcmp(cmd, "scan") == 0) {
+		bet_sqlite3_init();
+		scan_games_info();
+	}
+	// Print/display commands
+	else if (strcmp(cmd, "print") == 0 && argc > 3) {
+		print_vdxf_info(argc, argv);
+	} else if (strcmp(cmd, "print_id") == 0 && argc > 3) {
+		print_id_info(argc, argv);
+	} else if (strcmp(cmd, "print_table_key") == 0 && argc >= 3) {
+		print_table_key_info(argc, argv);
+	}
+	// Identity management
+	else if (strcmp(cmd, "reset_id") == 0 && argc == 3) {
+		if (id_cansignfor(argv[2], 0, &retval)) {
+			cJSON *out = update_cmm(argv[2], NULL);
+			dlg_info("%s", cJSON_Print(out));
+		}
+	}
+	// Help commands
+	else if (strcmp(cmd, "h") == 0 || strcmp(cmd, "-h") == 0 || 
+		 strcmp(cmd, "help") == 0 || strcmp(cmd, "--help") == 0) {
+		if (argc == 3) {
+			bet_help_command(argv[2]);
+		} else {
+			bet_command_info();
+		}
+	}
+	// Unknown command
+	else {
 		bet_command_info();
 	}
 
