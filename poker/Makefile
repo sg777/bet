@@ -5,6 +5,7 @@ LIB := libbet
 # Updated source and include paths
 SRC_DIR := src
 INCLUDE_DIR := include
+BUILD_DIR := build
 
 # Updated source files path
 SRCFILES := $(SRC_DIR)/cards777.c  $(SRC_DIR)/client.c  $(SRC_DIR)/commands.c  $(SRC_DIR)/gfshare.c  \
@@ -15,7 +16,8 @@ SRCFILES := $(SRC_DIR)/cards777.c  $(SRC_DIR)/client.c  $(SRC_DIR)/commands.c  $
             $(SRC_DIR)/blinder.c $(SRC_DIR)/dealer.c $(SRC_DIR)/print.c $(SRC_DIR)/test.c \
             $(SRC_DIR)/deck.c $(SRC_DIR)/game.c $(SRC_DIR)/dealer_registration.c
 
-OBJFILES := $(patsubst %.c,%.o,$(SRCFILES))
+# Object files go in build directory
+OBJFILES := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCFILES))
 CC := gcc
 
 UNAME_S := $(shell uname -s)
@@ -39,13 +41,16 @@ CFLAGS := -g -fPIC -std=c99 $(WARNINGS) \
 
 LIGHTNING := lightning
 
-all: some_clean $(PROJNAME) build_dir_tree
+all: $(BUILD_DIR) some_clean $(PROJNAME) build_dir_tree
+
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
 
 some_clean:
 	$(RM) bet bet.o
 
 clean:
-	$(RM) $(OBJFILES) 
+	$(RM) -rf $(BUILD_DIR)
 	$(RM) $(PROJNAME)	    
 	$(RM) $(CASHIER)
 	$(RM) $(LIB).a
@@ -80,7 +85,8 @@ $(PROJNAME): $(OBJFILES)
 	-levent -lpthread -lstdc++
 	cp $(PROJNAME) $(CASHIER)
 
-%.o: %.c
+# Pattern rule to compile .c files to .o files in build directory
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -L$(TARGET_DIR) -I$(LIBINIPARSER_HEADERS) -I$(LIBWEBSOCKETS_HEADERS) \
 	-I$(LIBJSMN_HEADERS) -L$(LIBINIPARSER_LDFLAGS) -L$(LIBWEBSOCKETS_LDFLAGS) $(LDFLAGS) \
 	$(CPPFLAGS) -c $< -o $@ -I ../includes/curl
