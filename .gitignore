@@ -55,3 +55,4 @@ external/arm64-apple-darwin*
 dist/*
 bet_version.h
 compile_commands.json
+.vscode/
