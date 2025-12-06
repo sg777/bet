@@ -1,6 +1,5 @@
 #include "bet.h"
 #include "dealer.h"
-#include "vdxf.h"
 #include "deck.h"
 #include "cards777.h"
 #include "game.h"

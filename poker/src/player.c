@@ -1,8 +1,6 @@
 #include "bet.h"
-#include "common.h"
 #include "player.h"
 #include "err.h"
-#include "vdxf.h"
 #include "misc.h"
 #include "commands.h"
 #include "deck.h"

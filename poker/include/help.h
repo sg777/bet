@@ -1,3 +1,6 @@
+#ifndef HELP_H
+#define HELP_H
+
 void bet_command_info();
 void bet_help_dcv_command_usage();
 void bet_help_player_command_usage();
@@ -12,3 +15,5 @@ void bet_help_command(char *command);
 void bet_help_raise_registration_dispute_command_usage(void);
 void bet_help_register_dealer_command_usage(void);
 void bet_help_deregister_dealer_command_usage(void);
+
+#endif /* HELP_H */

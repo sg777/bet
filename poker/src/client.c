@@ -25,7 +25,6 @@
 #include "cards777.h"
 #include "client.h"
 #include "commands.h"
-#include "common.h"
 #include "gfshare.h"
 #include "network.h"
 #include "payment.h"

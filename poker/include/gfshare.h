@@ -1,3 +1,6 @@
+#ifndef GFSHARE_H
+#define GFSHARE_H
+
 #include "bet.h"
 void libgfshare_init();
 struct gfshare_ctx_bet *_gfshare_init_core(uint8_t *sharenrs, uint32_t sharecount, uint8_t threshold, uint32_t size,
@@ -21,3 +24,5 @@ uint8_t *gfshare_recoverdata(uint8_t *shares[], uint8_t *sharenrs, int32_t M, ui
 void gfshare_calc_share(uint8_t *buffer, int32_t size, int32_t M, uint32_t ilog, uint8_t *share);
 void gfshare_calc_shares(uint8_t *shares, uint8_t *secret, int32_t size, int32_t width, int32_t M, int32_t N,
 			 uint8_t *sharenrs, uint8_t *space, int32_t spacesize);
+
+#endif /* GFSHARE_H */

@@ -1,3 +1,6 @@
+#ifndef MISC_H
+#define MISC_H
+
 #include "bet.h"
 int32_t hexstr_to_str(char *input, char *output);
 void str_to_hexstr(char *input, char *output);
@@ -10,3 +13,5 @@ void struct_to_byte_arr(const void *object, size_t size, uint8_t *out);
 void cJSON_hex(cJSON *argjson, char **hexstr);
 cJSON *hex_cJSON(char *hex_data);
 cJSON *struct_table_to_cJSON(struct table *t);
+
+#endif /* MISC_H */

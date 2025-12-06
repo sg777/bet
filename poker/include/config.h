@@ -1,3 +1,6 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
 #include "bet.h"
 cJSON *bet_read_json_file(char *file_name);
 void bet_parse_dealer_config_ini_file();
@@ -9,3 +12,4 @@ void bet_parse_blockchain_config_ini_file();
 bool bet_is_new_block_set();
 int32_t bet_parse_verus_dealer();
 int32_t bet_parse_verus_player();
+#endif /* CONFIG_H */

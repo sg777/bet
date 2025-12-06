@@ -1,3 +1,6 @@
+#ifndef STATES_H
+#define STATES_H
+
 #include "bet.h"
 /***************************************************************
 Here contains the functions which are specific to DCV
@@ -32,3 +35,5 @@ int32_t bet_player_small_blind(cJSON *argjson, struct privatebet_info *bet, stru
 int32_t bet_player_round_betting_response(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars);
 
 int32_t bet_player_round_betting(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars);
+
+#endif /* STATES_H */

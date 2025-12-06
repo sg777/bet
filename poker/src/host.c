@@ -18,7 +18,6 @@
 #include "cards777.h"
 #include "client.h"
 #include "commands.h"
-#include "common.h"
 #include "network.h"
 #include "oracle.h"
 #include "payment.h"
@@ -37,8 +36,6 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-#include <string.h>
 
 #define LWS_PLUGIN_STATIC
 

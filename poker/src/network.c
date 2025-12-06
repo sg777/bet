@@ -29,7 +29,6 @@
 #include "network.h"
 #include "bet.h"
 #include "cards777.h"
-#include "common.h"
 #include "gfshare.h"
 #include "err.h"
 

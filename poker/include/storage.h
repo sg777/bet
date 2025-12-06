@@ -1,3 +1,6 @@
+#ifndef STORAGE_H
+#define STORAGE_H
+
 #include "bet.h"
 #include <sqlite3.h>
 
@@ -24,3 +27,5 @@ int32_t update_player_deck_info_a_rG(char *tx_id);
 int32_t update_player_deck_info_game_id_p_id(char *tx_id);
 int32_t insert_dealer_deck_info();
 int32_t insert_cashier_deck_info(char *table_id);
+
+#endif /* STORAGE_H */

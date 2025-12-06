@@ -1,3 +1,6 @@
+#ifndef PAYMENT_H
+#define PAYMENT_H
+
 #include "bet.h"
 /***************************************************************
 Here contains the functions which are specific to DCV
@@ -18,3 +21,5 @@ void bet_player_paymentloop(void *_ptr);
 
 int32_t bet_player_invoice_request(cJSON *argjson, cJSON *actionResponse, struct privatebet_info *bet, int32_t amount);
 int32_t bet_player_log_bet_info(cJSON *argjson, struct privatebet_info *bet, int32_t amount, int32_t action);
+
+#endif /* PAYMENT_H */

@@ -1,5 +1,4 @@
 #include "bet.h"
-#include "vdxf.h"
 #include "commands.h"
 #include "misc.h"
 #include "err.h"

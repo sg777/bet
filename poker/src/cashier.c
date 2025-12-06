@@ -7,7 +7,6 @@
 #include "storage.h"
 #include "misc.h"
 #include "cards777.h"
-#include "common.h"
 #include "err.h"
 #include "switchs.h"
 
@@ -949,7 +948,9 @@ void bet_raise_dispute(char *tx_id)
 void bet_handle_game(int argc, char **argv)
 {
 	switchs(argv[2]) {
-		cases("dispute")
+		cases(
+
+"dispute")
 			if (argc == 4) {
 				bet_raise_dispute(argv[3]);
 			}

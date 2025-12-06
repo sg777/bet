@@ -4,11 +4,9 @@
 
 #include "bet.h"
 #include "config.h"
-#include "common.h"
 #include "misc.h"
 #include "err.h"
 #include "commands.h"
-#include "vdxf.h"
 #include "dealer.h"
 
 char *dealer_config_ini_file = "../config/dealer_config.ini";

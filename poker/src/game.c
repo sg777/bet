@@ -1,7 +1,5 @@
 #include "bet.h"
 #include "game.h"
-#include "vdxf.h"
-#include "common.h"
 #include "err.h"
 
 struct t_game_info_struct t_game_info;

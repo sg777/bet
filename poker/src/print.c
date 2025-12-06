@@ -1,7 +1,5 @@
 #include "bet.h"
-#include "common.h"
 #include "misc.h"
-#include "vdxf.h"
 #include "print.h"
 #include "game.h"
 

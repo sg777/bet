@@ -1,3 +1,6 @@
+#ifndef CLIENT_H
+#define CLIENT_H
+
 #include "bet.h"
 
 char *enc_share_str(char hexstr[177], struct enc_share x);
@@ -42,3 +45,5 @@ void rest_display_cards(cJSON *argjson, int32_t this_playerID);
 cJSON *bet_get_available_dealers();
 int32_t bet_player_stack_info_req(struct privatebet_info *bet);
 void bet_handle_player_error(struct privatebet_info *bet, int32_t err_no);
+
+#endif /* CLIENT_H */

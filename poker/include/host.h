@@ -1,3 +1,6 @@
+#ifndef HOST_H
+#define HOST_H
+
 #include "bet.h"
 
 void bet_set_table_id();
@@ -25,3 +28,5 @@ void bet_init_player_seats_info();
 cJSON *bet_get_seats_json(int32_t max_players);
 void bet_dcv_bvv_backend_loop(void *_ptr);
 int32_t bet_dcv_bvv_backend(cJSON *argjson, struct dcv_bvv_sock_info *bet);
+
+#endif /* HOST_H */

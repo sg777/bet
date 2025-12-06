@@ -14,7 +14,6 @@
  ******************************************************************************/
 
 #include "bet.h"
-#include "common.h"
 #include "gfshare.h"
 #include "cards777.h"
 

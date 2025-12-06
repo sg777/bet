@@ -1,3 +1,6 @@
+#ifndef PRINT_H
+#define PRINT_H
+
 #include "bet.h"
 
 void print_struct_table(struct table *t);
@@ -9,3 +12,5 @@ void print_player_id(char *id);
 void print_table_key_info(int argc, char **argv);
 void print_id_info(int argc, char **argv);
 void print_vdxf_info(int argc, char **argv);
+
+#endif /* PRINT_H */

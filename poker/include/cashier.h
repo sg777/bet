@@ -1,3 +1,6 @@
+#ifndef CASHIER_H
+#define CASHIER_H
+
 void bet_game_multisigaddress();
 void bet_compute_m_of_n_msig_addr();
 void bet_check_cashier_nodes();
@@ -22,3 +25,5 @@ void bet_raise_dispute(char *tx_id);
 void bet_handle_game(int argc, char **argv);
 void find_bvv();
 int32_t bet_clear_tables();
+
+#endif /* CASHIER_H */

@@ -1,3 +1,6 @@
+#ifndef GAME_H
+#define GAME_H
+
 #include "bet.h"
 
 #define G_ZEROIZED_STATE 0
@@ -26,3 +29,5 @@ int32_t init_game_state(char *table_id);
 int32_t is_card_drawn(char *table_id);
 int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars);
 int32_t verus_small_blind(char *table_id, struct privatebet_vars *vars);
+
+#endif /* GAME_H */

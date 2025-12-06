@@ -10,8 +10,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <string.h>
-
 int32_t active_players = 0;
 int32_t player_status[CARDS777_MAXPLAYERS] = { 0 };
 
