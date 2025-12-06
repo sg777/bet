@@ -374,7 +374,7 @@ static char *bet_pick_dealer()
 	return NULL;
 }
 
-static void bet_start(int argc, char **argv)
+void bet_start(int argc, char **argv)
 {
 	int32_t retval = OK;
 
