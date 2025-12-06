@@ -60,10 +60,10 @@ First make sure the basics are working.
 
 ### lightning-cli: Connecting to 'chipsln-rpc': Connection refused
 
-**./bet player/dcv**
+**./bin/bin/bet player/dcv**
 
 ```
-root@server:~/bet/poker$ ./bet player
+root@server:~/bet/poker$ ./bin/bin/bet player
 lightning-cli: Connecting to 'chipsln-rpc': Connection refused
 ln is 7822365 blocks behind chips network
 lightning-cli: Connecting to 'chipsln-rpc': Connection refused
@@ -82,7 +82,7 @@ ln is 7822365 blocks behind chips network
 
 ### corrupted size vs. prev_size
 
-**./bet player/dcv**
+**./bin/bin/bet player/dcv**
 
 ```
 ln is in sync with chips

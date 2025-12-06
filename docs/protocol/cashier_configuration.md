@@ -37,7 +37,7 @@ The rules are not set yet, but there is a good discussion going on [here](https:
 ### Running cashier node
 The cashier node can be launched using either `cashierd` or `bet`. Right now, there isn't any difference between these two utilities so you can launch cashier node using either of these two. 
 ```
-./bet cashier <ipv4_addr>
+./bin/bet cashier <ipv4_addr>
 or
 ./cashierd cashier <ipv4_addr>
 

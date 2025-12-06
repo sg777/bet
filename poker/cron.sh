@@ -7,7 +7,7 @@ then
 else
     echo "$SERVICE stopped"
     cd /root/bet/poker
-    ./cashierd cashier 159.69.23.30
+    ./bin/cashierd cashier 159.69.23.30
     # uncomment to start nginx if stopped
     # systemctl start nginx
     # mail  

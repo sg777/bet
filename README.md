@@ -29,10 +29,10 @@ You will get an address and to this address deposit CHIPS to play.
 ```
 cd
 cd bet/poker
-./bet game solve
+./bin/bet game solve
 
 Withdraw using the following command
-./bet withdraw <amount> <to_your_chips_address>
+./bin/bet withdraw <amount> <to_your_chips_address>
 ```
 ## Setup
 There are many different ways in which you can setup the nodes to play the poker using bet. Here are some of the ways in which you can setup the nodes:
@@ -126,17 +126,17 @@ Then run the chips daemon
 #### step4 :- If you are a player run the player as follows
 ```
 cd
-./bet/poker/bet player
+./bet/poker/bin/bet player
 ```
 #### step4 :-  If you are the dealer run the dealer as follows
 ```
 cd
-./bet/poker/bet dcv <host_ip>
+./bet/poker/bin/bet dcv <host_ip>
 
 ```
 #### step5 :-  Hosting the GUI
 ##### Using the GUI hosted by the cashier and dealer nodes
-GUI can be hosted by anyone, by default the GUI is hosted by all the cashier nodes and dealer nodes can also host the GUI as a service they provide to its players. After starting the player node with `./bet player` in the above step, in the logs you see the list of the servers where the GUI hosted something like below:
+GUI can be hosted by anyone, by default the GUI is hosted by all the cashier nodes and dealer nodes can also host the GUI as a service they provide to its players. After starting the player node with `./bin/bet player` in the above step, in the logs you see the list of the servers where the GUI hosted something like below:
 ```
 [client.c:bet_player_handle_stack_info_resp:1345] Player can use any of the GUI's hosted by cashiers to connect to backend
 [config.c:bet_display_cashier_hosted_gui:236] http://141.94.227.65:1234/

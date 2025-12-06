@@ -29,7 +29,7 @@ Here is  how we run the dealer
 ```
 cd
 cd bet/poker
-./bet dcv ipv4_address_of_this_node
+./bin/bin/bet dcv ipv4_address_of_this_node
 ```
 And this dealer info is advertised to all the cashier nodes, the json content of the message which the dealer sends to cashier nodes looks as below:
 ```

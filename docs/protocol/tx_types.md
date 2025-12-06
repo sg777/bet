@@ -8,11 +8,11 @@ At the time of joining the table player locks funds at msig address owned by cas
 
 Any payin_tx's which are unspent are the indication that game didn't progressed successfully. The payin_tx's which are specific to the player node can be retrieved from the player local DB as follows:
 ```
-./bet game info fail
+./bin/bet game info fail
 ```
 The data part of one such payin_tx looks as follows:
 ```
-$ ./bet extract_tx_data 018f7aa0afd6321768aaac42c5d4dcee12dbf864d1bd534a36e382cbef9075ab
+$ ./bin/bin/bet extract_tx_data 018f7aa0afd6321768aaac42c5d4dcee12dbf864d1bd534a36e382cbef9075ab
 [bet.c:main:482] Data part of tx 
  {
 	"table_id":	"0e9d7446df17acdecd9578faf76a746352bdf17cdaa7b3fb37ac6578d5cec0df",
@@ -34,7 +34,7 @@ Lets take a look at what each field in the JSON object refering:
 ### Dust tx's to record game moves
 The data fields of a sample dust tx that happen during the geme looks as follows
 ```
-~/bet/poker$ ./bet extract_tx_data 58ec6cbcef7a223405d77b78e6fbf0425d2c3333105a586f99160f479e4ca26b
+~/bet/poker$ ./bin/bin/bet extract_tx_data 58ec6cbcef7a223405d77b78e6fbf0425d2c3333105a586f99160f479e4ca26b
 [bet.c:bet_start:449] Data part of tx 
  
 	"method":	"bet",
@@ -58,11 +58,11 @@ The payout_tx's are the indication of successful games that are played and you c
 
 The payout_tx's which are specific to the player are retrieved as follows:
 ```
-./bet game info success
+./bin/bet game info success
 ```
 The data part of one such payout_tx looks as follows:
 ```
-$ ./bet extract_tx_data c04da4d720cbaa940f5983134816892176ad0e153443db8e39cbe98082a1311c
+$ ./bin/bin/bet extract_tx_data c04da4d720cbaa940f5983134816892176ad0e153443db8e39cbe98082a1311c
 [bet.c:main:482] Data part of tx 
  {
 	"table_id":	"925beb9843e39782fcedb5988406dc6bbaa39c9fc517765a28cb509d8816eb39",

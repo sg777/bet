@@ -170,7 +170,7 @@ First determin what is the public IP of your server/VPS/VM/node. You probably kn
 NOTE: If you see the following output running `./bet` command for the first time, just execute the same command again. This seems to be the bug, and will be resolved in future updates to `bet`:
 
 ```bash
-./bet cashier 51.222.150.52
+./bin/bet cashier 51.222.150.52
 ln is in sync with chips
 sqlite3_init_db_name::36::db_name::/home/satinder/.bet/db/pangea.db
 corrupted size vs. prev_size
@@ -184,16 +184,16 @@ curl ifconfig.co
 
 ```bash
 # e.g. Dealer node is at 45.77.139.155 (you will know this IP from someone who will be running a dealer node OR you can run the dealer node yourself)
-$ cd ~/bet/poker && ./bet dcv 45.77.139.155
+$ cd ~/bet/poker && ./bin/bin/bet dcv 45.77.139.155
 ```
 
 ### Running Bet Player
 ```bash
-cd ~/bet/poker && ./bet player
+cd ~/bet/poker && ./bin/bin/bet player
 ```
 
 You might see something like this when running bet for the first time. The number of blocks will keep on rising. This means LN is not synced. You just need to let it be for a while and let it sync. Feel free to exit the currently running command. The sync is happening in the background in the tmux session that you have started earlier.
 ```
-root@959aa68123b4:~/bet# cd ~/bet/poker && ./bet dcv 45.77.139.155
+root@959aa68123b4:~/bet# cd ~/bet/poker && ./bin/bin/bet dcv 45.77.139.155
 ln is 48513 blocks behind chips network
 ```

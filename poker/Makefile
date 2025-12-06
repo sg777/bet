@@ -6,6 +6,8 @@ LIB := libbet
 SRC_DIR := src
 INCLUDE_DIR := include
 BUILD_DIR := build
+BIN_DIR := bin
+BIN_DIR := bin
 
 # Updated source files path
 SRCFILES := $(SRC_DIR)/cards777.c  $(SRC_DIR)/client.c  $(SRC_DIR)/commands.c  $(SRC_DIR)/gfshare.c  \
@@ -41,16 +43,19 @@ CFLAGS := -g -fPIC -std=c99 $(WARNINGS) \
 
 LIGHTNING := lightning
 
-all: $(BUILD_DIR) some_clean $(PROJNAME) build_dir_tree
+all: $(BUILD_DIR) $(BIN_DIR) some_clean $(BIN_DIR)/$(PROJNAME) build_dir_tree
 
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
+$(BIN_DIR):
+	@mkdir -p $(BIN_DIR)
+
 some_clean:
-	$(RM) bet bet.o
+	$(RM) bet bet.o $(BIN_DIR)/bet $(BIN_DIR)/cashierd
 
 clean:
-	$(RM) -rf $(BUILD_DIR)
+	$(RM) -rf $(BUILD_DIR) $(BIN_DIR)
 	$(RM) $(PROJNAME)	    
 	$(RM) $(CASHIER)
 	$(RM) $(LIB).a
@@ -77,13 +82,13 @@ endif
 
 $(info $$CC is [${CC}])
 
-$(PROJNAME): $(OBJFILES)
+$(BIN_DIR)/$(PROJNAME): $(OBJFILES) | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $(SRC_DIR)/bet.c $^ ../external/iniparser/libiniparser.a ../libs/crypto777/libcrypto777.a \
 	-L$(TARGET_DIR) -I$(LIBWEBSOCKETS_HEADERS) -I$(LIBJSMN_HEADERS) -I$(LIBINIPARSER_HEADERS) \
 	-L$(LIBWEBSOCKETS_LDFLAGS) $(LDFLAGS) $(CPPFLAGS) -lcurl -ldl -lnng -lpthread -lm -ljsmn \
 	-lwebsockets -ldlg -L/usr/local/lib -lm -lgmp -lsqlite3 -L/usr/local/lib -lssl -lcrypto \
 	-levent -lpthread -lstdc++
-	cp $(PROJNAME) $(CASHIER)
+	cp $(BIN_DIR)/$(PROJNAME) $(BIN_DIR)/$(CASHIER)
 
 # Pattern rule to compile .c files to .o files in build directory
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)

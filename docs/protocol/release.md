@@ -25,7 +25,7 @@ For Linux[Fully tested]: https://github.com/chips-blockchain/bet/releases/downlo
 wget https://github.com/chips-blockchain/bet/releases/download/v0.1.3-500-g2f3ba78/bet-linux-x86_64-v0.1.3-500-g2f3ba78.tar.gz
 tar -xvf bet-linux-x86_64-v0.1.3-500-g2f3ba78.tar.gz
 cd src
-./bet player #To start player node
+./bin/bin/bet player #To start player node
 ```
 > Note: If any issues are faced while running the downloaded binaries, please login the issue or post in the discord or try directly [compiling](./ubuntu_compile.md) from the source code.
 

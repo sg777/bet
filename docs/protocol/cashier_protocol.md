@@ -8,7 +8,7 @@ Once if the node is trusted and elected as a notary, it runs the cashier protoco
 
 ### Steps to run a notary node with cashier protocol
 ```
-./bet cashier
+./bin/bet cashier
 ```
 
 ### Notary nodes

@@ -27,7 +27,9 @@ monkeytype.sqlite3
 
 # Build directories
 poker/build/
+poker/bin/
 build/
+bin/
 obj/
 
 # privatebet generated files to ignore (legacy)

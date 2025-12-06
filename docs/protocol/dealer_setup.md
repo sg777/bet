@@ -22,10 +22,10 @@ As a dealer along with running the `bet` backend node, dealer should also be res
 ### Running the dealer bet backend
 ```
 cd bet/poker
-./bet dcv <ipv4_addr> #Here ipv4_addr is the public ipv4 address on which the dealer backend is running. 
+./bin/bin/bet dcv <ipv4_addr> #Here ipv4_addr is the public ipv4 address on which the dealer backend is running. 
 ```
 For example im running all my backend setup is on the node `159.69.23.30`, so i start my dealer backend is as follows:
-> ./bet dcv 159.69.23.30
+> ./bin/bin/bet dcv 159.69.23.30
 
 ### Running the dealer pangea-poker GUI backend
 The instructions to build & run `pangea-poker` GUI is [here](https://github.com/chips-blockchain/pangea-poker/tree/master#development). I'm copying them them the same below:
@@ -64,8 +64,8 @@ Due to any reason if the game didn't happen, the dealer can help in players in r
 
 ```
 cd bet/poker
-./bet game solve
-./bet game dispute "disputed tx_id" #This is for a specific tx_id.
+./bin/bet game solve
+./bin/bet game dispute "disputed tx_id" #This is for a specific tx_id.
 ```
 
 ## Running private tables
