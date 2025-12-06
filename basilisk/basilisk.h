@@ -19,7 +19,7 @@
 //#define BASILISK_DISABLESENDTX
 //#define BASILISK_DISABLEWAITTX
 
-#include "../iguana/iguana777.h"
+#include "../libs/iguana/iguana777.h"
 
 #define BASILISK_TIMEOUT 3000
 #define BASILISK_MINFANOUT 8

@@ -28,11 +28,11 @@ You will get an address and to this address deposit CHIPS to play.
 *  **Withdraw funds:** Needless to say, once the game is done, its always advisable to move funds back to your secure wallet. Before withdrawing the funds, if there is any issues like player disconnection, loss of funds like that happens then raise the dispute with the cashier node as mentioned below and then withdraw the funds. 
 ```
 cd
-cd bet/privatebet
-./bet game solve
+cd bet/poker
+./bin/bet game solve
 
 Withdraw using the following command
-./bet withdraw <amount> <to_your_chips_address>
+./bin/bet withdraw <amount> <to_your_chips_address>
 ```
 ## Setup
 There are many different ways in which you can setup the nodes to play the poker using bet. Here are some of the ways in which you can setup the nodes:
@@ -57,7 +57,7 @@ Irrespective of whichever approach you follow, the prerequisites and configurati
 * The dealer and cashier nodes should need the static public IP for the nodes on which they setup.
 
 ## Configuring the nodes
-The behaviour of the node is based on how you configure it. We can enable/disable few functionalities of the players and dealers by making corresponding settings in the configuration files. All the configuration files are located in the path`./bet/privatebet/config`.
+The behaviour of the node is based on how you configure it. We can enable/disable few functionalities of the players and dealers by making corresponding settings in the configuration files. All the configuration files are located in the path`./bet/poker/config`.
 
 Lets take a look into the details of what these configuration settings mean:
 1. For Player configuration follow this [link](./docs/protocol/player_configuration.md)
@@ -100,7 +100,7 @@ cd && mkdir chips_bootstrap
 cd chips_bootstrap
 wget https://eu.bootstrap.dexstats.info/CHIPS-bootstrap.tar.gz
 tar --overwrite -xvf "$bootstrap_node"
-wget https://raw.githubusercontent.com/chips-blockchain/bet/master/privatebet/config/chips.conf
+wget https://raw.githubusercontent.com/chips-blockchain/bet/master/poker/config/chips.conf
 ```
 Then run the docker as follows:
 ```
@@ -126,17 +126,17 @@ Then run the chips daemon
 #### step4 :- If you are a player run the player as follows
 ```
 cd
-./bet/privatebet/bet player
+./bet/poker/bin/bet player
 ```
 #### step4 :-  If you are the dealer run the dealer as follows
 ```
 cd
-./bet/privatebet/bet dcv <host_ip>
+./bet/poker/bin/bet dcv <host_ip>
 
 ```
 #### step5 :-  Hosting the GUI
 ##### Using the GUI hosted by the cashier and dealer nodes
-GUI can be hosted by anyone, by default the GUI is hosted by all the cashier nodes and dealer nodes can also host the GUI as a service they provide to its players. After starting the player node with `./bet player` in the above step, in the logs you see the list of the servers where the GUI hosted something like below:
+GUI can be hosted by anyone, by default the GUI is hosted by all the cashier nodes and dealer nodes can also host the GUI as a service they provide to its players. After starting the player node with `./bin/bet player` in the above step, in the logs you see the list of the servers where the GUI hosted something like below:
 ```
 [client.c:bet_player_handle_stack_info_resp:1345] Player can use any of the GUI's hosted by cashiers to connect to backend
 [config.c:bet_display_cashier_hosted_gui:236] http://141.94.227.65:1234/

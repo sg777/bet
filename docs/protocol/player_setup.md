@@ -28,8 +28,8 @@ Release Page: https://github.com/chips-blockchain/bet/releases
 For Linux[Fully tested]: https://github.com/chips-blockchain/bet/releases/download/v0.1.3-500-g2f3ba78/bet-linux-x86_64-v0.1.3-500-g2f3ba78.tar.gz
 wget https://github.com/chips-blockchain/bet/releases/download/v0.1.3-500-g2f3ba78/bet-linux-x86_64-v0.1.3-500-g2f3ba78.tar.gz
 tar -xvf bet-linux-x86_64-v0.1.3-500-g2f3ba78.tar.gz
-cd privatebet
-./bet player #To start player node
+cd src
+./bin/bin/bet player #To start player node
 ```
 > Note: If any issues are faced while running the downloaded binaries, please login the issue or post in the discord or try directly compiling from the source code.
 
@@ -42,7 +42,7 @@ copy the blocks downloaded to .chips folder from home directory and start the ch
 ```
 ## Configuring the player node
 
-All the configurable options for the player can be set in `player_setup.ini` file, which is located at `bet/privatebet/config` path. The default content of this file is as follows:
+All the configurable options for the player can be set in `player_setup.ini` file, which is located at `bet/poker/config` path. The default content of this file is as follows:
 ```
 [player]
 max_allowed_dcv_commission = 5      #This is the max percentage of the dealer commision that the player is willing to pay, if the dealer sets the commission higher than this then the backend node will exit.
@@ -63,8 +63,8 @@ table_password       = pangea      #If the player wishes to join the private tab
 
 ## Running the player node
 ```
-cd bet/privatebet
-./bet player
+cd bet/poker
+./bin/bin/bet player
 ```
 ## Playing with the player node
 
@@ -92,12 +92,12 @@ Once if the other players join, one can able to view the cards and betting actio
 ## Raising disputes
 Due to any reason if the game didn't happen, one can reverse the payin_tx by raising the dispute by running the following commands:
 ```
-cd bet/privatebet
-./bet game solve # To resolve all the undisputed tx's
-./bet game raise tx_id # To resolve a specific disputed tx's
-./bet game info fail #To list the disputed games along with disputed tx id's
-./bet game info success #To list the games that played successfully
-./bet game info #To list all the successful and unsuccessful games
+cd bet/poker
+./bin/bet game solve # To resolve all the undisputed tx's
+./bin/bet game raise tx_id # To resolve a specific disputed tx's
+./bin/bet game info fail #To list the disputed games along with disputed tx id's
+./bin/bet game info success #To list the games that played successfully
+./bin/bet game info #To list all the successful and unsuccessful games
 ```
 
 ## Joining the private table

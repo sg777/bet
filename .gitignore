@@ -25,7 +25,14 @@ __pycache__
 config.vars
 monkeytype.sqlite3
 
-# privatebet generated files to ignore
+# Build directories
+poker/build/
+poker/bin/
+build/
+bin/
+obj/
+
+# privatebet generated files to ignore (legacy)
 privatebet/bet
 privatebet/cashierd
 privatebet/cron.sh
@@ -47,3 +54,5 @@ release/
 external/arm64-apple-darwin*
 dist/*
 bet_version.h
+compile_commands.json
+.vscode/
