@@ -26,7 +26,7 @@ void bet_push_dcv_to_gui(cJSON *argjson);
 void bet_dcv_lws_write(cJSON *data);
 void bet_init_player_seats_info();
 cJSON *bet_get_seats_json(int32_t max_players);
-void bet_dcv_bvv_backend_loop(void *_ptr);
-int32_t bet_dcv_bvv_backend(cJSON *argjson, struct dcv_bvv_sock_info *bet);
+// bet_dcv_bvv_backend_loop removed - dcv_bvv_sock_info struct removed, nanomsg no longer used
+// bet_dcv_bvv_backend removed - dcv_bvv_sock_info struct removed, nanomsg no longer used
 
 #endif /* HOST_H */

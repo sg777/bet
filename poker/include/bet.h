@@ -35,13 +35,7 @@
 #include "../../external/dlg/include/dlg/dlg.h"
 #include "../../external/iniparser/src/iniparser.h"
 
-#include "../../external/nng/include/nng/compat/nanomsg/bus.h"
-#include "../../external/nng/include/nng/compat/nanomsg/nn.h"
-#include "../../external/nng/include/nng/compat/nanomsg/pair.h"
-#include "../../external/nng/include/nng/compat/nanomsg/pipeline.h"
-#include "../../external/nng/include/nng/compat/nanomsg/pubsub.h"
-#include "../../external/nng/include/nng/compat/nanomsg/reqrep.h"
-#include "../../external/nng/include/nng/compat/nanomsg/tcp.h"
+// Nanomsg/nano sockets support completely removed - no longer used
 
 #include "common.h"
 #include "vdxf.h"
@@ -81,7 +75,7 @@ struct privatebet_info {
 	bits256 MofN[CARDS777_MAXCARDS * CARDS777_MAXPLAYERS], cardpubs[CARDS777_MAXCARDS],
 		playerpubs[CARDS777_MAXPLAYERS + 1], tableid, deckid;
 	int32_t numplayers, maxplayers, numrounds, range, myplayerid, maxchips, chipsize;
-	int32_t pullsock, pubsock, subsock, pushsock;
+	// Nanomsg sockets removed - no longer used
 	uint32_t timestamp;
 	char peerids[CARDS777_MAXPLAYERS + 1][67];
 	int32_t cardid, turni;
@@ -89,9 +83,7 @@ struct privatebet_info {
 	cJSON *msg;
 };
 
-struct dcv_bvv_sock_info {
-	int32_t pullsock, pubsock, subsock, pushsock;
-};
+// struct dcv_bvv_sock_info removed - nanomsg sockets no longer used
 
 struct privatebet_rawpeerln {
 	uint64_t msatoshi_to_us, msatoshi_total;
@@ -131,12 +123,7 @@ struct pair256 {
 	bits256 priv, prod;
 };
 
-struct privatebet_share {
-	int32_t numplayers, range, myplayerid;
-	int32_t pullsock, pubsock, subsock, pushsock;
-	bits256 bvv_public_key;
-	struct pair256 player_key;
-};
+// struct privatebet_share removed - nanomsg sockets no longer used, struct was only for socket communication
 
 struct enc_share {
 	uint8_t bytes[sizeof(bits256) + crypto_box_NONCEBYTES + crypto_box_ZEROBYTES];
@@ -221,7 +208,7 @@ struct deck_bvv_info {
 };
 
 struct cashier {
-	int32_t c_pullsock, c_pubsock, c_subsock, c_pushsock;
+	// Nanomsg sockets removed - no longer used
 	char addr[67];
 	cJSON *msg;
 };

@@ -7,9 +7,14 @@ This directory contains code that was removed during cleanup:
 - LN configuration flags
 - LN error codes (kept for compatibility but unused)
 
-## Nano Sockets Pub/Sub Code  
-- NN_PUB/NN_SUB socket types
-- pubsub.h include
-- All pub/sub related socket operations
+## Nano Sockets (Nanomsg) Code - COMPLETELY REMOVED
+- All nanomsg/nano sockets support removed
+- NN_PUB/NN_SUB socket types removed
+- NN_PUSH/NN_PULL socket types removed
+- All nn_send/nn_recv calls removed
+- All bet_nanosock() calls removed
+- All socket initialization code removed
+- All socket fields removed from structures
+- pubsub.h, pipeline.h, and all nanomsg includes removed
 
-Note: PUSH/PULL pattern is still used and kept.
+Note: Communication now uses websockets (libwebsockets) exclusively.

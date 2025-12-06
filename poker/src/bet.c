@@ -90,20 +90,10 @@ static void bet_cashier_deinitialize()
 
 static void bet_player_initialize(char *dcv_ip)
 {
-	int32_t subsock = -1, pushsock = -1;
-	char bind_sub_addr[128], bind_push_addr[128];
-
-	bet_tcp_sock_address(0, bind_sub_addr, dcv_ip, dealer_pub_sub_port);
-	subsock = bet_nanosock(0, bind_sub_addr, NN_SUB);
-
-	bet_tcp_sock_address(0, bind_push_addr, dcv_ip, dealer_push_pull_port);
-	pushsock = bet_nanosock(0, bind_push_addr, NN_PUSH);
-
+	// Nanomsg sockets removed - no longer used
 	player_vars = calloc(1, sizeof(struct privatebet_vars));
 
 	bet_player = calloc(1, sizeof(struct privatebet_info));
-	bet_player->subsock = subsock;
-	bet_player->pushsock = pushsock;
 	bet_player->maxplayers = (max_players < CARDS777_MAXPLAYERS) ? max_players : CARDS777_MAXPLAYERS;
 	bet_player->maxchips = CARDS777_MAXCHIPS;
 	bet_player->chipsize = CARDS777_CHIPSIZE;
@@ -154,19 +144,9 @@ static void bet_player_thrd(char *dcv_ip)
 
 static void bet_bvv_initialize(char *dcv_ip, const int32_t port)
 {
-	int32_t subsock = -1, pushsock = -1;
-	char bind_sub_addr[128], bind_push_addr[128];
-
-	bet_tcp_sock_address(0, bind_sub_addr, dcv_ip, port);
-	subsock = bet_nanosock(0, bind_sub_addr, NN_SUB);
-
-	bet_tcp_sock_address(0, bind_push_addr, dcv_ip, port + 1);
-	pushsock = bet_nanosock(0, bind_push_addr, NN_PUSH);
-
+	// Nanomsg sockets removed - no longer used
 	bvv_vars = calloc(1, sizeof(struct privatebet_vars));
 	bet_bvv = calloc(1, sizeof(struct privatebet_info));
-	bet_bvv->subsock = subsock;
-	bet_bvv->pushsock = pushsock;
 	bet_bvv->maxplayers = (max_players < CARDS777_MAXPLAYERS) ? max_players : CARDS777_MAXPLAYERS;
 	bet_bvv->maxchips = CARDS777_MAXCHIPS;
 	bet_bvv->chipsize = CARDS777_CHIPSIZE;
@@ -198,48 +178,13 @@ void bet_bvv_thrd(char *dcv_ip, const int32_t port)
 	bet_bvv_deinitialize();
 }
 
-static int32_t bet_dcv_bvv_initialize(char *dcv_ip)
-{
-	int32_t pubsock = -1, pullsock = -1, retval = OK;
-	char bind_pub_addr[128], bind_pull_addr[128];
-
-	bet_tcp_sock_address(0, bind_pub_addr, dcv_ip, dealer_bvv_pub_sub_port);
-	pubsock = bet_nanosock(1, bind_pub_addr, NN_PUB);
-
-	bet_tcp_sock_address(0, bind_pull_addr, dcv_ip, dealer_bvv_push_pull_port);
-	pullsock = bet_nanosock(1, bind_pull_addr, NN_PULL);
-
-	if ((pubsock == -1) || (pullsock == -1)) {
-		retval = ERR_PORT_BINDING;
-		return retval;
-	}
-
-	bet_dcv_bvv = calloc(1, sizeof(struct dcv_bvv_sock_info));
-	bet_dcv_bvv->pubsock = pubsock;
-	bet_dcv_bvv->pullsock = pullsock;
-
-	return retval;
-}
+// bet_dcv_bvv_initialize removed - dcv_bvv_sock_info struct removed, nanomsg no longer used
 
 static int32_t bet_dcv_initialize(char *dcv_ip)
 {
-	int32_t pubsock = -1, pullsock = -1, retval = OK;
-	char bind_pub_addr[128], bind_pull_addr[128];
-
-	bet_tcp_sock_address(0, bind_pub_addr, dcv_ip, dealer_pub_sub_port);
-	pubsock = bet_nanosock(1, bind_pub_addr, NN_PUB);
-
-	bet_tcp_sock_address(0, bind_pull_addr, dcv_ip, dealer_push_pull_port);
-	pullsock = bet_nanosock(1, bind_pull_addr, NN_PULL);
-
-	if ((pubsock == -1) || (pullsock == -1)) {
-		retval = ERR_PORT_BINDING;
-		return retval;
-	}
-
+	int32_t retval = OK;
+	// Nanomsg sockets removed - no longer used
 	bet_dcv = calloc(1, sizeof(struct privatebet_info));
-	bet_dcv->pubsock = pubsock;
-	bet_dcv->pullsock = pullsock;
 	bet_dcv->maxplayers = (max_players < CARDS777_MAXPLAYERS) ? max_players : CARDS777_MAXPLAYERS;
 	bet_dcv->maxchips = CARDS777_MAXCHIPS;
 	bet_dcv->chipsize = CARDS777_CHIPSIZE;
@@ -283,7 +228,7 @@ static void bet_dcv_deinitialize()
 static void bet_dcv_thrd(char *dcv_ip)
 {
 	int32_t retval = OK;
-	pthread_t dcv_backend, dcv_thrd, dcv_bvv_thrd;
+	pthread_t dcv_backend, dcv_thrd;
 
 #ifdef LIVE_THREAD
 	pthread_t live_thrd;
@@ -294,11 +239,7 @@ static void bet_dcv_thrd(char *dcv_ip)
 		dlg_error("%s", bet_err_str(retval));
 		exit(-1);
 	}
-	retval = bet_dcv_bvv_initialize(dcv_ip);
-	if (retval != OK) {
-		dlg_error("%s", bet_err_str(retval));
-		exit(-1);
-	}
+	// bet_dcv_bvv_initialize removed - dcv_bvv_sock_info struct removed
 
 #ifdef LIVE_THREAD
 	if (OS_thread_create(&live_thrd, NULL, (void *)bet_dcv_heartbeat_loop, (void *)bet_dcv) != 0) {
@@ -310,10 +251,7 @@ static void bet_dcv_thrd(char *dcv_ip)
 		dlg_error("%s", bet_err_str(ERR_PTHREAD_LAUNCHING));
 		exit(-1);
 	}
-	if (OS_thread_create(&dcv_bvv_thrd, NULL, (void *)bet_dcv_bvv_backend_loop, (void *)bet_dcv_bvv) != 0) {
-		dlg_error("%s", bet_err_str(ERR_PTHREAD_LAUNCHING));
-		exit(-1);
-	}
+	// bet_dcv_bvv_backend_loop removed - dcv_bvv_sock_info struct removed
 	if (OS_thread_create(&dcv_thrd, NULL, (void *)bet_dcv_frontend_loop, NULL) != 0) {
 		dlg_error("%s", bet_err_str(ERR_PTHREAD_LAUNCHING));
 		exit(-1);
@@ -325,9 +263,7 @@ static void bet_dcv_thrd(char *dcv_ip)
 	if (pthread_join(dcv_thrd, NULL)) {
 		dlg_error("%s", bet_err_str(ERR_PTHREAD_JOINING));
 	}
-	if (pthread_join(dcv_bvv_thrd, NULL)) {
-		dlg_error("%s", bet_err_str(ERR_PTHREAD_JOINING));
-	}
+	// dcv_bvv_thrd removed - bet_dcv_bvv_backend_loop removed
 #ifdef LIVE_THREAD
 	if (pthread_join(live_thrd, NULL)) {
 		dlg_error("%s", bet_err_str(ERR_PTHREAD_JOINING));
@@ -338,19 +274,8 @@ static void bet_dcv_thrd(char *dcv_ip)
 
 static void bet_cashier_server_initialize(char *node_ip)
 {
-	int32_t pubsock = -1, pullsock = -1;
-	char bind_pub_addr[128], bind_pull_addr[128];
-
-	bet_tcp_sock_address(0, bind_pub_addr, node_ip, cashier_pub_sub_port);
-	pubsock = bet_nanosock(1, bind_pub_addr, NN_PUB);
-
-	bet_tcp_sock_address(0, bind_pull_addr, node_ip, cashier_push_pull_port);
-	pullsock = bet_nanosock(1, bind_pull_addr, NN_PULL);
-
+	// Nanomsg sockets removed - no longer used
 	cashier_info = calloc(1, sizeof(struct cashier));
-
-	cashier_info->c_pubsock = pubsock;
-	cashier_info->c_pullsock = pullsock;
 }
 
 static void bet_cashier_server_thrd(char *node_ip)
@@ -566,19 +491,7 @@ end:
 	}
 }
 
-void test_x()
-{
-	char hexstr[65];
-	bits256 temp, temp1;
-
-	temp = rand256(0);
-	bits256_str(hexstr, temp);
-
-	temp1 = bits256_conv(hexstr);
-
-	dlg_info("%s", bits256_str(hexstr, temp));
-	dlg_info("%s", bits256_str(hexstr, temp1));
-}
+// test_x() removed - unused function
 
 int main(int argc, char **argv)
 {

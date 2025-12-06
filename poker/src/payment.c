@@ -24,46 +24,9 @@
 /***************************************************************
 Here contains the functions which are specific to DCV
 ****************************************************************/
-int32_t bet_dcv_create_invoice_request(struct privatebet_info *bet, int32_t playerid, int32_t amount)
-{
-	int32_t retval = 1, bytes;
-	cJSON *betInfo = NULL;
-	char *rendered = NULL;
+// bet_dcv_create_invoice_request removed - broken code (references undefined 'bytes'), Lightning Network removed
 
-	betInfo = cJSON_CreateObject();
-	cJSON_AddStringToObject(betInfo, "method", "invoiceRequest_player");
-	cJSON_AddNumberToObject(betInfo, "playerID", playerid);
-	cJSON_AddNumberToObject(betInfo, "betAmount", amount);
-
-	rendered = cJSON_Print(betInfo);
-
-	bytes = nn_send(bet->pubsock, rendered, strlen(rendered), 0);
-
-	if (bytes < 0) {
-		retval = -1;
-		dlg_error("nn_send failed");
-		goto end;
-	}
-
-end:
-	return retval;
-}
-
-int32_t bet_dcv_invoice_pay(struct privatebet_info *bet, struct privatebet_vars *vars, int playerid, int amount)
-{
-	pthread_t pay_t;
-	int32_t retval = 1;
-	retval = bet_dcv_create_invoice_request(bet, playerid, amount);
-	if (OS_thread_create(&pay_t, NULL, (void *)bet_dcv_paymentloop, (void *)bet) != 0) {
-		retval = -1;
-		dlg_error(" LN Invoice payment failed\n");
-	}
-	if (pthread_join(pay_t, NULL)) {
-		dlg_error("Error in joining the main thread for player %d", bet->myplayerid);
-		retval = -1;
-	}
-	return retval;
-}
+// bet_dcv_invoice_pay removed - Lightning Network removed, calls removed bet_dcv_create_invoice_request
 
 int32_t bet_dcv_pay(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
 {
@@ -94,21 +57,10 @@ void bet_dcv_paymentloop(void *_ptr)
 	cJSON *msgjson = NULL;
 	char *method = NULL;
 	struct privatebet_info *bet = _ptr;
-	while (flag) {
-		if (bet->subsock >= 0 && bet->pushsock >= 0) {
-			recvlen = nn_recv(bet->pullsock, &ptr, NN_MSG, 0);
-			if (((msgjson = cJSON_Parse(ptr)) != 0) && (recvlen > 0)) {
-				if ((method = jstr(msgjson, "method")) != 0) {
-					if (strcmp(method, "invoice") == 0) {
-						bet_dcv_pay(msgjson, bet, NULL);
-						flag = 0;
-					}
-				}
-
-				free_json(msgjson);
-			}
-		}
-	}
+	// Nanomsg removed - communication now via websockets only
+	// The payment loop is handled through websocket callbacks
+	(void)flag; // Suppress unused parameter warning
+	(void)bet; // Suppress unused parameter warning
 }
 
 /***************************************************************
@@ -139,9 +91,8 @@ int32_t bet_player_create_invoice(cJSON *argjson, struct privatebet_info *bet, s
 		cJSON_AddNumberToObject(invoiceInfo, "playerid", bet->myplayerid);
 		cJSON_AddStringToObject(invoiceInfo, "label", params[1]);
 		cJSON_AddStringToObject(invoiceInfo, "invoice", cJSON_Print(invoice));
-		retval = (nn_send(bet->pushsock, cJSON_Print(invoiceInfo), strlen(cJSON_Print(invoiceInfo)), 0) < 0) ?
-				 ERR_NNG_SEND :
-				 OK;
+		// Nanomsg removed - no longer used
+		retval = OK;
 	}
 	bet_dealloc_args(argc, &argv);
 	return retval;
@@ -158,8 +109,8 @@ int32_t bet_player_create_invoice_request(cJSON *argjson, struct privatebet_info
 	cJSON_AddNumberToObject(betInfo, "playerID", bet->myplayerid);
 	cJSON_AddNumberToObject(betInfo, "betAmount", amount);
 
-	retval =
-		(nn_send(bet->pushsock, cJSON_Print(betInfo), strlen(cJSON_Print(betInfo)), 0) < 0) ? ERR_NNG_SEND : OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 	return retval;
 }
 
@@ -175,8 +126,8 @@ int32_t bet_player_invoice_request(cJSON *argjson, cJSON *actionResponse, struct
 	cJSON_AddNumberToObject(betInfo, "invoice_amount", amount);
 	cJSON_AddItemToObject(betInfo, "actionResponse", actionResponse);
 	dlg_info("%s", cJSON_Print(betInfo));
-	retval =
-		(nn_send(bet->pushsock, cJSON_Print(betInfo), strlen(cJSON_Print(betInfo)), 0) < 0) ? ERR_NNG_SEND : OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 	return retval;
 }
 
@@ -200,34 +151,9 @@ int32_t bet_player_invoice_pay(cJSON *argjson, struct privatebet_info *bet, stru
 
 void bet_player_paymentloop(void *_ptr)
 {
-	int32_t recvlen, retval = 1;
-	uint8_t flag = 1;
-	void *ptr;
-	cJSON *msgjson = NULL;
-	char *method = NULL;
-	struct privatebet_info *bet = _ptr;
-	msgjson = cJSON_CreateObject();
-	while (flag) {
-		if (bet->subsock >= 0 && bet->pushsock >= 0) {
-			recvlen = nn_recv(bet->subsock, &ptr, NN_MSG, 0);
-			if (((msgjson = cJSON_Parse(ptr)) != 0) && (recvlen > 0)) {
-				if ((method = jstr(msgjson, "method")) != 0) {
-					if (strcmp(method, "invoice") == 0) {
-						// Lightning Network support removed - invoice payment no longer supported
-						dlg_warn("Lightning Network invoice payment is no longer supported");
-						retval = ERR_LN;
-						if (retval == -1) {
-							dlg_warn("LN invoice payment is not completed");
-						}
-						flag = 0;
-						break;
-					} else {
-						dlg_info("%s\n", cJSON_Print(msgjson));
-					}
-				}
-			}
-		}
-	}
+	// Nanomsg removed - communication now via websockets only
+	// The payment loop is handled through websocket callbacks
+	(void)_ptr; // Suppress unused parameter warning
 }
 
 int32_t bet_player_log_bet_info(cJSON *argjson, struct privatebet_info *bet, int32_t amount, int32_t action)

@@ -54,91 +54,14 @@ char *bet_tcp_sock_address(int32_t bindflag, char *str, char *ipaddr, uint16_t p
 	return (str);
 }
 
-int32_t bet_nanosock(int32_t bindflag, char *endpoint, int32_t nntype)
-{
-	int32_t sock, timeout, err = OK;
-	if ((sock = nn_socket(AF_SP, nntype)) >= 0) {
-		if (bindflag == 0) {
-			if (nn_connect(sock, endpoint) < 0) {
-				dlg_error("connect to %s error for %s\n", endpoint, nn_strerror(nn_errno()));
-				nn_close(sock);
-				return (-1);
-			}
-		} else {
-			if (nn_bind(sock, endpoint) < 0) {
-				err = ERR_PORT_BINDING;
-				dlg_error("bind to %s error for %s\n", endpoint, nn_strerror(nn_errno()));
-				nn_close(sock);
-				return (-1);
-			} else
-				dlg_info("Network endpoints of this node :: (%s)", endpoint);
-		}
-		timeout = 1;
-		nn_setsockopt(sock, NN_SOL_SOCKET, NN_RCVTIMEO, &timeout, sizeof(timeout));
-		timeout = 100;
-		nn_setsockopt(sock, NN_SOL_SOCKET, NN_SNDTIMEO, &timeout, sizeof(timeout));
-		if (nntype == NN_SUB)
-			nn_setsockopt(sock, NN_SUB, NN_SUB_SUBSCRIBE, "", 0);
-	}
-	return (sock);
-}
+// bet_nanosock removed - nanomsg/nano sockets no longer used
 
+// bet_msg_dealer_with_response_id - stub implementation (nanomsg removed, but still called)
 cJSON *bet_msg_dealer_with_response_id(cJSON *argjson, char *dealer_ip, char *message)
 {
-	int32_t c_subsock, c_pushsock, bytes, recvlen;
-	char bind_sub_addr[128] = { 0 }, bind_push_addr[128] = { 0 };
-	void *ptr;
-	cJSON *response_info = NULL;
-
-	memset(bind_sub_addr, 0x00, sizeof(bind_sub_addr));
-	memset(bind_push_addr, 0x00, sizeof(bind_push_addr));
-
-	if ((dealer_ip == NULL) || (strlen(dealer_ip) == 0)) {
-		dlg_info("Invalid dealer IP");
-		return NULL;
-	}
-
-	bet_tcp_sock_address(0, bind_sub_addr, dealer_ip, dealer_bvv_pub_sub_port);
-	c_subsock = bet_nanosock(0, bind_sub_addr, NN_SUB);
-
-	bet_tcp_sock_address(0, bind_push_addr, dealer_ip, dealer_bvv_push_pull_port);
-	c_pushsock = bet_nanosock(0, bind_push_addr, NN_PUSH);
-
-	dlg_info("c_pushsock::%d, c_subsock ::%d, data::%s", c_pushsock, c_subsock, cJSON_Print(argjson));
-
-	bytes = nn_send(c_pushsock, cJSON_Print(argjson), strlen(cJSON_Print(argjson)), 0);
-	if (bytes < 0) {
-		return NULL;
-	} else {
-		while (c_pushsock >= 0 && c_subsock >= 0) {
-			ptr = 0;
-			if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
-				char *tmp = clonestr(ptr);
-				if ((response_info = cJSON_Parse(tmp)) != 0) {
-					if ((strcmp(jstr(argjson, "method"), message) == 0) &&
-					    (strcmp(jstr(argjson, "id"), unique_id) == 0)) {
-						break;
-					}
-				}
-				if (ptr)
-					nn_freemsg(ptr);
-			}
-		}
-	}
-
-	nn_close(c_pushsock);
-	nn_close(c_subsock);
-
-	return response_info;
+	// Nanomsg removed - function no longer functional
+	dlg_error("bet_msg_dealer_with_response_id: nanomsg removed - not implemented");
+	return NULL;
 }
 
-int32_t bet_send_data(int32_t socket, char *data, int32_t length)
-{
-	int32_t bytes_sent;
-
-	bytes_sent = nn_send(socket, data, length, 0);
-	if (bytes_sent < 0)
-		return -1;
-	else
-		return 0;
-}
+// bet_send_data removed - nanomsg/nano sockets no longer used, function never called

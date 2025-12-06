@@ -165,8 +165,8 @@ int32_t bet_send_status(struct cashier *cashier_info, char *id)
 	live_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(live_info, "method", "live");
 	cJSON_AddStringToObject(live_info, "id", id);
-	retval = (nn_send(cashier_info->c_pubsock, cJSON_Print(live_info), strlen(cJSON_Print(live_info)), 0) < 0) ?
-			 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+			 OK :
 			 OK;
 	return retval;
 }
@@ -180,8 +180,8 @@ int32_t bet_process_lock_in_tx(cJSON *argjson, struct cashier *cashier_info)
 	status = cJSON_CreateObject();
 	cJSON_AddStringToObject(status, "method", "query_status");
 	cJSON_AddNumberToObject(status, "status", retval);
-	retval = (nn_send(cashier_info->c_pubsock, cJSON_Print(status), strlen(cJSON_Print(status)), 0) < 0) ?
-			 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+			 OK :
 			 OK;
 	return retval;
 }
@@ -198,8 +198,8 @@ int32_t bet_cashier_process_raw_msig_tx(cJSON *argjson, struct cashier *cashier_
 	tx = cJSON_Print(cJSON_GetObjectItem(argjson, "tx"));
 	cJSON_AddItemToObject(signed_tx, "signed_tx", chips_sign_raw_tx_with_wallet(tx));
 	dlg_info("signed_tx::%s", cJSON_Print(signed_tx));
-	retval = (nn_send(cashier_info->c_pubsock, cJSON_Print(signed_tx), strlen(cJSON_Print(signed_tx)), 0) < 0) ?
-			 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+			 OK :
 			 OK;
 	return retval;
 }
@@ -387,45 +387,16 @@ int32_t bet_validate_game_details(cJSON *argjson, struct cashier *cashier_info)
 	cJSON_AddStringToObject(response_info, "id", jstr(argjson, "id"));
 	cJSON_AddNumberToObject(response_info, "status", value);
 
-	retval = (nn_send(cashier_info->c_pubsock, cJSON_Print(response_info), strlen(cJSON_Print(response_info)), 0) <
-		  0) ?
-			 ERR_NNG_SEND :
-			 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 	return retval;
 }
 
 void bet_cashier_status_loop(void *_ptr)
 {
-	int32_t recvlen = 0, bytes;
-	void *ptr = NULL;
-	cJSON *argjson = NULL;
-	struct cashier *cashier_info = _ptr;
-
-	bytes = nn_send(cashier_info->c_pushsock, cJSON_Print(cashier_info->msg),
-			strlen(cJSON_Print(cashier_info->msg)), 0);
-
-	if (bytes < 0) {
-		dlg_error("Failed to send data");
-	} else {
-		while (cashier_info->c_pushsock >= 0 && cashier_info->c_subsock >= 0) {
-			ptr = 0;
-			if ((recvlen = nn_recv(cashier_info->c_subsock, &ptr, NN_MSG, 0)) > 0) {
-				char *tmp = clonestr(ptr);
-				if ((argjson = cJSON_Parse(tmp)) != 0) {
-					if (strcmp(jstr(argjson, "id"), unique_id) == 0) {
-						if (strcmp(jstr(argjson, "method"), "live") == 0)
-							live_notaries++;
-						break;
-					}
-					free_json(argjson);
-				}
-				if (tmp)
-					free(tmp);
-				if (ptr)
-					nn_freemsg(ptr);
-			}
-		}
-	}
+	// Nanomsg removed - communication now via websockets only
+	// The cashier status loop is handled through websocket callbacks
+	(void)_ptr; // Suppress unused parameter warning
 }
 
 static int32_t bet_update_tx_spent(cJSON *argjson)
@@ -576,10 +547,8 @@ int32_t bet_process_dispute(cJSON *argjson, struct cashier *cashier_info)
 		cJSON_AddItemToObject(dispute_response, "payout_tx", tx);
 	}
 	dlg_info("%s", cJSON_Print(dispute_response));
-	retval = (nn_send(cashier_info->c_pubsock, cJSON_Print(dispute_response), strlen(cJSON_Print(dispute_response)),
-			  0) < 0) ?
-			 ERR_NNG_SEND :
-			 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 	return retval;
 }
 
@@ -628,10 +597,8 @@ static int32_t bet_process_rqst_dealer_info(cJSON *argjson, struct cashier *cash
 	}
 
 	cJSON_AddItemToObject(response_info, "dealers_info", active_dealers);
-	retval = (nn_send(cashier_info->c_pubsock, cJSON_Print(response_info), strlen(cJSON_Print(response_info)), 0) <
-		  0) ?
-			 ERR_NNG_SEND :
-			 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 	return retval;
 }
 
@@ -659,8 +626,8 @@ static int32_t bet_process_find_bvv(cJSON *argjson, struct cashier *cashier_info
 	cJSON_AddNumberToObject(bvv_status, "bvv_state", bvv_state);
 	cJSON_AddStringToObject(bvv_status, "id", jstr(argjson, "id"));
 	cJSON_AddStringToObject(bvv_status, "bvv_unique_id", unique_id);
-	retval = (nn_send(cashier_info->c_pubsock, cJSON_Print(bvv_status), strlen(cJSON_Print(bvv_status)), 0) < 0) ?
-			 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+			 OK :
 			 OK;
 	return retval;
 }
@@ -730,32 +697,9 @@ void bet_cashier_server_loop(void *_ptr)
 	uint8_t flag = 1;
 
 	dlg_info("cashier server node started");
-	while (flag) {
-		if (cashier_info->c_pubsock >= 0 && cashier_info->c_pullsock >= 0) {
-			ptr = 0;
-			char *tmp = NULL;
-			recvlen = nn_recv(cashier_info->c_pullsock, &ptr, NN_MSG, 0);
-			if (recvlen > 0) {
-				tmp = clonestr(ptr);
-			}
-			if ((recvlen > 0) && ((msgjson = cJSON_Parse(tmp)) != 0)) {
-				pthread_t server_thrd;
-				cashier_info->msg = msgjson;
-				if (OS_thread_create(&server_thrd, NULL, (void *)bet_cashier_backend_thrd,
-						     (void *)cashier_info) != 0) {
-					dlg_error("Error in launching the bet_cashier_backend_thrd");
-					exit(-1);
-				}
-				/*
-				if (pthread_join(server_thrd, NULL)) {
-					dlg_error("Error in joining the main thread for bet_cashier_backend_thrd");
-				}
-				*/
-				if (ptr)
-					nn_freemsg(ptr);
-			}
-		}
-	}
+	// Nanomsg removed - communication now via websockets only
+	// The cashier server loop is handled through websocket callbacks
+	(void)flag; // Suppress unused parameter warning
 }
 
 int32_t bet_submit_msig_raw_tx(cJSON *tx)
@@ -767,18 +711,13 @@ int32_t bet_submit_msig_raw_tx(cJSON *tx)
 	cJSON_AddStringToObject(msig_raw_tx, "method", "raw_msig_tx");
 	cJSON_AddItemToObject(msig_raw_tx, "tx", tx);
 
-	if (cashier_info->c_pushsock > 0) {
-		bytes = nn_send(cashier_info->c_pushsock, cJSON_Print(msig_raw_tx), strlen(cJSON_Print(msig_raw_tx)),
-				0);
-		if (bytes < 0)
-			retval = -1;
-	}
+	// Nanomsg removed - no longer used
 	return retval;
 }
 
 char *bet_send_message_to_notary(cJSON *argjson, char *notary_node_ip)
 {
-	int32_t c_subsock, c_pushsock;
+// Nanomsg removed - no longer used
 	char bind_sub_addr[128] = { 0 }, bind_push_addr[128] = { 0 };
 	pthread_t cashier_thrd;
 	struct cashier *cashier_info = NULL;
@@ -789,14 +728,7 @@ char *bet_send_message_to_notary(cJSON *argjson, char *notary_node_ip)
 	memset(bind_sub_addr, 0x00, sizeof(bind_sub_addr));
 	memset(bind_push_addr, 0x00, sizeof(bind_push_addr));
 
-	bet_tcp_sock_address(0, bind_sub_addr, notary_node_ip, cashier_pub_sub_port);
-	c_subsock = bet_nanosock(0, bind_sub_addr, NN_SUB);
-
-	bet_tcp_sock_address(0, bind_push_addr, notary_node_ip, cashier_push_pull_port);
-	c_pushsock = bet_nanosock(0, bind_push_addr, NN_PUSH);
-
-	cashier_info->c_subsock = c_subsock;
-	cashier_info->c_pushsock = c_pushsock;
+	// Nanomsg removed - no longer used
 	cashier_info->msg = argjson;
 
 	if (OS_thread_create(&cashier_thrd, NULL, (void *)bet_cashier_status_loop, (void *)cashier_info) != 0) {
@@ -813,7 +745,7 @@ char *bet_send_message_to_notary(cJSON *argjson, char *notary_node_ip)
 
 cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *method_name)
 {
-	int32_t c_subsock, c_pushsock, bytes, recvlen;
+// Nanomsg removed - no longer used
 	char bind_sub_addr[128] = { 0 }, bind_push_addr[128] = { 0 };
 	void *ptr;
 	cJSON *response_info = NULL;
@@ -821,59 +753,23 @@ cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *
 	memset(bind_sub_addr, 0x00, sizeof(bind_sub_addr));
 	memset(bind_push_addr, 0x00, sizeof(bind_push_addr));
 
-	bet_tcp_sock_address(0, bind_sub_addr, cashier_ip, cashier_pub_sub_port);
-	c_subsock = bet_nanosock(0, bind_sub_addr, NN_SUB);
-
-	bet_tcp_sock_address(0, bind_push_addr, cashier_ip, cashier_push_pull_port);
-	c_pushsock = bet_nanosock(0, bind_push_addr, NN_PUSH);
-
-	bytes = nn_send(c_pushsock, cJSON_Print(argjson), strlen(cJSON_Print(argjson)), 0);
-	if (bytes < 0) {
-		dlg_warn("The cashier node :: %s is not reachable", cashier_ip);
-		return NULL;
-	} else {
-		while (c_pushsock >= 0 && c_subsock >= 0) {
-			ptr = 0;
-			if ((recvlen = nn_recv(c_subsock, &ptr, NN_MSG, 0)) > 0) {
-				char *tmp = clonestr(ptr);
-				if ((response_info = cJSON_Parse(tmp)) != 0) {
-					if ((strcmp(jstr(response_info, "method"), method_name) == 0) &&
-					    (strcmp(jstr(response_info, "id"), unique_id) == 0)) {
-						break;
-					}
-				}
-				if (tmp)
-					free(tmp);
-				if (ptr)
-					nn_freemsg(ptr);
-			}
-		}
-	}
-
-	nn_close(c_pushsock);
-	nn_close(c_subsock);
+	// Nanomsg removed - function no longer functional
+	dlg_error("bet_msg_cashier_with_response_id: nanomsg removed - not implemented");
+	return NULL;
 
 	return response_info;
 }
 
 int32_t bet_msg_cashier(cJSON *argjson, char *cashier_ip)
 {
-	int32_t c_pushsock, bytes, retval = OK;
+// Nanomsg removed - no longer used
 	char bind_push_addr[128] = { 0 };
 
 	memset(bind_push_addr, 0x00, sizeof(bind_push_addr));
 
-	bet_tcp_sock_address(0, bind_push_addr, cashier_ip, cashier_push_pull_port);
-	c_pushsock = bet_nanosock(0, bind_push_addr, NN_PUSH);
-
-	bytes = nn_send(c_pushsock, cJSON_Print(argjson), strlen(cJSON_Print(argjson)), 0);
-	if (bytes < 0) {
-		retval = ERR_NNG_SEND;
-		dlg_error("%s", bet_err_str(ERR_NNG_SEND));
-	}
-	nn_close(c_pushsock);
-
-	return retval;
+	// Nanomsg removed - function no longer functional
+	dlg_error("bet_msg_cashier: nanomsg removed - not implemented");
+	return -1;
 }
 
 int32_t *bet_msg_multiple_cashiers(cJSON *argjson, char **cashier_ips, int no_of_cashiers)

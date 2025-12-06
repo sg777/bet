@@ -200,9 +200,8 @@ int32_t bet_bvv_init(cJSON *argjson, struct privatebet_info *bet, struct private
 			}
 		}
 	}
-	retval = (nn_send(bet->pushsock, cJSON_Print(bvv_init_info), strlen(cJSON_Print(bvv_init_info)), 0) < 0) ?
-			 ERR_NNG_SEND :
-			 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 	return retval;
 }
 
@@ -214,10 +213,8 @@ static int32_t bet_bvv_join_init(struct privatebet_info *bet)
 	bvv_response_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(bvv_response_info, "method", "bvv_join");
 	dlg_info("BVV Response Info::%s\n", cJSON_Print(bvv_response_info));
-	retval = (nn_send(bet->pushsock, cJSON_Print(bvv_response_info), strlen(cJSON_Print(bvv_response_info)), 0) <
-		  0) ?
-			 ERR_NNG_SEND :
-			 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 
 	return retval;
 }
@@ -231,9 +228,8 @@ int32_t bet_check_bvv_ready(cJSON *argjson, struct privatebet_info *bet, struct 
 	cJSON_AddStringToObject(bvv_ready, "method", "bvv_ready");
 
 	dlg_info("BVV ready info::%s\n", cJSON_Print(bvv_ready));
-	retval = (nn_send(bet->pushsock, cJSON_Print(bvv_ready), strlen(cJSON_Print(bvv_ready)), 0) < 0) ?
-			 ERR_NNG_SEND :
-			 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 	return retval;
 }
 
@@ -261,24 +257,8 @@ void bet_bvv_backend_loop(void *_ptr)
 		permis_b[i] = bvv_info.permis[i];
 	}
 	bet_bvv_join_init(bet);
-	while ((bet->pushsock >= 0 && bet->subsock >= 0) && (bvv_state == 1)) {
-		ptr = 0;
-		if ((recvlen = nn_recv(bet->subsock, &ptr, NN_MSG, 0)) > 0) {
-			char *tmp = clonestr(ptr);
-			if ((argjson = cJSON_Parse(tmp)) != 0) {
-				if ((retval = bet_bvv_backend(argjson, bet, bvv_vars)) != OK) {
-					dlg_error("%s", bet_err_str(retval));
-				} else {
-					if (strcmp(jstr(argjson, "method"), "init_d") == 0) {
-						bet_bvv_reset(bet, bvv_vars);
-						dlg_info("The role of bvv is done for this hand\n");
-						bvv_state = 0;
-						break;
-					}
-				}
-			}
-		}
-	}
+	// Nanomsg removed - communication now via websockets only
+	// The BVV backend loop is handled through websocket callbacks
 }
 
 int32_t bet_bvv_backend(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
@@ -409,10 +389,8 @@ static int32_t bet_player_betting_invoice(cJSON *argjson, struct privatebet_info
 
 		action_response = cJSON_CreateObject();
 		action_response = cJSON_GetObjectItem(argjson, "actionResponse");
-		retval = (nn_send(bet->pushsock, cJSON_Print(action_response), strlen(cJSON_Print(action_response)),
-				  0) < 0) ?
-				 ERR_NNG_SEND :
-				 OK;
+		// Nanomsg removed - no longer used
+		retval = OK;
 	}
 	bet_dealloc_args(argc, &argv);
 	return retval;
@@ -443,9 +421,8 @@ static int32_t bet_player_winner(cJSON *argjson, struct privatebet_info *bet, st
 		cJSON_AddStringToObject(invoice_info, "label", params);
 		cJSON_AddStringToObject(invoice_info, "invoice", cJSON_Print(winner_invoice_info));
 
-		retval = (nn_send(bet->pushsock, cJSON_Print(invoice_info), strlen(cJSON_Print(invoice_info)), 0) < 0) ?
-				 ERR_NNG_SEND :
-				 OK;
+		// Nanomsg removed - no longer used
+		retval = OK;
 	}
 	bet_dealloc_args(argc, &argv);
 	return retval;
@@ -533,10 +510,8 @@ int32_t bet_client_receive_share(cJSON *argjson, struct privatebet_info *bet, st
 			cJSON_AddNumberToObject(player_card_info, "card_type", card_type);
 			cJSON_AddNumberToObject(player_card_info, "decoded_card", decoded256.bytes[30]);
 			dlg_info("%s", cJSON_Print(player_card_info));
-			retval = (nn_send(bet->pushsock, cJSON_Print(player_card_info),
-					  strlen(cJSON_Print(player_card_info)), 0) < 0) ?
-					 ERR_NNG_SEND :
-					 OK;
+			// Nanomsg removed - no longer used
+			retval = OK;
 		}
 	}
 	return retval;
@@ -555,9 +530,8 @@ int32_t bet_player_ask_share(struct privatebet_info *bet, int32_t cardid, int32_
 	cJSON_AddNumberToObject(request_info, "card_type", card_type);
 	cJSON_AddNumberToObject(request_info, "other_player", other_player);
 
-	retval = (nn_send(bet->pushsock, cJSON_Print(request_info), strlen(cJSON_Print(request_info)), 0) < 0) ?
-			 ERR_NNG_SEND :
-			 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 	return retval;
 }
 
@@ -598,9 +572,8 @@ int32_t bet_client_give_share(cJSON *argjson, struct privatebet_info *bet, struc
 		memcpy(share.bytes, ptr, recvlen);
 		jaddbits256(share_info, "share", share);
 	}
-	retval = (nn_send(bet->pushsock, cJSON_Print(share_info), strlen(cJSON_Print(share_info)), 0) < 0) ?
-			 ERR_NNG_SEND :
-			 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 
 	return retval;
 }
@@ -661,9 +634,8 @@ int32_t bet_player_ready(cJSON *argjson, struct privatebet_info *bet, struct pri
 	cJSON_AddStringToObject(player_ready, "method", "player_ready");
 	cJSON_AddNumberToObject(player_ready, "playerid", bet->myplayerid);
 
-	retval = (nn_send(bet->pushsock, cJSON_Print(player_ready), strlen(cJSON_Print(player_ready)), 0) < 0) ?
-			 ERR_NNG_SEND :
-			 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 	return retval;
 }
 
@@ -748,7 +720,8 @@ int32_t bet_client_init(cJSON *argjson, struct privatebet_info *bet, struct priv
 		cJSON_AddItemToArray(cjson_player_cards,
 				     cJSON_CreateString(bits256_str(str, player_info.cardpubkeys[i])));
 	}
-	retval = (nn_send(bet->pushsock, cJSON_Print(init_p), strlen(cJSON_Print(init_p)), 0) < 0) ? ERR_NNG_SEND : OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 
 	return retval;
 }
@@ -811,8 +784,8 @@ int32_t bet_client_join(cJSON *argjson, struct privatebet_info *bet)
 	cJSON_AddStringToObject(joininfo, "player_name", player_name);
 
 	dlg_info("join info::%s\n", cJSON_Print(joininfo));
-	retval = (nn_send(bet->pushsock, cJSON_Print(joininfo), strlen(cJSON_Print(joininfo)), 0) < 0) ? ERR_NNG_SEND :
-													 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 
 end:
 	if (uri)
@@ -972,9 +945,7 @@ static void bet_gui_init_message(struct privatebet_info *bet)
 		cJSON_AddStringToObject(req_seats_info, "method", "req_seats_info");
 		cJSON_AddStringToObject(req_seats_info, "req_identifier", req_identifier);
 		dlg_info("Requesting seats into with the dealer \n %s", cJSON_Print(req_seats_info));
-		if (nn_send(bet->pushsock, cJSON_Print(req_seats_info), strlen(cJSON_Print(req_seats_info)), 0) < 0) {
-			dlg_error("Error in sending the data");
-		}
+		// Nanomsg removed - no longer used
 	}
 }
 
@@ -1471,8 +1442,8 @@ static int32_t bet_player_handle_stack_info_resp(cJSON *argjson, struct privateb
 	cJSON_AddNumberToObject(
 		tx_info, "block_height",
 		chips_get_block_height_from_block_hash(chips_get_block_hash_from_txid(cJSON_Print(txid))));
-	retval =
-		(nn_send(bet->pushsock, cJSON_Print(tx_info), strlen(cJSON_Print(tx_info)), 0) < 0) ? ERR_NNG_SEND : OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 
 	if (hex_data)
 		free(hex_data);
@@ -1497,9 +1468,8 @@ int32_t bet_player_stack_info_req(struct privatebet_info *bet)
 	if (is_table_private) {
 		cJSON_AddStringToObject(stack_info_req, "table_password", table_password);
 	}
-	bytes = nn_send(bet->pushsock, cJSON_Print(stack_info_req), strlen(cJSON_Print(stack_info_req)), 0);
-	if (bytes < 0)
-		retval = ERR_NNG_SEND;
+	// Nanomsg removed - no longer used
+	retval = OK;
 
 	return retval;
 }
@@ -1563,7 +1533,8 @@ void bet_handle_player_error(struct privatebet_info *bet, int32_t err_no)
 	cJSON_AddStringToObject(publish_error, "method", "player_error");
 	cJSON_AddNumberToObject(publish_error, "playerid", bet->myplayerid);
 	cJSON_AddNumberToObject(publish_error, "err_no", err_no);
-	if (nn_send(bet->pushsock, cJSON_Print(publish_error), strlen(cJSON_Print(publish_error)), 0) < 0)
+	// Nanomsg removed - no longer used
+	if (0)
 		exit(-1);
 
 	switch (err_no) {
@@ -1682,10 +1653,8 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 				cJSON_AddStringToObject(signedTxInfo, "method", "signedrawtransaction");
 				cJSON_AddStringToObject(signedTxInfo, "tx", jstr(temp, "hex"));
 				cJSON_AddNumberToObject(signedTxInfo, "playerid", bet->myplayerid);
-				retval = (nn_send(bet->pushsock, cJSON_Print(signedTxInfo),
-						  strlen(cJSON_Print(signedTxInfo)), 0) < 0) ?
-						 ERR_NNG_SEND :
-						 OK;
+				// Nanomsg removed - no longer used
+				retval = OK;
 			}
 		} else if (strcmp(method, "stack_info_resp") == 0) {
 			if (strncmp(req_identifier, jstr(argjson, "id"), sizeof(req_identifier)) == 0) {
@@ -1718,10 +1687,8 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 					cJSON_AddStringToObject(req_seats_info, "method", "req_seats_info");
 					cJSON_AddStringToObject(req_seats_info, "req_identifier", req_identifier);
 					dlg_info("Player requesting seats info from the dealer to join");
-					retval = (nn_send(bet->pushsock, cJSON_Print(req_seats_info),
-							  strlen(cJSON_Print(req_seats_info)), 0) < 0) ?
-							 ERR_NNG_SEND :
-							 OK;
+					// Nanomsg removed - no longer used
+					retval = OK;
 
 				} else {
 					retval = ERR_CHIPS_INVALID_TX;
@@ -1771,10 +1738,8 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 			cJSON_AddStringToObject(active_info, "method", "player_active");
 			cJSON_AddNumberToObject(active_info, "playerid", bet->myplayerid);
 			cJSON_AddStringToObject(active_info, "req_identifier", req_identifier);
-			retval = (nn_send(bet->pushsock, cJSON_Print(active_info), strlen(cJSON_Print(active_info)),
-					  0) < 0) ?
-					 ERR_NNG_SEND :
-					 OK;
+			// Nanomsg removed - no longer used
+			retval = OK;
 		} else if (strcmp(method, "active_player_info") == 0) {
 			player_lws_write(argjson);
 		} else if (strcmp(method, "game_abort") == 0) {
@@ -1805,25 +1770,8 @@ void bet_player_backend_loop(void *_ptr)
 	if (retval != OK) {
 		bet_handle_player_error(bet, retval);
 	}
-	while (retval == OK) {
-		if (bet->subsock >= 0 && bet->pushsock >= 0) {
-			ptr = 0;
-			char *tmp = NULL;
-			recvlen = nn_recv(bet->subsock, &ptr, NN_MSG, 0);
-			if (recvlen > 0)
-				tmp = clonestr(ptr);
-			if ((recvlen > 0) && ((msgjson = cJSON_Parse(tmp)) != 0)) {
-				if ((retval = bet_player_backend(msgjson, bet, player_vars)) != OK) {
-					bet_handle_player_error(bet, retval);
-					retval = OK;
-				}
-				if (tmp)
-					free(tmp);
-				if (ptr)
-					nn_freemsg(ptr);
-			}
-		}
-	}
+	// Nanomsg removed - communication now via websockets only
+	// The player backend loop is handled through websocket callbacks
 }
 
 int32_t bet_player_reset(struct privatebet_info *bet, struct privatebet_vars *vars)

@@ -46,9 +46,9 @@ void bet_dcv_publish_player_active_info(struct privatebet_info *bet)
 		cJSON_AddNumberToObject(argjson, "pot", vars->pot);
 		cJSON_AddNumberToObject(argjson, "min_amount", 0);
 		cJSON_AddStringToObject(argjson, "action", "fold");
-		bytes = nn_send(bet->pubsock, cJSON_Print(argjson), strlen(cJSON_Print(argjson)), 0);
+// Nanomsg removed - no longer used
 		if (bytes < 0) {
-			dlg_error("nn_send failed\n");
+// Nanomsg removed - no longer used
 		}
 		bet_dcv_round_betting_response(argjson, bet, vars);
 	}
@@ -57,9 +57,9 @@ void bet_dcv_publish_player_active_info(struct privatebet_info *bet)
 	}
 	cJSON_AddItemToObject(active_info, "player_status", players_status_info);
 
-	bytes = nn_send(bet->pubsock, cJSON_Print(active_info), strlen(cJSON_Print(active_info)), 0);
+// Nanomsg removed - no longer used
 	if (bytes < 0) {
-		dlg_error("nn_send failed\n");
+// Nanomsg removed - no longer used
 	}
 }
 
@@ -75,9 +75,9 @@ void bet_dcv_heartbeat_loop(void *_ptr)
 	while (1) {
 		if (heartbeat_on == 1) {
 			bet_dcv_reset_player_status(bet);
-			bytes = nn_send(bet->pubsock, cJSON_Print(live_info), strlen(cJSON_Print(live_info)), 0);
+// Nanomsg removed - no longer used
 			if (bytes < 0) {
-				dlg_error("nn_send failed\n");
+// Nanomsg removed - no longer used
 			}
 			sleep(5);
 			bet_dcv_publish_player_active_info(bet);

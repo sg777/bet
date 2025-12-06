@@ -80,7 +80,7 @@ extern int32_t no_of_signers, max_no_of_signers, is_signed[CARDS777_MAXPLAYERS];
 
 extern struct privatebet_info *bet_bvv;
 extern struct privatebet_vars *bvv_vars;
-extern struct dcv_bvv_sock_info *bet_dcv_bvv;
+// bet_dcv_bvv removed - nanomsg sockets no longer used
 
 extern struct privatebet_info *BET_player[CARDS777_MAXPLAYERS];
 

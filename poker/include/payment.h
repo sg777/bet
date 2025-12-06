@@ -6,8 +6,8 @@
 Here contains the functions which are specific to DCV
 ****************************************************************/
 int32_t bet_dcv_pay(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars);
-int32_t bet_dcv_create_invoice_request(struct privatebet_info *bet, int32_t playerid, int32_t amount);
-int32_t bet_dcv_invoice_pay(struct privatebet_info *bet, struct privatebet_vars *vars, int playerid, int amount);
+// bet_dcv_create_invoice_request removed - broken code, Lightning Network removed
+// bet_dcv_invoice_pay removed - Lightning Network removed
 void bet_dcv_paymentloop(void *_ptr);
 
 /***************************************************************

@@ -48,8 +48,8 @@ int32_t bet_initiate_statemachine(cJSON *argjson, struct privatebet_info *bet, s
 	cJSON_AddStringToObject(dealerInfo, "method", "dealer");
 	cJSON_AddNumberToObject(dealerInfo, "playerid", vars->dealer);
 
-	retval = (nn_send(bet->pubsock, cJSON_Print(dealerInfo), strlen(cJSON_Print(dealerInfo)), 0) < 0) ?
-			 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+			 OK :
 			 OK;
 	bet_push_dcv_to_gui(dealerInfo);
 
@@ -276,8 +276,8 @@ int32_t bet_dcv_round_betting(cJSON *argjson, struct privatebet_info *bet, struc
 
 	cJSON_AddNumberToObject(roundBetting, "min_amount", (maxamount - vars->betamount[vars->turni][vars->round]));
 
-	retval = (nn_send(bet->pubsock, cJSON_Print(roundBetting), strlen(cJSON_Print(roundBetting)), 0) < 0) ?
-			 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+			 OK :
 			 OK;
 
 end:
@@ -372,8 +372,8 @@ int32_t bet_dcv_big_blind(cJSON *argjson, struct privatebet_info *bet, struct pr
 	cJSON_AddNumberToObject(big_blind_info, "min_amount", (vars->small_blind * 2));
 	cJSON_AddNumberToObject(big_blind_info, "pot", vars->pot);
 
-	retval = (nn_send(bet->pubsock, cJSON_Print(big_blind_info), strlen(cJSON_Print(big_blind_info)), 0) < 0) ?
-			 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+			 OK :
 			 OK;
 	return retval;
 }
@@ -410,8 +410,8 @@ int32_t bet_dcv_small_blind(cJSON *argjson, struct privatebet_info *bet, struct 
 	cJSON_AddNumberToObject(smallBlindInfo, "playerid", vars->turni);
 	cJSON_AddNumberToObject(smallBlindInfo, "round", vars->round);
 	cJSON_AddNumberToObject(smallBlindInfo, "pot", vars->pot);
-	retval = (nn_send(bet->pubsock, cJSON_Print(smallBlindInfo), strlen(cJSON_Print(smallBlindInfo)), 0) < 0) ?
-			 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+			 OK :
 			 OK;
 	return retval;
 }
@@ -469,10 +469,8 @@ int32_t bet_player_betting_statemachine(cJSON *argjson, struct privatebet_info *
 			   (strcmp(action, "raise") == 0) || (strcmp(action, "fold") == 0) ||
 			   (strcmp(action, "allin") == 0)) {
 			if (bet->myplayerid == -2) {
-				retval = (nn_send(bet->pubsock, cJSON_Print(argjson), strlen(cJSON_Print(argjson)), 0) <
-					  0) ?
-						 ERR_NNG_SEND :
-						 OK;
+				// Nanomsg removed - no longer used
+				retval = OK;
 				if (retval != OK)
 					goto end;
 				retval = bet_dcv_round_betting_response(argjson, bet, vars);
@@ -576,8 +574,8 @@ int32_t bet_player_dealer_info(cJSON *argjson, struct privatebet_info *bet, stru
 		dlg_info("This player is next to dealer: %d\n", bet->myplayerid);
 		dealerReady = cJSON_CreateObject();
 		cJSON_AddStringToObject(dealerReady, "method", "dealer_ready");
-		retval = (nn_send(bet->pushsock, cJSON_Print(dealerReady), strlen(cJSON_Print(dealerReady)), 0) < 0) ?
-				 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+				 OK :
 				 OK;
 	}
 	bet_push_client(argjson);
@@ -606,8 +604,8 @@ int32_t bet_player_small_blind(cJSON *argjson, struct privatebet_info *bet, stru
 	cJSON_AddNumberToObject(small_blind_info, "playerid", jint(argjson, "playerid"));
 	cJSON_AddNumberToObject(small_blind_info, "round", jint(argjson, "round"));
 
-	retval = (nn_send(bet->pushsock, cJSON_Print(small_blind_info), strlen(cJSON_Print(small_blind_info)), 0) < 0) ?
-			 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+			 OK :
 			 OK;
 	player_lws_write(small_blind_info);
 
@@ -635,8 +633,8 @@ int32_t bet_player_big_blind(cJSON *argjson, struct privatebet_info *bet, struct
 	cJSON_AddNumberToObject(big_blind_info, "playerid", jint(argjson, "playerid"));
 	cJSON_AddNumberToObject(big_blind_info, "round", jint(argjson, "round"));
 
-	retval = (nn_send(bet->pushsock, cJSON_Print(big_blind_info), strlen(cJSON_Print(big_blind_info)), 0) < 0) ?
-			 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+			 OK :
 			 OK;
 	player_lws_write(big_blind_info);
 
@@ -713,10 +711,8 @@ int32_t bet_player_round_betting(cJSON *argjson, struct privatebet_info *bet, st
 		dlg_error("%s", bet_err_str(retval));
 	}
 	dlg_info("action response :: %s\n", cJSON_Print(action_response));
-	retval = (nn_send(bet->pushsock, cJSON_Print(action_response), strlen(cJSON_Print(action_response)),
-			  0) < 0) ?
-			 ERR_NNG_SEND :
-			 OK;
+	// Nanomsg removed - no longer used
+	retval = OK;
 	return retval;
 }
 

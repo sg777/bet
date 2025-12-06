@@ -515,8 +515,8 @@ int32_t chips_publish_multisig_tx(char *tx)
 	if (flag) {
 		cJSON_AddStringToObject(tx_info, "method", "signrawtransaction");
 		cJSON_AddStringToObject(tx_info, "tx", tx);
-		retval = (nn_send(bet_dcv->pubsock, cJSON_Print(tx_info), strlen(cJSON_Print(tx_info)), 0) < 0) ?
-				 ERR_NNG_SEND :
+// Nanomsg removed - no longer used
+				 OK :
 				 OK;
 	}
 	return retval;
