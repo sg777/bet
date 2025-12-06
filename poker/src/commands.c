@@ -1655,7 +1655,16 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		dlg_info("LN command :: %s\n", command);
 
 	//dlg_info("\nchips-pbaas command :: %s\n", command);
-	fp = popen(command, "r");
+	// Redirect stderr to stdout to capture error messages (2>&1)
+	char *command_with_stderr = malloc(strlen(command) + 10);
+	if (!command_with_stderr) {
+		retval = ERR_MEMORY_ALLOC;
+		free(command);
+		return retval;
+	}
+	snprintf(command_with_stderr, strlen(command) + 10, "%s 2>&1", command);
+	
+	fp = popen(command_with_stderr, "r");
 	if (fp == NULL) {
 		dlg_error("%s::%d::Fail to open the pipe while running the command::%s\n", __FUNCTION__, __LINE__,
 			  command);
@@ -1663,6 +1672,8 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 			retval = ERR_CHIPS_COMMAND;
 		if (strcmp(argv[0], "lightning-cli") == 0)
 			retval = ERR_LN_COMMAND;
+		free(command_with_stderr);
+		free(command);
 		return retval;
 	}
 
@@ -1693,6 +1704,46 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		memset(buf, 0x00, buf_size);
 	}
 	data[new_size - 1] = '\0';
+	
+	// Close pipe and check for errors in output (Verus exceptions, etc.)
+	// Note: We check output first, then close, to avoid double-close issues
+	int exit_status = pclose(fp);
+	fp = NULL; // Set to NULL so we don't close it again
+	
+	// Check for error messages in output (Verus exceptions, etc.)
+	// This catches "UNKNOWN EXCEPTION" and other error patterns
+	if (strstr(data, "UNKNOWN EXCEPTION") != NULL) {
+		dlg_error("Verus RPC command failed with exception: %s", data);
+		if (strcmp(argv[0], blockchain_cli) == 0) {
+			retval = ERR_CHIPS_COMMAND;
+			// For getidentity, return specific error
+			if (strcmp(argv[1], "getidentity") == 0) {
+				retval = ERR_ID_NOT_FOUND;
+			}
+		} else if (strcmp(argv[0], "lightning-cli") == 0) {
+			retval = ERR_LN_COMMAND;
+		} else {
+			retval = ERR_COMMAND_FAILED;
+		}
+		// Don't try to parse error output as JSON
+		goto end;
+	}
+	
+	// Check exit status - if command failed and we got no data, it's an error
+	// Note: exit_status from pclose is the wait status, need to extract exit code
+	// For simplicity, we check if exit_status != 0 (which indicates failure)
+	if (exit_status != 0 && strlen(data) == 0) {
+		dlg_error("Command failed with exit status %d: %s", exit_status, command);
+		if (strcmp(argv[0], blockchain_cli) == 0) {
+			retval = ERR_CHIPS_COMMAND;
+		} else if (strcmp(argv[0], "lightning-cli") == 0) {
+			retval = ERR_LN_COMMAND;
+		} else {
+			retval = ERR_COMMAND_FAILED;
+		}
+		goto end;
+	}
+	
 	if (strcmp(argv[0], "git") == 0) {
 		*argjson = cJSON_CreateString((const char *)data);
 	} else if (strcmp(argv[0], "lightning-cli") == 0) {
@@ -1779,6 +1830,8 @@ end:
 		free(data);
 	if (command)
 		free(command);
+	if (command_with_stderr)
+		free(command_with_stderr);
 	if (fp)
 		pclose(fp);
 

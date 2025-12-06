@@ -194,6 +194,8 @@ const char *bet_err_str(int32_t err_no)
 		return "Dealers ID not found";
 	case ERR_NO_DEALERS_REGISTERED:
 		return "No dealers registered";
+	case ERR_COMMAND_FAILED:
+		return "Command execution failed";
 	default:
 		dlg_error("err_no::%d", err_no);
 		return "This error is not handled yet...";
