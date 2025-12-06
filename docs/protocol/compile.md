@@ -184,16 +184,16 @@ curl ifconfig.co
 
 ```bash
 # e.g. Dealer node is at 45.77.139.155 (you will know this IP from someone who will be running a dealer node OR you can run the dealer node yourself)
-$ cd ~/bet/src && ./bet dcv 45.77.139.155
+$ cd ~/bet/poker && ./bet dcv 45.77.139.155
 ```
 
 ### Running Bet Player
 ```bash
-cd ~/bet/src && ./bet player
+cd ~/bet/poker && ./bet player
 ```
 
 You might see something like this when running bet for the first time. The number of blocks will keep on rising. This means LN is not synced. You just need to let it be for a while and let it sync. Feel free to exit the currently running command. The sync is happening in the background in the tmux session that you have started earlier.
 ```
-root@959aa68123b4:~/bet# cd ~/bet/src && ./bet dcv 45.77.139.155
+root@959aa68123b4:~/bet# cd ~/bet/poker && ./bet dcv 45.77.139.155
 ln is 48513 blocks behind chips network
 ```

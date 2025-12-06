@@ -63,7 +63,7 @@ First make sure the basics are working.
 **./bet player/dcv**
 
 ```
-root@server:~/bet/src$ ./bet player
+root@server:~/bet/poker$ ./bet player
 lightning-cli: Connecting to 'chipsln-rpc': Connection refused
 ln is 7822365 blocks behind chips network
 lightning-cli: Connecting to 'chipsln-rpc': Connection refused

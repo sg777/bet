@@ -1,5 +1,5 @@
 ## Configuring the dealer node
-All the configurable options for the dealer are set in `dealer_setup.ini`, which is located at the path `bet/src/config`. The default configuration settings are as follows: 
+All the configurable options for the dealer are set in `dealer_setup.ini`, which is located at the path `bet/poker/config`. The default configuration settings are as follows: 
 ```
 [dealer]
 dcv_commission       = 0.5		   #This is the percentage of the pot amount that dealer takes home as commission.				

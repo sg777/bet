@@ -5,7 +5,7 @@ The compilation instructions for any node of a bet is same, please follow the co
 >Note : The docker setup is tested only on ubuntu.
 
 ## Configuring the dealer node
-All the configurable options for the player can be set in `dealer_setup.ini` file, which is located at `bet/src/config` path. The default content of this file is as follows:
+All the configurable options for the player can be set in `dealer_setup.ini` file, which is located at `bet/poker/config` path. The default content of this file is as follows:
 ```
 [dealer]
 max_players           = 3           #This is the maximun number of players that dealer will allow them to join the table. Atm, dealer waits for this number of players to join before starting hand.
@@ -21,7 +21,7 @@ As a dealer along with running the `bet` backend node, dealer should also be res
 
 ### Running the dealer bet backend
 ```
-cd bet/src
+cd bet/poker
 ./bet dcv <ipv4_addr> #Here ipv4_addr is the public ipv4 address on which the dealer backend is running. 
 ```
 For example im running all my backend setup is on the node `159.69.23.30`, so i start my dealer backend is as follows:
@@ -63,7 +63,7 @@ After connecting to dealer backend,  from GUI dealer view the same interface as 
 Due to any reason if the game didn't happen, the dealer can help in players in raising the disputes on behalf of the player. Even if dealer raises the disputes, no need to worry about losing the funds since the funds in the payin_tx are credited to the address which is present in the data part of the payin_tx and which is belongs to the player.
 
 ```
-cd bet/src
+cd bet/poker
 ./bet game solve
 ./bet game dispute "disputed tx_id" #This is for a specific tx_id.
 ```

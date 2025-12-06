@@ -146,20 +146,20 @@ fi
 
 
 # Install bet on system if not found
-if ! command -v $HOME/src/bet &> /dev/null
+if ! command -v $HOME/poker/bet &> /dev/null
 then
-    echo "$HOME/src/bet could not be found"
+    echo "$HOME/poker/bet could not be found"
     cd $HOME
     sudo apt update
     sudo apt install -y libcurl4-gnutls-dev
     wget $BET_DL_URL
     tar xvf $BET_FILE
     rm $BET_FILE
-    echo "bet is located at $PWD/src/"
-    # sudo mv src/bet /usr/local/bin
-    # sudo mv src/cashierd /usr/local/bin
+    echo "bet is located at $PWD/poker/"
+    # sudo mv poker/bet /usr/local/bin
+    # sudo mv poker/cashierd /usr/local/bin
     # mkdir -p $HOME/.pangea/
-    # mv src/config/* $HOME/.pangea/
+    # mv poker/config/* $HOME/.pangea/
 fi
 
 
@@ -215,10 +215,10 @@ echo "	  lightning-cli getinfo"
 echo ""
 echo "	- bet is installed in home directory at following location:"
 echo ""
-echo "	  $HOME/src/"
+echo "	  $HOME/poker/"
 echo ""
 echo "	  To start bet as a player node you will need to change"
-echo "	  directory to $HOME/src/ and then give command as following:"
+echo "	  directory to $HOME/poker/ and then give command as following:"
 echo ""
 echo "	  ./bet player"
 echo ""

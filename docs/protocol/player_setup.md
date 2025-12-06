@@ -42,7 +42,7 @@ copy the blocks downloaded to .chips folder from home directory and start the ch
 ```
 ## Configuring the player node
 
-All the configurable options for the player can be set in `player_setup.ini` file, which is located at `bet/src/config` path. The default content of this file is as follows:
+All the configurable options for the player can be set in `player_setup.ini` file, which is located at `bet/poker/config` path. The default content of this file is as follows:
 ```
 [player]
 max_allowed_dcv_commission = 5      #This is the max percentage of the dealer commision that the player is willing to pay, if the dealer sets the commission higher than this then the backend node will exit.
@@ -63,7 +63,7 @@ table_password       = pangea      #If the player wishes to join the private tab
 
 ## Running the player node
 ```
-cd bet/src
+cd bet/poker
 ./bet player
 ```
 ## Playing with the player node
@@ -92,7 +92,7 @@ Once if the other players join, one can able to view the cards and betting actio
 ## Raising disputes
 Due to any reason if the game didn't happen, one can reverse the payin_tx by raising the dispute by running the following commands:
 ```
-cd bet/src
+cd bet/poker
 ./bet game solve # To resolve all the undisputed tx's
 ./bet game raise tx_id # To resolve a specific disputed tx's
 ./bet game info fail #To list the disputed games along with disputed tx id's

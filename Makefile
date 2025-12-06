@@ -246,7 +246,7 @@ build_dep:
 	make --directory libs/crypto777
 	# make --directory external/jsmn
 build_dep1:
-	make --directory src
+	make --directory poker
 all-programs: $(ALL_PROGRAMS) build_dep build_dep1
 all-test-programs: $(ALL_FUZZ_TARGETS)
 
@@ -266,7 +266,7 @@ clean: obsclean
 	$(RM) $(CDUMP_OBJS) $(ALL_OBJS)
 	$(RM) $(ALL_PROGRAMS)
 	$(RM) $(ALL_FUZZ_TARGETS)
-	make --directory src clean
+	make --directory poker clean
 	make --directory external/jsmn clean
 	make --directory external/libwally-core clean
 	make --directory libs/crypto777 clean

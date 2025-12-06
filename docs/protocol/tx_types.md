@@ -34,7 +34,7 @@ Lets take a look at what each field in the JSON object refering:
 ### Dust tx's to record game moves
 The data fields of a sample dust tx that happen during the geme looks as follows
 ```
-~/bet/src$ ./bet extract_tx_data 58ec6cbcef7a223405d77b78e6fbf0425d2c3333105a586f99160f479e4ca26b
+~/bet/poker$ ./bet extract_tx_data 58ec6cbcef7a223405d77b78e6fbf0425d2c3333105a586f99160f479e4ca26b
 [bet.c:bet_start:449] Data part of tx 
  
 	"method":	"bet",

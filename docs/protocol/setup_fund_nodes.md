@@ -7,7 +7,7 @@ In order to start playing you need to fund your CHIPS node. Having funds in your
 1. Get new address
 
     ```
-    root@server:~/bet/src$ chips-cli getnewaddress
+    root@server:~/bet/poker$ chips-cli getnewaddress
     bbd7L2LuapPhw18DQZUnw25v1N3F3nrHB2
     ```
 2. Send a few CHIPS there (1-3?). 
@@ -15,7 +15,7 @@ In order to start playing you need to fund your CHIPS node. Having funds in your
 3. Check the balance
     
     ```
-    root@server:~/bet/src$ chips-cli getbalance
+    root@server:~/bet/poker$ chips-cli getbalance
     1.00000000
     ```
 
@@ -24,7 +24,7 @@ In order to start playing you need to fund your CHIPS node. Having funds in your
 
 Check the balance
 
-    root@server:~/bet/src$ lightning-cli listfunds
+    root@server:~/bet/poker$ lightning-cli listfunds
     {
     "outputs": [
         {
