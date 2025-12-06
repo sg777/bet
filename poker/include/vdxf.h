@@ -124,9 +124,9 @@ Any entity in the bet ecosystem can register the identities under chips, like fo
 under chips as sg777.chips@ which basically been used to hold the tokens. 
 */
 
-#define CASHIERS_ID_FQN "cashiers.poker.chips777@"
-#define DEALERS_ID_FQN "dealers.poker.chips777@"
-#define POKER_ID_FQN "poker.chips777@"
+#define CASHIERS_ID_FQN "cashiers.poker.chips@"
+#define DEALERS_ID_FQN "dealers.poker.chips@"
+#define POKER_ID_FQN "poker.chips@"
 
 #define DEALERS_ID "dealers"
 #define CASHIERS_ID "cashiers"
@@ -137,7 +137,7 @@ Currencies
 ----------
 Bet supports various tokens that launch on Verus and CHIPS is the token which we use to play poker.
 */
-#define CHIPS "chips777"
+#define CHIPS "chips"
 
 /* Every node that is part of the poker make updates to the IDs, so to pay tx_fee for the ID updates we keeping this reserve
 *  amount to be 1 CHIP which is sufficient to accomodate all gaming updates in poker.
