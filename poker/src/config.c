@@ -91,14 +91,17 @@ void bet_parse_dealer_config_ini_file()
 			dcv_commission_percentage = iniparser_getdouble(ini, "dealer:dcv_commission", 0);
 		}
 		if (NULL != iniparser_getstring(ini, "dealer:gui_host", NULL)) {
-			strcpy(dcv_hosted_gui_url, iniparser_getstring(ini, "dealer:gui_host", NULL));
+			/* Avoid overflowing fixed-size global buffer */
+			snprintf(dcv_hosted_gui_url, sizeof(dcv_hosted_gui_url), "%s",
+				 iniparser_getstring(ini, "dealer:gui_host", NULL));
 		}
 		threshold_value = iniparser_getint(ini, "dealer:min_cashiers", threshold_value);
 		if (-1 != iniparser_getboolean(ini, "private table:is_table_private", -1)) {
 			is_table_private = iniparser_getboolean(ini, "private table:is_table_private", -1);
 		}
 		if (NULL != iniparser_getstring(ini, "private table:table_password", NULL)) {
-			strcpy(table_password, iniparser_getstring(ini, "private table:table_password", NULL));
+			snprintf(table_password, sizeof(table_password), "%s",
+				 iniparser_getstring(ini, "private table:table_password", NULL));
 		}
 		if (-1 != iniparser_getboolean(ini, "dealer:bet_ln_config", -1)) {
 			bet_ln_config = iniparser_getboolean(ini, "dealer:bet_ln_config", -1);
@@ -121,13 +124,15 @@ void bet_parse_player_config_ini_file()
 			table_stack_in_bb = iniparser_getint(ini, "player:table_stake_size", 0);
 		}
 		if (0 != iniparser_getstring(ini, "player:name", NULL)) {
-			strcpy(player_name, iniparser_getstring(ini, "player:name", NULL));
+			snprintf(player_name, sizeof(player_name), "%s",
+				 iniparser_getstring(ini, "player:name", NULL));
 		}
 		if (-1 != iniparser_getboolean(ini, "private table:is_table_private", -1)) {
 			is_table_private = iniparser_getboolean(ini, "private table:is_table_private", -1);
 		}
 		if (NULL != iniparser_getstring(ini, "private table:table_password", NULL)) {
-			strcpy(table_password, iniparser_getstring(ini, "private table:table_password", NULL));
+			snprintf(table_password, sizeof(table_password), "%s",
+				 iniparser_getstring(ini, "private table:table_password", NULL));
 		}
 		if (-1 != iniparser_getboolean(ini, "player:bet_ln_config", -1)) {
 			bet_ln_config = iniparser_getboolean(ini, "player:bet_ln_config", -1);
@@ -144,14 +149,14 @@ void bet_parse_cashier_config_ini_file()
 	if (ini == NULL) {
 		dlg_error("error in parsing %s", cashier_config_ini_file);
 	} else {
-		char str[20];
+		char str[64];
 		int i = 1;
-		sprintf(str, "cashier:node-%d", i);
+		snprintf(str, sizeof(str), "cashier:node-%d", i);
 		cashiers_info = cJSON_CreateArray();
 		while (NULL != iniparser_getstring(ini, str, NULL)) {
 			cJSON_AddItemToArray(cashiers_info, cJSON_Parse(iniparser_getstring(ini, str, NULL)));
 			memset(str, 0x00, sizeof(str));
-			sprintf(str, "cashier:node-%d", ++i);
+			snprintf(str, sizeof(str), "cashier:node-%d", ++i);
 		}
 		no_of_notaries = cJSON_GetArraySize(cashiers_info);
 		notary_node_ips = (char **)malloc(no_of_notaries * sizeof(char *));
@@ -182,14 +187,14 @@ void bet_display_cashier_hosted_gui()
 	if (ini == NULL) {
 		dlg_error("error in parsing %s", player_config_ini_file);
 	} else {
-		char str[20];
+		char str[64];
 		int i = 1;
-		sprintf(str, "gui:cashier-%d", i);
+		snprintf(str, sizeof(str), "gui:cashier-%d", i);
 		while (NULL != iniparser_getstring(ini, str, NULL)) {
 			if (check_url(iniparser_getstring(ini, str, NULL)))
 				dlg_warn("%s", iniparser_getstring(ini, str, NULL));
 			memset(str, 0x00, sizeof(str));
-			sprintf(str, "gui:cashier-%d", ++i);
+			snprintf(str, sizeof(str), "gui:cashier-%d", ++i);
 		}
 	}
 }
@@ -269,9 +274,13 @@ bool bet_is_new_block_set()
 	const char *homedir = pw->pw_dir;
 
 	char *config_file = NULL;
-	config_file = calloc(1, 200);
-	strcpy(config_file, homedir);
-	strcat(config_file, "/bet/privatebet/config/blockchain_config.ini");
+	const char *suffix = "/bet/privatebet/config/blockchain_config.ini";
+	size_t need = strlen(homedir) + strlen(suffix) + 1;
+	config_file = calloc(1, need);
+	if (!config_file) {
+		return false;
+	}
+	snprintf(config_file, need, "%s%s", homedir, suffix);
 	ini = iniparser_load(config_file);
 	if (ini == NULL) {
 		dlg_error("error in parsing %s", config_file);
@@ -280,6 +289,8 @@ bool bet_is_new_block_set()
 			is_new_block_set = iniparser_getboolean(ini, "blockchain:new_block", -1);
 		}
 	}
+	if (config_file)
+		free(config_file);
 	return is_new_block_set;
 }
 

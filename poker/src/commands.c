@@ -28,6 +28,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <math.h>
 
 double epsilon = 0.000000001;
 
@@ -1257,7 +1258,8 @@ static int32_t chips_get_vout_from_tx(char *tx_id)
 	vout = cJSON_GetObjectItem(decode_raw_tx_info, "vout");
 	for (int i = 0; i < cJSON_GetArraySize(vout); i++) {
 		cJSON *temp = cJSON_GetArrayItem(vout, i);
-		if (abs(value - jdouble(temp, "value") < epsilon)) {
+		/* Compare doubles correctly: fabs(a-b) < epsilon */
+		if (fabs(value - jdouble(temp, "value")) < epsilon) {
 			retval = jint(temp, "n");
 			break;
 		}
@@ -1351,12 +1353,24 @@ static void chips_read_valid_unspent(char *file_name, cJSON **argjson)
 	fp = fopen(file_name, "r");
 	if (fp) {
 		while ((ch = fgetc(fp)) != EOF) {
-			if ((ch != '[') || (ch != ']')) {
+			/* Skip JSON array brackets */
+			if ((ch != '[') && (ch != ']')) {
 				if (ch == '{') {
+					if (len >= (int32_t)sizeof(buf) - 2) {
+						dlg_error("Unspent JSON object too large; truncating parse");
+						memset(buf, 0x00, sizeof(buf));
+						len = 0;
+					}
 					buf[len++] = ch;
 				} else {
 					if (len > 0) {
 						if (ch == '}') {
+							if (len >= (int32_t)sizeof(buf) - 2) {
+								dlg_error("Unspent JSON object too large; truncating parse");
+								memset(buf, 0x00, sizeof(buf));
+								len = 0;
+								continue;
+							}
 							buf[len++] = ch;
 							buf[len] = '\0';
 							temp = cJSON_Parse(buf);
@@ -1367,6 +1381,12 @@ static void chips_read_valid_unspent(char *file_name, cJSON **argjson)
 							memset(buf, 0x00, len);
 							len = 0;
 						} else {
+							if (len >= (int32_t)sizeof(buf) - 2) {
+								dlg_error("Unspent JSON object too large; truncating parse");
+								memset(buf, 0x00, sizeof(buf));
+								len = 0;
+								continue;
+							}
 							buf[len++] = ch;
 						}
 					}
@@ -1388,12 +1408,24 @@ int32_t chips_check_tx_exists_in_unspent(char *file_name, char *tx_id)
 	fp = fopen(file_name, "r");
 	if (fp) {
 		while ((ch = fgetc(fp)) != EOF) {
-			if ((ch != '[') || (ch != ']')) {
+			/* Skip JSON array brackets */
+			if ((ch != '[') && (ch != ']')) {
 				if (ch == '{') {
+					if (len >= (int32_t)sizeof(buf) - 2) {
+						dlg_error("Unspent JSON object too large; truncating parse");
+						memset(buf, 0x00, sizeof(buf));
+						len = 0;
+					}
 					buf[len++] = ch;
 				} else {
 					if (len > 0) {
 						if (ch == '}') {
+							if (len >= (int32_t)sizeof(buf) - 2) {
+								dlg_error("Unspent JSON object too large; truncating parse");
+								memset(buf, 0x00, sizeof(buf));
+								len = 0;
+								continue;
+							}
 							buf[len++] = ch;
 							buf[len] = '\0';
 							temp = cJSON_Parse(buf);
@@ -1406,6 +1438,12 @@ int32_t chips_check_tx_exists_in_unspent(char *file_name, char *tx_id)
 							memset(buf, 0x00, len);
 							len = 0;
 						} else {
+							if (len >= (int32_t)sizeof(buf) - 2) {
+								dlg_error("Unspent JSON object too large; truncating parse");
+								memset(buf, 0x00, sizeof(buf));
+								len = 0;
+								continue;
+							}
 							buf[len++] = ch;
 						}
 					}
@@ -1426,13 +1464,29 @@ int32_t chips_check_tx_exists(char *file_name, char *tx_id)
 
 	temp = cJSON_CreateObject();
 	fp = fopen(file_name, "r");
+	if (!fp) {
+		dlg_error("Failed to open %s", file_name);
+		return 0;
+	}
 	while ((ch = fgetc(fp)) != EOF) {
-		if ((ch != '[') || (ch != ']')) {
+		/* Skip JSON array brackets */
+		if ((ch != '[') && (ch != ']')) {
 			if (ch == '{') {
+				if (len >= (int32_t)sizeof(buf) - 2) {
+					dlg_error("Unspent JSON object too large; truncating parse");
+					memset(buf, 0x00, sizeof(buf));
+					len = 0;
+				}
 				buf[len++] = ch;
 			} else {
 				if (len > 0) {
 					if (ch == '}') {
+						if (len >= (int32_t)sizeof(buf) - 2) {
+							dlg_error("Unspent JSON object too large; truncating parse");
+							memset(buf, 0x00, sizeof(buf));
+							len = 0;
+							continue;
+						}
 						buf[len++] = ch;
 						buf[len] = '\0';
 						temp = cJSON_Parse(buf);
@@ -1447,12 +1501,19 @@ int32_t chips_check_tx_exists(char *file_name, char *tx_id)
 						memset(buf, 0x00, len);
 						len = 0;
 					} else {
+						if (len >= (int32_t)sizeof(buf) - 2) {
+							dlg_error("Unspent JSON object too large; truncating parse");
+							memset(buf, 0x00, sizeof(buf));
+							len = 0;
+							continue;
+						}
 						buf[len++] = ch;
 					}
 				}
 			}
 		}
 	}
+	fclose(fp);
 	return tx_exists;
 }
 
