@@ -25,6 +25,7 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 #include "network.h"
 #include "bet.h"
@@ -36,15 +37,35 @@ char *bet_get_etho_ip()
 {
 	struct ifreq ifr;
 	int fd;
-	unsigned char ip_address[15];
+	static char ipbuf[INET_ADDRSTRLEN];
+
+	memset(&ifr, 0, sizeof(ifr));
+	memset(ipbuf, 0, sizeof(ipbuf));
 
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (fd < 0) {
+		dlg_error("socket() failed: %s", strerror(errno));
+		return NULL;
+	}
+
 	ifr.ifr_addr.sa_family = AF_INET;
-	memcpy(ifr.ifr_name, "eth0", IFNAMSIZ - 1);
-	ioctl(fd, SIOCGIFADDR, &ifr);
+	/* Prefer eth0 if present; callers can fall back if NULL */
+	strncpy(ifr.ifr_name, "eth0", IFNAMSIZ - 1);
+	ifr.ifr_name[IFNAMSIZ - 1] = '\0';
+
+	if (ioctl(fd, SIOCGIFADDR, &ifr) != 0) {
+		dlg_error("ioctl(SIOCGIFADDR) failed for %s: %s", ifr.ifr_name, strerror(errno));
+		close(fd);
+		return NULL;
+	}
 	close(fd);
-	strcpy((char *)ip_address, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
-	return (inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+
+	if (!inet_ntop(AF_INET, &((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr, ipbuf, sizeof(ipbuf))) {
+		dlg_error("inet_ntop() failed: %s", strerror(errno));
+		return NULL;
+	}
+
+	return ipbuf;
 }
 
 char *bet_tcp_sock_address(int32_t bindflag, char *str, char *ipaddr, uint16_t port)

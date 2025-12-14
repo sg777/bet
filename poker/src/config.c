@@ -21,42 +21,55 @@ struct verus_player_config player_config = { 0 };
 
 bits256 game_id;
 
+/* Globals declared in include/common.h */
+int32_t is_table_private = 0;
+char table_password[128] = { 0 };
+char player_name[128] = { 0 };
+char verus_pid[128] = { 0 };
+int32_t bet_ln_config = 0;
+
 cJSON *bet_read_json_file(char *file_name)
 {
 	FILE *fp = NULL;
 	cJSON *json_data = NULL;
-	char *data = NULL, buf[256];
-	unsigned long data_size = 1024, buf_size = 256, temp_size = 0;
-	unsigned long new_size = data_size;
+	char *data = NULL;
+	char buf[256];
+	size_t cap = 4096;
+	size_t len = 0;
 
-	data = calloc(data_size, sizeof(char));
-	if (!data) {
+	data = calloc(cap, 1);
+	if (!data)
 		goto end;
-	}
 
 	fp = fopen(file_name, "r");
 	if (fp == NULL) {
 		dlg_error("Failed to open file %s\n", file_name);
 		goto end;
-	} else {
-		while (fgets(buf, buf_size, fp) != NULL) {
-			temp_size = temp_size + strlen(buf);
-			if (temp_size >= new_size) {
-				char *temp = calloc(new_size, sizeof(char));
-				strncpy(temp, data, strlen(data));
-				free(data);
-				new_size = new_size * 2;
-				data = calloc(new_size, sizeof(char));
-				strncpy(data, temp, strlen(temp));
-				free(temp);
-			}
-			strcat(data, buf);
-			memset(buf, 0x00, buf_size);
-		}
-		json_data = cJSON_CreateObject();
-		json_data = cJSON_Parse(data);
 	}
+
+	while (fgets(buf, sizeof(buf), fp) != NULL) {
+		size_t blen = strlen(buf);
+		if (len + blen + 1 > cap) {
+			size_t newcap = cap;
+			while (len + blen + 1 > newcap)
+				newcap *= 2;
+			char *tmp = realloc(data, newcap);
+			if (!tmp)
+				goto end;
+			data = tmp;
+			/* Ensure newly-allocated tail is NUL (for safety) */
+			memset(data + cap, 0x00, newcap - cap);
+			cap = newcap;
+		}
+		memcpy(data + len, buf, blen);
+		len += blen;
+		data[len] = '\0';
+	}
+
+	json_data = cJSON_Parse(data);
 end:
+	if (fp)
+		fclose(fp);
 	if (data)
 		free(data);
 	return json_data;

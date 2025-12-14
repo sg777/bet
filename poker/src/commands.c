@@ -112,7 +112,8 @@ char **bet_copy_args(int argc, ...)
 	va_copy(va_copy, valist);
 
 	for (int i = 0; i < argc; i++) {
-		if (strlen(va_arg(va_copy, char *)) > arg_size) {
+		/* Need room for terminating NUL in arg_size buffer */
+		if (strlen(va_arg(va_copy, char *)) >= arg_size) {
 			ret = ERR_ARG_SIZE_TOO_LONG;
 			dlg_error("Error::%s::%s", bet_err_str(ret), va_arg(valist, char *));
 			dlg_error("Error in running the command::%s", argv[1]);
@@ -1590,7 +1591,8 @@ int32_t run_command(int argc, char **argv)
 end:
 	if (command)
 		free(command);
-	pclose(fp);
+	if (fp)
+		pclose(fp);
 
 	return ret;
 }

@@ -138,12 +138,13 @@ extern double dcv_commission_percentage;
 extern double max_allowed_dcv_commission;
 extern char dcv_hosted_gui_url[128];
 
-int32_t is_table_private;
-char table_password[128];
-char player_name[128];
-char verus_pid[128]; // This is the verus ID owned by the player to which player updates during the game.
+/* These are globals; define them in exactly one .c file */
+extern int32_t is_table_private;
+extern char table_password[128];
+extern char player_name[128];
+extern char verus_pid[128]; // This is the verus ID owned by the player to which player updates during the game.
 
-int32_t bet_ln_config; 
+extern int32_t bet_ln_config;
 extern int64_t sc_start_block;
 
 extern char dealer_ip_for_bvv[128];

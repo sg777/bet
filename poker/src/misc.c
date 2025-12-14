@@ -134,11 +134,22 @@ void struct_to_byte_arr(const void *object, size_t size, uint8_t *out)
 
 void cJSON_hex(cJSON *argjson, char **hexstr)
 {
-	int32_t hex_data_len;
+	if (!hexstr)
+		return;
+	*hexstr = NULL;
+	if (!argjson)
+		return;
 
-	hex_data_len = 2 * strlen(cJSON_Print(argjson)) + 1;
+	/* cJSON_Print() allocates; don't leak it. */
+	char *printed = cJSON_Print(argjson);
+	if (!printed)
+		return;
+
+	int32_t hex_data_len = (int32_t)(2 * strlen(printed) + 1);
 	*hexstr = calloc(hex_data_len, sizeof(char));
-	str_to_hexstr(cJSON_Print(argjson), *hexstr);
+	if (*hexstr)
+		str_to_hexstr(printed, *hexstr);
+	free(printed);
 }
 
 cJSON *hex_cJSON(char *hex_data)
@@ -149,10 +160,10 @@ cJSON *hex_cJSON(char *hex_data)
 	if (hex_data == NULL)
 		return NULL;
 
-	data = calloc(1, strlen(hex_data));
+	/* Decoded data is ~ half the hex length (+1 for NUL). */
+	data = calloc(1, (strlen(hex_data) / 2) + 1);
 	hexstr_to_str(hex_data, data);
 
-	out = cJSON_CreateObject();
 	out = cJSON_Parse(data);
 
 	if (data)

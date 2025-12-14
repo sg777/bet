@@ -55,8 +55,9 @@ enum bet_node { player = 0, dealer, cashier };
 
 extern int32_t bet_node_type;
 
-int32_t num_of_players;
-char player_ids[CARDS777_MAXPLAYERS][MAX_ID_LEN];
+/* These are globals; define them in exactly one .c file */
+extern int32_t num_of_players;
+extern char player_ids[CARDS777_MAXPLAYERS][MAX_ID_LEN];
 
 struct BET_shardsinfo {
 	UT_hash_handle hh;
