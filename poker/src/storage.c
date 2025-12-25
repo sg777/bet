@@ -4,10 +4,7 @@
 #include "err.h"
 #include "vdxf.h"
 
-#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
 #include <pwd.h>
 
 #define no_of_tables 13
@@ -523,7 +520,7 @@ int32_t update_player_deck_info_a_rG(char *tx_id)
 	bits256_str(player_priv, p_deck_info.p_kp.priv);
 
 	cardinfo = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddistr(cardinfo, bits256_str(str, p_deck_info.player_r[i].priv));
 	}
 	cJSON_hex(cardinfo, &player_deck_priv);
@@ -562,13 +559,13 @@ int32_t insert_dealer_deck_info()
 	cJSON *d_perm = NULL, *d_blindinfo = NULL;
 
 	d_perm = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddi64bits(d_perm, d_deck_info.d_permi[i]);
 	}
 	cJSON_hex(d_perm, &perm);
 
 	d_blindinfo = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddistr(d_blindinfo, bits256_str(str, d_deck_info.dealer_r[i].priv));
 	}
 	cJSON_hex(d_blindinfo, &dealer_deck_priv);
@@ -598,7 +595,7 @@ int32_t insert_cashier_deck_info(char *table_id)
 	cJSON *t_player_info = NULL, *b_perm = NULL, *b_blindinfo = NULL;
 
 	b_perm = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddi64bits(b_perm, b_deck_info.b_permi[i]);
 	}
 	cJSON_hex(b_perm, &perm);
@@ -611,7 +608,7 @@ int32_t insert_cashier_deck_info(char *table_id)
 	for (int32_t i = 0; i < num_players; i++) {
 		memset(sql_query, 0x00, sql_query_size);
 		b_blindinfo = cJSON_CreateArray();
-		for (int j = 0; j < CARDS777_MAXCARDS; j++) {
+		for (int j = 0; j < CARDS_MAXCARDS; j++) {
 			jaddistr(b_blindinfo, bits256_str(str, b_deck_info.cashier_r[i][j].priv));
 		}
 		cJSON_hex(b_blindinfo, &cashier_deck_priv);

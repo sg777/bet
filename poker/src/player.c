@@ -22,13 +22,13 @@ int32_t player_init_deck()
 
 	p_deck_info.p_kp = gen_keypair();
 
-	gen_deck(p_deck_info.player_r, CARDS777_MAXCARDS);
+	gen_deck(p_deck_info.player_r, CARDS_MAXCARDS);
 
 	player_deck = cJSON_CreateObject();
 	jaddnum(player_deck, "id", p_deck_info.player_id);
 	jaddbits256(player_deck, "pubkey", p_deck_info.p_kp.prod);
 	jadd(player_deck, "cardinfo", cjson_player_cards = cJSON_CreateArray());
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddistr(cjson_player_cards, bits256_str(str, p_deck_info.player_r[i].prod));
 	}
 
@@ -62,8 +62,8 @@ int32_t decode_card(bits256 b_blinded_card, bits256 blinded_value, cJSON *dealer
 
 	dlg_info("Dealer blinded card :: %s", bits256_str(str1, d_blinded_card));
 
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
-		for (int32_t j = 0; j < CARDS777_MAXCARDS; j++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
+		for (int32_t j = 0; j < CARDS_MAXCARDS; j++) {
 			if (strcmp(bits256_str(str1, d_blinded_card),
 				   bits256_str(str2, curve25519(p_deck_info.player_r[i].priv,
 								jbits256i(dealer_blind_info, j)))) == 0) {
@@ -133,7 +133,7 @@ int32_t reveal_card(char *table_id)
 
 static int32_t handle_player_reveal_card(char *table_id)
 {
-	int32_t retval = OK, player_id;
+	int32_t retval = OK;
 	cJSON *game_state_info = NULL, *player_game_state_info = NULL;
 
 	player_game_state_info = get_game_state_info(player_config.verus_pid);
@@ -151,7 +151,7 @@ static int32_t handle_player_reveal_card(char *table_id)
 	if ((!player_game_state_info) || (jint(game_state_info, "card_id") > jint(player_game_state_info, "card_id"))) {
 		retval = reveal_card(table_id);
 		if (retval == OK) {
-			cJSON *out = append_game_state(player_config.verus_pid, G_REVEAL_CARD_P_DONE, game_state_info);
+			append_game_state(player_config.verus_pid, G_REVEAL_CARD_P_DONE, game_state_info);
 			dlg_info("Updating players revealed card info :: %s", cJSON_Print(game_state_info));
 		}
 	}

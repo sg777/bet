@@ -39,7 +39,7 @@ int32_t bet_initiate_statemachine(cJSON *argjson, struct privatebet_info *bet, s
 	vars->last_turn = 0;
 	vars->last_raise = 0;
 	for (int i = 0; i < bet->maxplayers; i++) {
-		for (int j = 0; j < CARDS777_MAXROUNDS; j++) {
+		for (int j = 0; j < CARDS_MAXROUNDS; j++) {
 			vars->bet_actions[i][j] = 0;
 			vars->betamount[i][j] = 0;
 		}
@@ -139,7 +139,7 @@ int32_t bet_dcv_round_betting(cJSON *argjson, struct privatebet_info *bet, struc
 		vars->turni = vars->dealer;
 		vars->last_raise = 0;
 
-		if ((vars->round >= CARDS777_MAXROUNDS) || (players_left < 2)) {
+		if ((vars->round >= CARDS_MAXROUNDS) || (players_left < 2)) {
 			vars->round -= 1;
 			retval = bet_evaluate_hand(bet, vars);
 			goto end;
@@ -317,7 +317,7 @@ int32_t bet_dcv_round_betting_response(cJSON *argjson, struct privatebet_info *b
 			vars->bet_actions[playerid][round] = allin;
 		} else if (strcmp(action, "fold") == 0) {
 			vars->bet_actions[playerid][round] = fold;
-			for (int32_t i = round; i < CARDS777_MAXROUNDS; i++) {
+			for (int32_t i = round; i < CARDS_MAXROUNDS; i++) {
 				vars->bet_actions[playerid][i] = fold;
 			}
 		}
@@ -329,7 +329,7 @@ int32_t bet_dcv_round_betting_response(cJSON *argjson, struct privatebet_info *b
 		players_left = bet->maxplayers - players_left;
 		if (players_left < 2) {
 			for (int i = 0; i < bet->maxplayers; i++) {
-				for (int j = vars->round; j < CARDS777_MAXROUNDS; j++) {
+				for (int j = vars->round; j < CARDS_MAXROUNDS; j++) {
 					vars->bet_actions[i][j] = vars->bet_actions[i][round]; // check
 				}
 			}
@@ -492,7 +492,7 @@ int32_t bet_display_current_state(cJSON *argjson, struct privatebet_info *bet, s
 
 	dlg_info("Display Actions:");
 
-	for (int j = 0; j < CARDS777_MAXROUNDS; j++) {
+	for (int j = 0; j < CARDS_MAXROUNDS; j++) {
 		dlg_info("Round:%d\n", j);
 		for (int i = 0; i < bet->maxplayers; i++) {
 			if (vars->bet_actions[i][j] == small_blind) {
@@ -560,12 +560,12 @@ int32_t bet_player_dealer_info(cJSON *argjson, struct privatebet_info *bet, stru
 	vars->pot = 0;
 
 	for (int i = 0; i < bet->maxplayers; i++) {
-		for (int j = 0; j < CARDS777_MAXROUNDS; j++) {
+		for (int j = 0; j < CARDS_MAXROUNDS; j++) {
 			vars->bet_actions[i][j] = 0;
 		}
 	}
 	for (int i = 0; i < bet->maxplayers; i++) {
-		for (int j = 0; j < CARDS777_MAXROUNDS; j++) {
+		for (int j = 0; j < CARDS_MAXROUNDS; j++) {
 			vars->betamount[i][j] = 0;
 		}
 	}

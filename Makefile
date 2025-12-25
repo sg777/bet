@@ -243,7 +243,7 @@ $(ALL_OBJS): $(ALL_GEN_HEADERS) $(EXTERNAL_HEADERS) Makefile
 
 # Now ALL_PROGRAMS is fully populated, we can expand it.
 build_dep:
-	make --directory libs/crypto777
+	make --directory libs/crypto
 	# make --directory external/jsmn
 build_dep1:
 	make --directory poker
@@ -268,7 +268,7 @@ clean: obsclean
 	$(RM) $(ALL_FUZZ_TARGETS)
 	make --directory poker clean
 	make --directory external/jsmn clean
-	make --directory libs/crypto777 clean
+	make --directory libs/crypto clean
 	find . -name '*gcda' -delete
 	find . -name '*gcno' -delete
 	find . -name '*.nccout' -delete

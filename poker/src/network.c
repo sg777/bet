@@ -14,22 +14,13 @@
  ******************************************************************************/
 #define _DEFAULT_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <netdb.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <string.h>
 
 #include "network.h"
 #include "bet.h"
-#include "cards777.h"
+#include "cards.h"
 #include "gfshare.h"
 #include "err.h"
 

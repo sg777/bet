@@ -514,7 +514,6 @@ int32_t chose_table()
 int32_t find_table()
 {
 	int32_t retval = OK;
-	cJSON *t_table_info = NULL, *dealer_ids = NULL;
 
 	/*
 	* Check if the configured table meets the preconditions for the player to join the table
@@ -794,8 +793,8 @@ bool is_table_full(char *table_id)
 
 	if (t_player_info == NULL || t_table_info == NULL) {
 		free(game_id_str);
-		cJSON_Delete(t_player_info);
-		cJSON_Delete(t_table_info);
+		if (t_player_info != NULL) cJSON_Delete(t_player_info);
+		if (t_table_info != NULL) cJSON_Delete(t_table_info);
 		return false;
 	}
 
@@ -821,7 +820,7 @@ bool is_table_full(char *table_id)
 
 bool is_playerid_added(char *table_id)
 {
-	int32_t game_state, retval = OK;
+	int32_t game_state;
 	char *game_id_str = NULL;
 	cJSON *t_player_info = NULL, *player_info = NULL;
 

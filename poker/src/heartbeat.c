@@ -4,14 +4,11 @@
 #include "states.h"
 
 #include <errno.h>
-#include <netinet/in.h>
 #include <pthread.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 int32_t active_players = 0;
-int32_t player_status[CARDS777_MAXPLAYERS] = { 0 };
+int32_t player_status[CARDS_MAXPLAYERS] = { 0 };
 
 void bet_dcv_reset_player_status(struct privatebet_info *bet)
 {

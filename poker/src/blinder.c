@@ -1,7 +1,7 @@
 #include "bet.h"
 #include "blinder.h"
 #include "deck.h"
-#include "cards777.h"
+#include "cards.h"
 #include "err.h"
 #include "game.h"
 
@@ -22,14 +22,14 @@ int32_t cashier_sb_deck(char *id, bits256 *d_blinded_deck, int32_t player_id)
 	cJSON *b_blinded_deck = NULL;
 
 	game_id_str = get_str_from_id_key(id, T_GAME_ID_KEY);
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		dlg_info("%s", bits256_str(str, d_blinded_deck[i]));
 	}
-	shuffle_deck_db(d_blinded_deck, CARDS777_MAXCARDS, b_deck_info.b_permi);
-	blind_deck_b(d_blinded_deck, CARDS777_MAXCARDS, b_deck_info.cashier_r[player_id]);
+	shuffle_deck_db(d_blinded_deck, CARDS_MAXCARDS, b_deck_info.b_permi);
+	blind_deck_b(d_blinded_deck, CARDS_MAXCARDS, b_deck_info.cashier_r[player_id]);
 
 	b_blinded_deck = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		dlg_info("%d::%s", i, bits256_str(str, d_blinded_deck[i]));
 		jaddibits256(b_blinded_deck, d_blinded_deck[i]);
 	}
@@ -51,13 +51,13 @@ void cashier_init_deck(char *table_id)
 	char *game_id_str = NULL;
 	cJSON *t_player_info = NULL;
 
-	bet_permutation(b_deck_info.b_permi, CARDS777_MAXCARDS);
+	bet_permutation(b_deck_info.b_permi, CARDS_MAXCARDS);
 
 	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
 	t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
 	num_players = jint(t_player_info, "num_players");
 	for (int32_t i = 0; i < num_players; i++) {
-		gen_deck(b_deck_info.cashier_r[i], CARDS777_MAXCARDS);
+		gen_deck(b_deck_info.cashier_r[i], CARDS_MAXCARDS);
 	}
 }
 
@@ -66,7 +66,7 @@ int32_t cashier_shuffle_deck(char *id)
 	int32_t num_players = 0, retval = OK;
 	char *game_id_str = NULL;
 	cJSON *t_d_p_deck_info = NULL, *t_player_info = NULL;
-	bits256 t_d_p_deck[CARDS777_MAXCARDS];
+	bits256 t_d_p_deck[CARDS_MAXCARDS];
 
 	cashier_init_deck(id);
 	game_id_str = get_str_from_id_key(id, T_GAME_ID_KEY);

@@ -13,9 +13,9 @@
  *                                                                            *
  ******************************************************************************/
 #include "host.h"
-#include "../../log/macrologger.h"
+#include "macrologger.h"
 #include "bet.h"
-#include "cards777.h"
+#include "cards.h"
 #include "client.h"
 #include "commands.h"
 #include "network.h"
@@ -31,11 +31,8 @@
 #include "err.h"
 
 #include <errno.h>
-#include <netinet/in.h>
 #include <pthread.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #define LWS_PLUGIN_STATIC
 
@@ -43,18 +40,18 @@ struct lws *wsi_global_host = NULL;
 
 int32_t players_joined = 0;
 int32_t turn = 0, no_of_cards = 0, no_of_rounds = 0, no_of_bets = 0;
-int32_t card_matrix[CARDS777_MAXPLAYERS][hand_size];
-int32_t card_values[CARDS777_MAXPLAYERS][hand_size];
+int32_t card_matrix[CARDS_MAXPLAYERS][hand_size];
+int32_t card_values[CARDS_MAXPLAYERS][hand_size];
 struct deck_dcv_info dcv_info;
-int32_t player_ready[CARDS777_MAXPLAYERS];
+int32_t player_ready[CARDS_MAXPLAYERS];
 int32_t hole_cards_drawn = 0, community_cards_drawn = 0, flop_cards_drawn = 0, turn_card_drawn = 0,
 	river_card_drawn = 0;
-int32_t bet_amount[CARDS777_MAXPLAYERS][CARDS777_MAXROUNDS];
-int32_t eval_game_p[CARDS777_MAXPLAYERS], eval_game_c[CARDS777_MAXPLAYERS];
+int32_t bet_amount[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
+int32_t eval_game_p[CARDS_MAXPLAYERS], eval_game_c[CARDS_MAXPLAYERS];
 
-char player_chips_address[CARDS777_MAXPLAYERS][64];
+char player_chips_address[CARDS_MAXPLAYERS][64];
 
-char tx_rand_str[CARDS777_MAXPLAYERS][65];
+char tx_rand_str[CARDS_MAXPLAYERS][65];
 int no_of_rand_str = 0;
 
 int32_t invoiceID;
@@ -68,14 +65,14 @@ struct privatebet_vars *dcv_vars = NULL;
 // bet_dcv_bvv removed - dcv_bvv_sock_info struct removed, nanomsg no longer used
 
 static int dealerPosition;
-int32_t no_of_signers, max_no_of_signers = 2, is_signed[CARDS777_MAXPLAYERS];
+int32_t no_of_signers, max_no_of_signers = 2, is_signed[CARDS_MAXPLAYERS];
 
 char lws_buf[65536];
 int32_t lws_buf_length = 0;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int32_t no_of_txs = 0;
-char tx_ids[CARDS777_MAXPLAYERS][100];
+char tx_ids[CARDS_MAXPLAYERS][100];
 
 int32_t threshold_time = 30; /* Time to send the beacon*/
 
@@ -138,7 +135,7 @@ int32_t bet_seats(struct lws *wsi, cJSON *argjson)
 {
 	cJSON *table_info = NULL, *seats_info = NULL;
 	char *rendered = NULL;
-	int32_t retval = 0, bytes;
+	int32_t retval = 0;
 	cJSON *seat[max_players];
 
 	for (int i = 0; i < max_players; i++) {
@@ -194,7 +191,6 @@ int32_t bet_dcv_frontend(struct lws *wsi, cJSON *argjson)
 {
 	int retval = 1;
 	char *rendered = NULL, *method = NULL;
-	int32_t bytes = 0;
 
 	method = jstr(argjson, "method");
 	dlg_info("method::%s\n", method);
@@ -208,6 +204,7 @@ int32_t bet_dcv_frontend(struct lws *wsi, cJSON *argjson)
 	} else if (strcmp(method, "reset") == 0) {
 		bet_reset_all_dcv_params(bet_dcv, dcv_vars);
 		rendered = cJSON_Print(argjson);
+		(void)rendered; /* set but not used - may be used by UI */
 		// Nanomsg removed - no longer used
 	} else if (strcmp(method, "get_bal_info") == 0) {
 		cJSON *bal_info = cJSON_CreateObject();
@@ -356,7 +353,7 @@ int32_t bet_dcv_deck_init_info(cJSON *argjson, struct privatebet_info *bet, stru
 int32_t bet_dcv_init(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
 {
 	int32_t peerid, retval = OK;
-	bits256 card_pubvalues[CARDS777_MAXCARDS];
+	bits256 card_pubvalues[CARDS_MAXCARDS];
 	cJSON *card_info = NULL;
 
 	peerid = jint(argjson, "peerid");
@@ -365,7 +362,7 @@ int32_t bet_dcv_init(cJSON *argjson, struct privatebet_info *bet, struct private
 		card_pubvalues[i] = jbits256i(card_info, i);
 	}
 
-	retval = sg777_deckgen_vendor(peerid, dcv_info.cardprods[peerid], dcv_info.dcvblindcards[peerid], bet->range,
+	retval = deckgen_vendor(peerid, dcv_info.cardprods[peerid], dcv_info.dcvblindcards[peerid], bet->range,
 				      card_pubvalues, dcv_info.deckid);
 	dcv_info.numplayers = dcv_info.numplayers + 1;
 
@@ -411,7 +408,7 @@ int32_t bet_player_join_req(cJSON *argjson, struct privatebet_info *bet, struct 
 {
 	int32_t retval = OK;
 	cJSON *player_info = NULL;
-	char *uri = NULL, *type = NULL;
+	char *uri = NULL;
 
 	bet->numplayers = ++players_joined;
 	dcv_info.peerpubkeys[jint(argjson, "gui_playerID")] = jbits256(argjson, "pubkey");
@@ -791,7 +788,7 @@ void bet_reset_all_dcv_params(struct privatebet_info *bet, struct privatebet_var
 	vars->last_raise = 0;
 	for (int i = 0; i < bet->maxplayers; i++) {
 		vars->funds[i] = 0;
-		for (int j = 0; j < CARDS777_MAXROUNDS; j++) {
+		for (int j = 0; j < CARDS_MAXROUNDS; j++) {
 			vars->bet_actions[i][j] = 0;
 			vars->betamount[i][j] = 0;
 		}
@@ -1012,10 +1009,10 @@ static int32_t bet_dcv_poker_winner(struct privatebet_info *bet, struct privateb
 
 int32_t det_dcv_pot_split(struct privatebet_info *bet, struct privatebet_vars *vars)
 {
-	int32_t retval = OK, eval_players[CARDS777_MAXPLAYERS] = { 0 }, min_win_amount, no_of_winners = 0, flag = 1,
+	int32_t retval = OK, eval_players[CARDS_MAXPLAYERS] = { 0 }, min_win_amount, no_of_winners = 0, flag = 1,
 		total_init_amount = 0, total_win_amount = 0;
 	unsigned char h[7];
-	unsigned long scores[CARDS777_MAXPLAYERS], max_score = 0;
+	unsigned long scores[CARDS_MAXPLAYERS], max_score = 0;
 
 	for (int i = 0; i < bet->maxplayers; i++) {
 		if (vars->bet_actions[i][(vars->round)] == fold)
@@ -1269,7 +1266,6 @@ static int32_t bet_dcv_process_signed_raw_tx(cJSON *argjson)
 static void bet_send_tx_reverse_rqst(cJSON *argjson, struct privatebet_info *bet)
 {
 	cJSON *tx_reverse_rqst_info = NULL;
-	int32_t bytes;
 
 	tx_reverse_rqst_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(tx_reverse_rqst_info, "method", "tx_reverse");
@@ -1634,9 +1630,7 @@ void bet_dcv_backend_thrd(void *_ptr)
 
 void bet_dcv_backend_loop(void *_ptr)
 {
-	int32_t recvlen;
-	cJSON *argjson = NULL;
-	void *ptr = NULL;
+	(void)_ptr; /* unused parameter */
 	struct privatebet_info *bet = _ptr;
 
 	dcv_info.numplayers = 0;

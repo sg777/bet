@@ -26,7 +26,6 @@
 #include "err.h"
 
 #include <stdarg.h>
-#include <stdlib.h>
 #include <inttypes.h>
 #include <math.h>
 

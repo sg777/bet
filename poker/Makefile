@@ -7,12 +7,11 @@ SRC_DIR := src
 INCLUDE_DIR := include
 BUILD_DIR := build
 BIN_DIR := bin
-BIN_DIR := bin
 
 EXTERNAL_DIR := ../external
 
 # Updated source files path
-SRCFILES := $(SRC_DIR)/cards777.c  $(SRC_DIR)/client.c  $(SRC_DIR)/commands.c  $(SRC_DIR)/gfshare.c  \
+SRCFILES := $(SRC_DIR)/cards.c  $(SRC_DIR)/client.c  $(SRC_DIR)/commands.c  $(SRC_DIR)/gfshare.c  \
             $(SRC_DIR)/host.c  $(SRC_DIR)/network.c  $(SRC_DIR)/oracle.c  $(SRC_DIR)/payment.c  \
             $(SRC_DIR)/states.c  $(SRC_DIR)/table.c $(SRC_DIR)/poker.c $(SRC_DIR)/cashier.c \
             $(SRC_DIR)/storage.c $(SRC_DIR)/config.c $(SRC_DIR)/misc.c $(SRC_DIR)/heartbeat.c \
@@ -39,7 +38,7 @@ endif
 
 CFLAGS := -g -fPIC -std=c99 $(WARNINGS) \
           -I$(INCLUDE_DIR) \
-          -I../libs/crypto777 \
+          -I../libs/crypto \
           -I../includes/curl \
           -I$(EXTERNAL_DIR)/dlg/include \
           -I$(EXTERNAL_DIR)/iniparser/src \
@@ -78,7 +77,7 @@ endif
 $(info $$CC is [${CC}])
 
 $(BIN_DIR)/$(PROJNAME): $(OBJFILES) | $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $(SRC_DIR)/bet.c $^ ../external/iniparser/libiniparser.a ../libs/crypto777/libcrypto777.a \
+	$(CC) $(CFLAGS) -o $@ $(SRC_DIR)/bet.c $^ ../external/iniparser/libiniparser.a ../libs/crypto/libcrypto.a \
 	$(LDFLAGS) $(CPPFLAGS) -lcurl -ldl -lpthread -lm -lwebsockets -lgmp -lsqlite3 -lssl -lcrypto -levent -lstdc++
 	cp $(BIN_DIR)/$(PROJNAME) $(BIN_DIR)/$(CASHIER)
 

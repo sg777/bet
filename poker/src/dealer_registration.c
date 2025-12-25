@@ -73,7 +73,6 @@ bool is_dealer_registered(char *dealer_id)
 
 int32_t register_dealer(char *dealer_id)
 {
-	int32_t retval = OK;
 	double balance = 0;
 	cJSON *tx_data = NULL, *op_id = NULL;
 
@@ -148,7 +147,6 @@ int32_t register_dealer(char *dealer_id)
 
 int32_t deregister_dealer(char *dealer_id)
 {
-	int32_t retval = OK;
 	double refund_amount = 0;
 	cJSON *tx_data = NULL, *op_id = NULL;
 	cJSON *dealers = NULL;
@@ -241,7 +239,6 @@ int32_t process_dealer_registration_tx(cJSON *tx_data)
 // Function to raise a dealer registration dispute
 int32_t raise_dealer_registration_dispute(char *dealer_id, char *dispute_action)
 {
-	int32_t retval = OK;
 	cJSON *registration_info = NULL, *tx_data = NULL, *op_id = NULL;
 
 	if (!dealer_id || !dispute_action) {

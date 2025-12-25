@@ -51,12 +51,9 @@ int32_t bet_dcv_pay(cJSON *argjson, struct privatebet_info *bet, struct privateb
 
 void bet_dcv_paymentloop(void *_ptr)
 {
-	int32_t recvlen;
 	uint8_t flag = 1;
-	void *ptr;
-	cJSON *msgjson = NULL;
-	char *method = NULL;
 	struct privatebet_info *bet = _ptr;
+	(void)_ptr; /* unused parameters */
 	// Nanomsg removed - communication now via websockets only
 	// The payment loop is handled through websocket callbacks
 	(void)flag; // Suppress unused parameter warning

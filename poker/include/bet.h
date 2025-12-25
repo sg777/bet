@@ -28,7 +28,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "../../libs/crypto777/OS_portable.h"
+#include "../../libs/crypto/OS_portable.h"
 
 #include <libwebsockets.h>
 
@@ -57,7 +57,7 @@ extern int32_t bet_node_type;
 
 /* These are globals; define them in exactly one .c file */
 extern int32_t num_of_players;
-extern char player_ids[CARDS777_MAXPLAYERS][MAX_ID_LEN];
+extern char player_ids[CARDS_MAXPLAYERS][MAX_ID_LEN];
 
 struct BET_shardsinfo {
 	UT_hash_handle hh;
@@ -73,12 +73,12 @@ struct gfshare_ctx_bet {
 
 struct privatebet_info {
 	char game[64];
-	bits256 MofN[CARDS777_MAXCARDS * CARDS777_MAXPLAYERS], cardpubs[CARDS777_MAXCARDS],
-		playerpubs[CARDS777_MAXPLAYERS + 1], tableid, deckid;
+	bits256 MofN[CARDS_MAXCARDS * CARDS_MAXPLAYERS], cardpubs[CARDS_MAXCARDS],
+		playerpubs[CARDS_MAXPLAYERS + 1], tableid, deckid;
 	int32_t numplayers, maxplayers, numrounds, range, myplayerid, maxchips, chipsize;
 	// Nanomsg sockets removed - no longer used
 	uint32_t timestamp;
-	char peerids[CARDS777_MAXPLAYERS + 1][67];
+	char peerids[CARDS_MAXPLAYERS + 1][67];
 	int32_t cardid, turni;
 	int32_t no_of_turns;
 	cJSON *msg;
@@ -99,25 +99,25 @@ struct privatebet_peerln {
 };
 
 struct privatebet_vars {
-	bits256 myhash, hashes[CARDS777_MAXPLAYERS + 1][2];
-	int32_t permis[CARDS777_MAXPLAYERS + 1][CARDS777_MAXCARDS];
-	uint32_t endround[CARDS777_MAXPLAYERS + 1], evalcrcs[CARDS777_MAXPLAYERS + 1], consensus;
-	cJSON *actions[CARDS777_MAXROUNDS][CARDS777_MAXPLAYERS + 1];
-	int32_t mypermi[CARDS777_MAXCARDS], permi[CARDS777_MAXCARDS], turni, round, validperms, roundready, lastround,
+	bits256 myhash, hashes[CARDS_MAXPLAYERS + 1][2];
+	int32_t permis[CARDS_MAXPLAYERS + 1][CARDS_MAXCARDS];
+	uint32_t endround[CARDS_MAXPLAYERS + 1], evalcrcs[CARDS_MAXPLAYERS + 1], consensus;
+	cJSON *actions[CARDS_MAXROUNDS][CARDS_MAXPLAYERS + 1];
+	int32_t mypermi[CARDS_MAXCARDS], permi[CARDS_MAXCARDS], turni, round, validperms, roundready, lastround,
 		numconsensus;
 	int32_t small_blind, big_blind;
-	int32_t betamount[CARDS777_MAXPLAYERS][CARDS777_MAXROUNDS];
-	int32_t bet_actions[CARDS777_MAXPLAYERS][CARDS777_MAXROUNDS];
+	int32_t betamount[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
+	int32_t bet_actions[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
 	int32_t dealer, last_turn, last_raise;
 	int32_t pot;
 	int32_t player_funds;
-	int32_t funds[CARDS777_MAXPLAYERS];
-	int32_t funds_spent[CARDS777_MAXPLAYERS];
-	int32_t win_funds[CARDS777_MAXPLAYERS];
-	int32_t ini_funds[CARDS777_MAXPLAYERS];
-	int32_t winners[CARDS777_MAXPLAYERS];
-	char player_chips_addrs[CARDS777_MAXPLAYERS][64];
-	int32_t req_id_to_player_id_mapping[CARDS777_MAXPLAYERS];
+	int32_t funds[CARDS_MAXPLAYERS];
+	int32_t funds_spent[CARDS_MAXPLAYERS];
+	int32_t win_funds[CARDS_MAXPLAYERS];
+	int32_t ini_funds[CARDS_MAXPLAYERS];
+	int32_t winners[CARDS_MAXPLAYERS];
+	char player_chips_addrs[CARDS_MAXPLAYERS][64];
+	int32_t req_id_to_player_id_mapping[CARDS_MAXPLAYERS];
 };
 
 struct pair256 {
@@ -134,19 +134,19 @@ extern char bvv_unique_id[65];
 
 extern struct enc_share *g_shares;
 
-extern struct enc_share *all_g_shares[CARDS777_MAXPLAYERS];
+extern struct enc_share *all_g_shares[CARDS_MAXPLAYERS];
 
 struct b_deck_info_struct {
 	bits256 game_id;
-	int32_t b_permi[CARDS777_MAXCARDS];
-	struct pair256 cashier_r[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
+	int32_t b_permi[CARDS_MAXCARDS];
+	struct pair256 cashier_r[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
 };
 extern struct b_deck_info_struct b_deck_info;
 
 struct d_deck_info_struct {
 	bits256 game_id;
-	int32_t d_permi[CARDS777_MAXCARDS];
-	struct pair256 dealer_r[CARDS777_MAXCARDS];
+	int32_t d_permi[CARDS_MAXCARDS];
+	struct pair256 dealer_r[CARDS_MAXCARDS];
 };
 extern struct d_deck_info_struct d_deck_info;
 
@@ -154,7 +154,7 @@ struct p_deck_info_struct {
 	int32_t player_id;
 	bits256 game_id;
 	struct pair256 p_kp;
-	struct pair256 player_r[CARDS777_MAXCARDS];
+	struct pair256 player_r[CARDS_MAXCARDS];
 };
 extern struct p_deck_info_struct p_deck_info;
 
@@ -169,16 +169,16 @@ struct game_meta_info_struct {
 	int32_t dealer_pos;
 	int32_t turn;
 	int32_t card_id;
-	int32_t card_state[CARDS777_MAXPLAYERS][hand_size];
+	int32_t card_state[CARDS_MAXPLAYERS][hand_size];
 };
 extern struct game_meta_info_struct game_meta_info;
 
 struct deck_player_info {
 	struct pair256 player_key;
-	bits256 cardpubkeys[CARDS777_MAXCARDS], cardprivkeys[CARDS777_MAXCARDS];
-	int32_t permis[CARDS777_MAXCARDS], r_permis[CARDS777_MAXCARDS];
-	bits256 cardprods[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
-	bits256 bvvblindcards[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
+	bits256 cardpubkeys[CARDS_MAXCARDS], cardprivkeys[CARDS_MAXCARDS];
+	int32_t permis[CARDS_MAXCARDS], r_permis[CARDS_MAXCARDS];
+	bits256 cardprods[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
+	bits256 bvvblindcards[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
 	bits256 dcvpubkey, bvvpubkey, deckid;
 	uint32_t numplayers, maxplayers, numcards;
 };
@@ -187,13 +187,13 @@ extern struct deck_player_info player_info;
 struct deck_dcv_info {
 	bits256 deckid;
 	struct pair256 dcv_key;
-	int32_t permis[CARDS777_MAXCARDS];
-	bits256 cardpubkeys[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
-	bits256 dcvblindcards[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
-	bits256 cardprods[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
-	bits256 peerpubkeys[CARDS777_MAXPLAYERS];
+	int32_t permis[CARDS_MAXCARDS];
+	bits256 cardpubkeys[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
+	bits256 dcvblindcards[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
+	bits256 cardprods[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
+	bits256 peerpubkeys[CARDS_MAXPLAYERS];
 	uint32_t numplayers, maxplayers;
-	unsigned char uri[CARDS777_MAXPLAYERS][100];
+	unsigned char uri[CARDS_MAXPLAYERS][100];
 	uint32_t betamount;
 	uint32_t commision;
 	uint32_t paidamount;
@@ -202,9 +202,9 @@ struct deck_dcv_info {
 
 struct deck_bvv_info {
 	bits256 deckid;
-	int32_t permis[CARDS777_MAXCARDS];
+	int32_t permis[CARDS_MAXCARDS];
 	struct pair256 bvv_key;
-	bits256 bvvblindcards[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
+	bits256 bvvblindcards[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
 	uint32_t numplayers, maxplayers;
 };
 
@@ -222,9 +222,9 @@ struct seat_info {
 	int32_t playing;
 };
 
-extern int32_t player_pos[CARDS777_MAXPLAYERS];
+extern int32_t player_pos[CARDS_MAXPLAYERS];
 
-extern struct seat_info player_seats_info[CARDS777_MAXPLAYERS];
+extern struct seat_info player_seats_info[CARDS_MAXPLAYERS];
 extern struct privatebet_info *bet_player;
 extern struct privatebet_vars *player_vars;
 
@@ -262,7 +262,7 @@ extern struct table player_t;
 extern bits256 game_id;
 
 extern int32_t hole_cards_drawn, community_cards_drawn, flop_cards_drawn, turn_card_drawn, river_card_drawn;
-extern int32_t card_matrix[CARDS777_MAXPLAYERS][hand_size];
+extern int32_t card_matrix[CARDS_MAXPLAYERS][hand_size];
 extern int32_t turn, no_of_cards, no_of_rounds, no_of_bets;
 
 bits256 xoverz_donna(bits256 a);
@@ -271,7 +271,7 @@ bits256 fmul_donna(bits256 a, bits256 b);
 bits256 card_rand256(int32_t privkeyflag, int8_t index);
 struct pair256 deckgen_common(struct pair256 *randcards, int32_t numcards);
 struct pair256 deckgen_player(bits256 *playerprivs, bits256 *playercards, int32_t *permis, int32_t numcards);
-int32_t sg777_deckgen_vendor(int32_t playerid, bits256 *cardprods, bits256 *finalcards, int32_t numcards,
+int32_t deckgen_vendor(int32_t playerid, bits256 *cardprods, bits256 *finalcards, int32_t numcards,
 			     bits256 *playercards, bits256 deckid);
 
 struct pair256 p2p_bvv_init(bits256 *keys, struct pair256 b_key, bits256 *blindings, bits256 *blindedcards,
