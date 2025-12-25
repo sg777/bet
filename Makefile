@@ -268,7 +268,6 @@ clean: obsclean
 	$(RM) $(ALL_FUZZ_TARGETS)
 	make --directory poker clean
 	make --directory external/jsmn clean
-	make --directory external/libwally-core clean
 	make --directory libs/crypto777 clean
 	find . -name '*gcda' -delete
 	find . -name '*gcno' -delete
