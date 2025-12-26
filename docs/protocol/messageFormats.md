@@ -68,4 +68,17 @@ The messages that gets exchanged during game play are listed below.
 * [__game__](./method_game.md)
 * [__seats__](./method_seats.md)
 
+## Complete GUI Message Reference
+
+For a comprehensive reference of all JSON message formats supported by the backend for GUI communication, see:
+* **[GUI Message Formats](./GUI_MESSAGE_FORMATS.md)** - Complete documentation of all message types, request/response formats, and field descriptions for Dealer, Player, and Cashier nodes.
+
+This document includes:
+- Common wallet messages (supported by all node types)
+- Dealer-specific game messages
+- Player-specific game messages
+- Cashier messages
+- Message flow diagrams
+- Error handling guidelines
+
 __NOTE__: I'm using [__pangea-poker-frontend__](https://github.com/sg777/pangea-poker-frontend) as the front-end repo to communicate with the backend bet node. Since I'm not the actual front-end dev of this GUI repo, many fields the original author has mentioned is not used by me. So in the next pages in the message formats whichever fields I didn't used I called them as __optional__.

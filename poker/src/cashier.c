@@ -9,6 +9,8 @@
 #include "cards.h"
 #include "err.h"
 #include "switchs.h"
+#include "payment.h"
+// Legacy pub-sub functions removed - use Verus ID communication instead
 
 int32_t no_of_notaries;
 
@@ -942,42 +944,38 @@ char *bet_send_message_to_notary(cJSON *argjson, char *notary_node_ip)
 	return NULL;
 }
 
+// Legacy pub-sub functions - stubs (to be replaced with Verus ID communication)
 cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *method_name)
 {
-// Nanomsg removed - no longer used
-	char bind_sub_addr[128] = { 0 }, bind_push_addr[128] = { 0 };
-	cJSON *response_info = NULL;
-
-	memset(bind_sub_addr, 0x00, sizeof(bind_sub_addr));
-	memset(bind_push_addr, 0x00, sizeof(bind_push_addr));
-
-	// Nanomsg removed - function no longer functional
-	dlg_error("bet_msg_cashier_with_response_id: nanomsg removed - not implemented");
+	dlg_warn("bet_msg_cashier_with_response_id: Legacy pub-sub removed - use Verus ID updates instead");
+	dlg_warn("  Replace with: get_cJSON_from_id_key() or update_cmm_from_id_key_data_cJSON()");
+	(void)argjson; (void)cashier_ip; (void)method_name;
 	return NULL;
-
-	return response_info;
 }
 
 int32_t bet_msg_cashier(cJSON *argjson, char *cashier_ip)
 {
-// Nanomsg removed - no longer used
-	char bind_push_addr[128] = { 0 };
-
-	memset(bind_push_addr, 0x00, sizeof(bind_push_addr));
-
-	// Nanomsg removed - function no longer functional
-	dlg_error("bet_msg_cashier: nanomsg removed - not implemented");
+	dlg_warn("bet_msg_cashier: Legacy pub-sub removed - use Verus ID updates instead");
+	(void)argjson; (void)cashier_ip;
 	return -1;
 }
 
 int32_t *bet_msg_multiple_cashiers(cJSON *argjson, char **cashier_ips, int no_of_cashiers)
 {
 	int *sent_status = NULL;
-
+	dlg_warn("bet_msg_multiple_cashiers: Legacy pub-sub removed - use Verus ID updates instead");
+	
 	sent_status = (int *)malloc(sizeof(int) * no_of_cashiers);
+	if (sent_status == NULL) {
+		dlg_error("bet_msg_multiple_cashiers: Memory allocation failed");
+		return NULL;
+	}
+	
+	// Mark all as failed since function is not functional
 	for (int32_t i = 0; i < no_of_cashiers; i++) {
 		sent_status[i] = bet_msg_cashier(argjson, cashier_ips[i]);
 	}
+	
 	return sent_status;
 }
 
@@ -1162,4 +1160,182 @@ int32_t bet_clear_tables()
 		free(sql_query);
 
 	return retval;
+}
+
+/***************************************************************
+Cashier frontend loop for GUI communication
+Handles wallet operations common to all node types
+****************************************************************/
+
+static char lws_cashier_buf[4096];
+static int lws_cashier_buf_length = 0;
+static struct lws *wsi_global_cashier = NULL;
+static int ws_cashier_connection_status = 0;
+
+/**
+ * Cashier frontend handler - handles wallet operations using common wallet functions
+ */
+int32_t bet_cashier_frontend(struct lws *wsi, cJSON *argjson)
+{
+	int32_t retval = OK;
+	char *method = NULL;
+	cJSON *response = NULL;
+
+	if (argjson == NULL) {
+		return ERR_ARGS_NULL;
+	}
+
+	method = jstr(argjson, "method");
+	if (method == NULL) {
+		dlg_warn("Cashier frontend: No method specified");
+		return ERR_ARGS_NULL;
+	}
+
+	dlg_info("Cashier frontend method::%s", method);
+
+	// Handle common wallet operations
+	if (strcmp(method, "get_bal_info") == 0) {
+		response = bet_wallet_get_bal_info();
+		if (response != NULL) {
+			char *response_str = cJSON_Print(response);
+			lws_write(wsi, (unsigned char *)response_str, strlen(response_str), 0);
+			free(response_str);
+			cJSON_Delete(response);
+		}
+	} else if (strcmp(method, "get_addr_info") == 0) {
+		response = bet_wallet_get_addr_info();
+		if (response != NULL) {
+			char *response_str = cJSON_Print(response);
+			lws_write(wsi, (unsigned char *)response_str, strlen(response_str), 0);
+			free(response_str);
+			cJSON_Delete(response);
+		}
+	} else if (strcmp(method, "withdrawRequest") == 0) {
+		response = bet_wallet_withdraw_request();
+		if (response != NULL) {
+			char *response_str = cJSON_Print(response);
+			lws_write(wsi, (unsigned char *)response_str, strlen(response_str), 0);
+			free(response_str);
+			cJSON_Delete(response);
+		}
+	} else if (strcmp(method, "withdraw") == 0) {
+		response = bet_wallet_withdraw(argjson);
+		if (response != NULL) {
+			char *response_str = cJSON_Print(response);
+			lws_write(wsi, (unsigned char *)response_str, strlen(response_str), 0);
+			free(response_str);
+			cJSON_Delete(response);
+		}
+	} else {
+		dlg_warn("Cashier frontend: Unknown method::%s", method);
+		retval = ERR_JSON_PARSING;
+	}
+
+	return retval;
+}
+
+/**
+ * WebSocket callback for cashier frontend
+ */
+int lws_callback_http_cashier(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
+{
+	cJSON *argjson = NULL;
+
+	switch (reason) {
+	case LWS_CALLBACK_RECEIVE:
+		memcpy(lws_cashier_buf + lws_cashier_buf_length, in, len);
+		lws_cashier_buf_length += len;
+		if (!lws_is_final_fragment(wsi))
+			break;
+		argjson = cJSON_Parse(lws_cashier_buf);
+		if (bet_cashier_frontend(wsi, argjson) != OK) {
+			dlg_warn("Failed to process cashier frontend command");
+		}
+		if (argjson != NULL) {
+			cJSON_Delete(argjson);
+		}
+		memset(lws_cashier_buf, 0x00, sizeof(lws_cashier_buf));
+		lws_cashier_buf_length = 0;
+		break;
+	case LWS_CALLBACK_ESTABLISHED:
+		wsi_global_cashier = wsi;
+		dlg_info("Cashier WebSocket connection established");
+		ws_cashier_connection_status = 1;
+		break;
+	case LWS_CALLBACK_SERVER_WRITEABLE:
+		// Handle writeable events if needed
+		break;
+	default:
+		break;
+	}
+	return 0;
+}
+
+static struct lws_protocols cashier_protocols[] = {
+	{ "http", lws_callback_http_cashier, 0, 0 },
+	{ NULL, NULL, 0, 0 } /* terminator */
+};
+
+static const struct lws_http_mount cashier_mount = {
+	/* .mount_next */ NULL,
+	/* .mountpoint */ "/",
+	/* .origin */ "./mount-origin",
+	/* .def */ "index.html",
+	/* .protocol */ NULL,
+	/* .cgienv */ NULL,
+	/* .extra_mimetypes */ NULL,
+	/* .interpret */ NULL,
+	/* .cgi_timeout */ 0,
+	/* .cache_max_age */ 0,
+	/* .auth_mask */ 0,
+	/* .cache_reusable */ 0,
+	/* .cache_revalidate */ 0,
+	/* .cache_intermediaries */ 0,
+	/* .origin_protocol */ LWSMPRO_FILE,
+	/* .mountpoint_len */ 1,
+	/* .basic_auth_login_file */ NULL,
+};
+
+static int cashier_interrupted = 0;
+
+/**
+ * Cashier frontend loop - WebSocket server for cashier GUI
+ */
+void bet_cashier_frontend_loop(void *_ptr)
+{
+	struct lws_context_creation_info cashier_info;
+	struct lws_context *cashier_context = NULL;
+	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
+
+	(void)_ptr; /* unused parameter */
+
+	lws_set_log_level(logs, NULL);
+	dlg_info("[GUI] Cashier WebSocket server starting on port %d | visit http://localhost:%d", gui_ws_port, gui_ws_port);
+	lwsl_user("[GUI] Cashier WebSocket server | visit http://localhost:%d", gui_ws_port);
+
+	memset(&cashier_info, 0, sizeof cashier_info);
+	cashier_info.port = gui_ws_port;
+	cashier_info.mounts = &cashier_mount;
+	cashier_info.protocols = cashier_protocols;
+	cashier_info.options = LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
+
+	cashier_context = lws_create_context(&cashier_info);
+	if (!cashier_context) {
+		lwsl_err("[GUI] Cashier lws init failed");
+		dlg_error("[GUI] Cashier lws_context error");
+		return;
+	}
+
+	dlg_info("[GUI] Cashier WebSocket server started successfully");
+	
+	// Keep running even if main thread exits
+	while (n >= 0) {
+		n = lws_service(cashier_context, 1000);
+	}
+	
+	dlg_info("[GUI] Cashier WebSocket server shutting down");
+
+	if (cashier_context) {
+		lws_context_destroy(cashier_context);
+	}
 }

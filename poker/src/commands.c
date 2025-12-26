@@ -728,14 +728,23 @@ double chips_get_balance()
 	double balance = 0;
 	char **argv = NULL;
 	cJSON *getbalanceInfo = NULL;
+	char *balance_str = NULL;
 
 	argc = 2;
 	argv = bet_copy_args(argc, blockchain_cli, "getbalance");
 	retval = make_command(argc, argv, &getbalanceInfo);
 	if (retval != OK) {
 		dlg_error("%s", bet_err_str(retval));
-	} else {
-		balance = atof(cJSON_Print(getbalanceInfo));
+	} else if (getbalanceInfo != NULL) {
+		// getbalance returns a plain number string (make_command creates cJSON_CreateString)
+		// Use unstringify to remove quotes from cJSON_Print output
+		balance_str = cJSON_Print(getbalanceInfo);
+		if (balance_str != NULL) {
+			char *clean_str = unstringify(balance_str);
+			balance = atof(clean_str);
+			free(balance_str);
+		}
+		cJSON_Delete(getbalanceInfo);
 	}
 	bet_dealloc_args(argc, &argv);
 	return balance;
@@ -1623,8 +1632,10 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		strcat(command, " ");
 	}
 	dlg_info("command :: %s\n", command);
-	if (strcmp(argv[0], "lightning-cli") == 0)
-		dlg_info("LN command :: %s\n", command);
+	// Lightning Network support removed - lightning-cli commands no longer supported
+	if (strcmp(argv[0], "lightning-cli") == 0) {
+		dlg_warn("Lightning Network support removed - lightning-cli command ignored: %s", command);
+	}
 
 	//dlg_info("\nchips-pbaas command :: %s\n", command);
 	// Redirect stderr to stdout to capture error messages (2>&1)
@@ -1642,8 +1653,11 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 			  command);
 		if (strcmp(argv[0], blockchain_cli) == 0)
 			retval = ERR_CHIPS_COMMAND;
-		if (strcmp(argv[0], "lightning-cli") == 0)
+		// Lightning Network support removed
+		if (strcmp(argv[0], "lightning-cli") == 0) {
+			dlg_warn("Lightning Network support removed - command not executed");
 			retval = ERR_LN_COMMAND;
+		}
 		free(command_with_stderr);
 		free(command);
 		return retval;
@@ -1688,6 +1702,8 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 				retval = ERR_ID_NOT_FOUND;
 			}
 		} else if (strcmp(argv[0], "lightning-cli") == 0) {
+			// Lightning Network support removed
+			dlg_warn("Lightning Network support removed - command not executed");
 			retval = ERR_LN_COMMAND;
 		} else {
 			retval = ERR_COMMAND_FAILED;
@@ -1708,6 +1724,8 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		if (strcmp(argv[0], blockchain_cli) == 0) {
 			retval = ERR_CHIPS_COMMAND;
 		} else if (strcmp(argv[0], "lightning-cli") == 0) {
+			// Lightning Network support removed
+			dlg_warn("Lightning Network support removed - command not executed");
 			retval = ERR_LN_COMMAND;
 		} else {
 			retval = ERR_COMMAND_FAILED;
@@ -1721,6 +1739,8 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		if (strcmp(argv[0], blockchain_cli) == 0) {
 			retval = ERR_CHIPS_COMMAND;
 		} else if (strcmp(argv[0], "lightning-cli") == 0) {
+			// Lightning Network support removed
+			dlg_warn("Lightning Network support removed - command not executed");
 			retval = ERR_LN_COMMAND;
 		} else {
 			retval = ERR_COMMAND_FAILED;
@@ -1732,7 +1752,7 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		*argjson = cJSON_CreateString((const char *)data);
 	} else if (strcmp(argv[0], "lightning-cli") == 0) {
 		// Lightning Network support removed
-		dlg_error("Lightning Network support has been removed");
+		dlg_warn("Lightning Network support removed - command not executed");
 		retval = ERR_LN_COMMAND;
 	} else if (strcmp(argv[0], blockchain_cli) == 0) {
 		if (strlen(data) == 0) {

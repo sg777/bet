@@ -64,8 +64,7 @@ enum bet_dcv_state {
 #define default_min_stake_in_bb     20
 #define default_max_stake_in_bb     100
 
-#define BET_WITHOUT_LN 0
-#define BET_WITH_LN    1      
+// BET_WITHOUT_LN and BET_WITH_LN removed - Lightning Network support removed, using CHIPS-only payments      
 
 extern bits256 v_hash[CARDS_MAXCARDS][CARDS_MAXCARDS];
 extern bits256 g_hash[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
@@ -144,7 +143,7 @@ extern char table_password[128];
 extern char player_name[128];
 extern char verus_pid[128]; // This is the verus ID owned by the player to which player updates during the game.
 
-extern int32_t bet_ln_config;
+// bet_ln_config removed - Lightning Network support removed, using CHIPS-only payments
 extern int64_t sc_start_block;
 
 extern char dealer_ip_for_bvv[128];

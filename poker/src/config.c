@@ -1,6 +1,14 @@
+#define _GNU_SOURCE
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <limits.h>
+#include <libgen.h>
+#include <string.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 #include "bet.h"
 #include "config.h"
@@ -9,13 +17,69 @@
 #include "commands.h"
 #include "dealer.h"
 
-char *dealer_config_ini_file = "../config/dealer_config.ini";
-char *player_config_ini_file = "../config/player_config.ini";
-char *cashier_config_ini_file = "../config/cashier_config.ini";
-char *bets_config_ini_file = "../config/bets.ini";
-char *blockchain_config_ini_file = "../config/blockchain_config.ini";
-char *verus_dealer_config = "../config/verus_dealer.ini";
-char *verus_player_config_file = "../config/verus_player.ini";
+// Config file paths - will be initialized to absolute paths
+static char dealer_config_ini_file_buf[PATH_MAX];
+static char player_config_ini_file_buf[PATH_MAX];
+static char cashier_config_ini_file_buf[PATH_MAX];
+static char bets_config_ini_file_buf[PATH_MAX];
+static char blockchain_config_ini_file_buf[PATH_MAX];
+static char verus_dealer_config_buf[PATH_MAX];
+static char verus_player_config_file_buf[PATH_MAX];
+
+char *dealer_config_ini_file = dealer_config_ini_file_buf;
+char *player_config_ini_file = player_config_ini_file_buf;
+char *cashier_config_ini_file = cashier_config_ini_file_buf;
+char *bets_config_ini_file = bets_config_ini_file_buf;
+char *blockchain_config_ini_file = blockchain_config_ini_file_buf;
+char *verus_dealer_config = verus_dealer_config_buf;
+char *verus_player_config_file = verus_player_config_file_buf;
+
+/**
+ * Initialize config file paths relative to the executable location
+ * This allows the program to be run from any directory
+ */
+void bet_init_config_paths(void)
+{
+	char exe_path[PATH_MAX] = { 0 };
+	char exe_dir[PATH_MAX] = { 0 };
+	char exe_dir_copy[PATH_MAX] = { 0 };
+	ssize_t len = 0;
+
+	// Get the executable path
+	len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+	if (len == -1) {
+		// Fallback: use current directory
+		strncpy(exe_dir, ".", sizeof(exe_dir) - 1);
+	} else {
+		exe_path[len] = '\0';
+		// Get directory from executable path (dirname modifies the string, so use a copy)
+		strncpy(exe_dir_copy, exe_path, sizeof(exe_dir_copy) - 1);
+		char *dir = dirname(exe_dir_copy);
+		if (dir != NULL) {
+			strncpy(exe_dir, dir, sizeof(exe_dir) - 1);
+		}
+	}
+
+	// If executable is in bin/, go up one level to poker/ then to config/
+	// Otherwise assume we're in poker/ directory
+	char config_base[PATH_MAX];
+	if (strstr(exe_dir, "/bin") != NULL || strstr(exe_dir, "bin") != NULL) {
+		// Executable is in bin/, config is in ../config/
+		snprintf(config_base, sizeof(config_base), "%s/../config", exe_dir);
+	} else {
+		// Executable is in poker/, config is in ./config/
+		snprintf(config_base, sizeof(config_base), "%s/config", exe_dir);
+	}
+
+	// Initialize all config paths
+	snprintf(dealer_config_ini_file, sizeof(dealer_config_ini_file_buf), "%s/dealer_config.ini", config_base);
+	snprintf(player_config_ini_file, sizeof(player_config_ini_file_buf), "%s/player_config.ini", config_base);
+	snprintf(cashier_config_ini_file, sizeof(cashier_config_ini_file_buf), "%s/cashier_config.ini", config_base);
+	snprintf(bets_config_ini_file, sizeof(bets_config_ini_file_buf), "%s/bets.ini", config_base);
+	snprintf(blockchain_config_ini_file, sizeof(blockchain_config_ini_file_buf), "%s/blockchain_config.ini", config_base);
+	snprintf(verus_dealer_config, sizeof(verus_dealer_config_buf), "%s/verus_dealer.ini", config_base);
+	snprintf(verus_player_config_file, sizeof(verus_player_config_file_buf), "%s/verus_player.ini", config_base);
+}
 
 struct verus_player_config player_config = { 0 };
 
@@ -26,7 +90,7 @@ int32_t is_table_private = 0;
 char table_password[128] = { 0 };
 char player_name[128] = { 0 };
 char verus_pid[128] = { 0 };
-int32_t bet_ln_config = 0;
+// bet_ln_config removed - Lightning Network support removed, using CHIPS-only payments
 
 cJSON *bet_read_json_file(char *file_name)
 {
@@ -116,9 +180,7 @@ void bet_parse_dealer_config_ini_file()
 			snprintf(table_password, sizeof(table_password), "%s",
 				 iniparser_getstring(ini, "private table:table_password", NULL));
 		}
-		if (-1 != iniparser_getboolean(ini, "dealer:bet_ln_config", -1)) {
-			bet_ln_config = iniparser_getboolean(ini, "dealer:bet_ln_config", -1);
-		}
+		// bet_ln_config removed - Lightning Network support removed, using CHIPS-only payments
 	}
 }
 
@@ -147,9 +209,7 @@ void bet_parse_player_config_ini_file()
 			snprintf(table_password, sizeof(table_password), "%s",
 				 iniparser_getstring(ini, "private table:table_password", NULL));
 		}
-		if (-1 != iniparser_getboolean(ini, "player:bet_ln_config", -1)) {
-			bet_ln_config = iniparser_getboolean(ini, "player:bet_ln_config", -1);
-		}
+		// bet_ln_config removed - Lightning Network support removed, using CHIPS-only payments
 	}
 }
 

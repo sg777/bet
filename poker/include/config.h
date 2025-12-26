@@ -2,6 +2,7 @@
 #define CONFIG_H
 
 #include "bet.h"
+void bet_init_config_paths(void);
 cJSON *bet_read_json_file(char *file_name);
 void bet_parse_dealer_config_ini_file();
 void bet_parse_player_config_ini_file();

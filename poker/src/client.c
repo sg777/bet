@@ -35,6 +35,7 @@
 #include "config.h"
 #include "err.h"
 #include "switchs.h"
+// Legacy Lightning Network functions removed - use CHIPS transactions instead
 
 #define LWS_PLUGIN_STATIC
 
@@ -387,34 +388,19 @@ end:
 	return tmp;
 }
 
-// Lightning Network code removed - ln_pay_invoice() no longer used
-
+// Legacy Lightning Network functions - stubs (to be replaced with Verus/CHIPS)
 static int32_t bet_player_betting_invoice(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
 {
-	int argc, player_id, retval = OK;
-	char **argv = NULL, *invoice = NULL;
-	cJSON *invoice_info = NULL, *pay_response = NULL, *action_response = NULL;
+	dlg_warn("bet_player_betting_invoice: Lightning Network deprecated - use CHIPS transactions instead");
+	(void)argjson; (void)bet; (void)vars;
+	return ERR_LN;
+}
 
-	player_id = jint(argjson, "playerID");
-	invoice = jstr(argjson, "invoice");
-	invoice_info = cJSON_Parse(invoice);
-	if (player_id == bet->myplayerid) {
-		argc = 3;
-		bet_alloc_args(argc, &argv);
-		argv = bet_copy_args(argc, "lightning-cli", "pay", jstr(invoice_info, "bolt11"));
-		pay_response = cJSON_CreateObject();
-		retval = make_command(argc, argv, &pay_response);
-		if (retval != OK) {
-			dlg_error("%s", cJSON_Print(pay_response));
-		}
-
-		action_response = cJSON_GetObjectItem(argjson, "actionResponse");
-		(void)action_response; /* retrieved but not used - may be used by UI */
-		// Nanomsg removed - no longer used
-		retval = OK;
-	}
-	bet_dealloc_args(argc, &argv);
-	return retval;
+static int32_t bet_player_create_invoice(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars, char *deckid)
+{
+	dlg_warn("bet_player_create_invoice: Lightning Network deprecated - use CHIPS transactions instead");
+	(void)argjson; (void)bet; (void)vars; (void)deckid;
+	return ERR_LN;
 }
 
 static int32_t bet_player_winner(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
@@ -851,31 +837,7 @@ static void bet_player_handle_invalid_method(char *method)
 	player_lws_write(error_info);
 }
 
-static void bet_player_withdraw_request()
-{
-	cJSON *withdraw_response_info = NULL;
-
-	withdraw_response_info = cJSON_CreateObject();
-	cJSON_AddStringToObject(withdraw_response_info, "method", "withdrawResponse");
-	cJSON_AddNumberToObject(withdraw_response_info, "balance", chips_get_balance());
-	cJSON_AddNumberToObject(withdraw_response_info, "tx_fee", chips_tx_fee);
-	cJSON_AddItemToObject(withdraw_response_info, "addrs", chips_list_address_groupings());
-	player_lws_write(withdraw_response_info);
-}
-
-static void bet_player_withdraw(cJSON *argjson)
-{
-	cJSON *withdraw_info = NULL;
-	double amount = 0.0;
-	char *addr = NULL;
-
-	amount = jdouble(argjson, "amount");
-	addr = jstr(argjson, "addr");
-	withdraw_info = cJSON_CreateObject();
-	cJSON_AddStringToObject(withdraw_info, "method", "withdrawInfo");
-	cJSON_AddItemToObject(withdraw_info, "tx", chips_transfer_funds(amount, addr));
-	player_lws_write(withdraw_info);
-}
+// bet_player_withdraw_request and bet_player_withdraw removed - now using common wallet handler bet_wallet_withdraw_request() and bet_wallet_withdraw()
 
 static void bet_player_wallet_info()
 {
@@ -921,11 +883,12 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 			break;
 		cases("get_bal_info")
 			{
-				cJSON *bal_info = cJSON_CreateObject();
-				cJSON_AddStringToObject(bal_info, "method", "bal_info");
-				cJSON_AddNumberToObject(bal_info, "chips_bal", chips_get_balance());
-				// Lightning Network support removed - ln_bal field removed
-				player_lws_write(bal_info);
+				// Common wallet functionality
+				cJSON *bal_info = bet_wallet_get_bal_info();
+				if (bal_info != NULL) {
+					player_lws_write(bal_info);
+					cJSON_Delete(bal_info);
+				}
 			}
 			break;
 		cases("player_join")
@@ -941,10 +904,24 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 			bet_player_wallet_info();
 			break;
 		cases("withdraw")
-			bet_player_withdraw(argjson);
+			{
+				// Common wallet functionality
+				cJSON *withdraw_info = bet_wallet_withdraw(argjson);
+				if (withdraw_info != NULL) {
+					player_lws_write(withdraw_info);
+					cJSON_Delete(withdraw_info);
+				}
+			}
 			break;
 		cases("withdrawRequest")
-			bet_player_withdraw_request();
+			{
+				// Common wallet functionality
+				cJSON *withdraw_response = bet_wallet_withdraw_request();
+				if (withdraw_response != NULL) {
+					player_lws_write(withdraw_response);
+					cJSON_Delete(withdraw_response);
+				}
+			}
 			break;
 		defaults
 			bet_player_handle_invalid_method(method);
@@ -1154,6 +1131,7 @@ void bet_player_frontend_read_loop(void *_ptr)
 	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
 
 	lws_set_log_level(logs, NULL);
+	dlg_info("[GUI] Player WebSocket read server starting on port 9001");
 
 	memset(&lws_player_info_read, 0, sizeof lws_player_info_read); /* otherwise uninitialized garbage */
 	lws_player_info_read.port = 9001;
@@ -1163,10 +1141,20 @@ void bet_player_frontend_read_loop(void *_ptr)
 
 	player_context_read = lws_create_context(&lws_player_info_read);
 	if (!player_context_read) {
-		dlg_error("lws init failed\n");
+		dlg_error("[GUI] Player read lws init failed");
+		return;
 	}
-	while (n >= 0 && !interrupted1) {
+	
+	dlg_info("[GUI] Player WebSocket read server started successfully");
+	
+	// Keep running even if main thread exits
+	while (n >= 0) {
 		n = lws_service(player_context_read, 1000);
+	}
+	
+	dlg_info("[GUI] Player WebSocket read server shutting down");
+	if (player_context_read) {
+		lws_context_destroy(player_context_read);
 	}
 }
 
@@ -1176,6 +1164,7 @@ void bet_player_frontend_write_loop(void *_ptr)
 
 	// signal(SIGINT,player_sigint_handler);
 	lws_set_log_level(logs, NULL);
+	dlg_info("[GUI] Player WebSocket write server starting on port %d", gui_ws_port);
 
 	memset(&lws_player_info_write, 0, sizeof lws_player_info_write); /* otherwise uninitialized garbage */
 	lws_player_info_write.port = gui_ws_port;
@@ -1185,10 +1174,20 @@ void bet_player_frontend_write_loop(void *_ptr)
 
 	player_context_write = lws_create_context(&lws_player_info_write);
 	if (!player_context_write) {
-		dlg_error("lws init failed\n");
+		dlg_error("[GUI] Player write lws init failed");
+		return;
 	}
-	while (n >= 0 && !interrupted1) {
+	
+	dlg_info("[GUI] Player WebSocket write server started successfully");
+	
+	// Keep running even if main thread exits
+	while (n >= 0) {
 		n = lws_service(player_context_write, 1000);
+	}
+	
+	dlg_info("[GUI] Player WebSocket write server shutting down");
+	if (player_context_write) {
+		lws_context_destroy(player_context_write);
 	}
 }
 

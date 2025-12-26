@@ -66,14 +66,11 @@ char *bet_tcp_sock_address(int32_t bindflag, char *str, char *ipaddr, uint16_t p
 	return (str);
 }
 
-// bet_nanosock removed - nanomsg/nano sockets no longer used
-
-// bet_msg_dealer_with_response_id - stub implementation (nanomsg removed, but still called)
+// Legacy pub-sub/nanomsg functions - stubs (to be replaced with Verus ID communication)
 cJSON *bet_msg_dealer_with_response_id(cJSON *argjson, char *dealer_ip, char *message)
 {
-	// Nanomsg removed - function no longer functional
-	dlg_error("bet_msg_dealer_with_response_id: nanomsg removed - not implemented");
+	dlg_warn("bet_msg_dealer_with_response_id: Legacy pub-sub removed - use Verus ID updates instead");
+	dlg_warn("  Replace with: append_game_state() or update_cmm_from_id_key_data_cJSON()");
+	(void)argjson; (void)dealer_ip; (void)message;
 	return NULL;
 }
-
-// bet_send_data removed - nanomsg/nano sockets no longer used, function never called

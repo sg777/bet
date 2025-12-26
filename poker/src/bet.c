@@ -386,6 +386,7 @@ void bet_start(int argc, char **argv)
 	}
 
 	// Initialize common components for other commands
+	bet_init_config_paths(); // Initialize config paths relative to executable
 	bet_set_unique_id();
 	bet_parse_blockchain_config_ini_file();
 
@@ -405,15 +406,91 @@ void bet_start(int argc, char **argv)
 	}
 	// Node type commands
 	else if (strcmp(cmd, "c") == 0 || strcmp(cmd, "cashier") == 0) {
+		pthread_t cashier_frontend_thrd;
 		dlg_info("Starting cashier node");
 		bet_node_type = cashier;
-		cashier_game_init("sg777_t");
+		
+		// Start GUI backend thread for cashier FIRST - it must run regardless of backend errors
+		if (OS_thread_create(&cashier_frontend_thrd, NULL, (void *)bet_cashier_frontend_loop, NULL) != 0) {
+			dlg_error("[GUI] Failed to start GUI thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
+			retval = ERR_PTHREAD_LAUNCHING;
+		} else {
+			dlg_info("[GUI] GUI backend thread started for cashier on port %d", gui_ws_port);
+			// Detach the thread so it runs in background independently
+			pthread_detach(cashier_frontend_thrd);
+			// Give GUI thread a moment to start
+			sleep(1);
+		}
+		
+		// Start backend initialization - GUI will continue even if this fails
+		if (retval == OK) {
+			cashier_game_init("sg777_t");
+			dlg_info("[GUI] GUI thread continues running on port %d", gui_ws_port);
+			// Keep process alive so GUI thread continues
+			while (1) {
+				sleep(60);
+			}
+		}
 	} else if (strcmp(cmd, "d") == 0 || strcmp(cmd, "dcv") == 0 || strcmp(cmd, "dealer") == 0) {
+		pthread_t dcv_frontend_thrd;
 		bet_node_type = dealer;
-		retval = bet_parse_verus_dealer();
+		
+		// Start GUI backend thread for dealer FIRST - it must run regardless of backend errors
+		if (OS_thread_create(&dcv_frontend_thrd, NULL, (void *)bet_dcv_frontend_loop, NULL) != 0) {
+			dlg_error("[GUI] Failed to start GUI thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
+			retval = ERR_PTHREAD_LAUNCHING;
+		} else {
+			dlg_info("[GUI] GUI backend thread started for dealer on port %d", gui_ws_port);
+			// Detach the thread so it runs in background independently
+			pthread_detach(dcv_frontend_thrd);
+			// Give GUI thread a moment to start
+			sleep(1);
+		}
+		
+		// Start backend initialization - GUI will continue even if this fails
+		if (retval == OK) {
+			retval = bet_parse_verus_dealer();
+			if (retval != OK) {
+				dlg_warn("[Backend] Backend initialization failed: %s", bet_err_str(retval));
+				dlg_info("[GUI] GUI thread continues running on port %d despite backend error", gui_ws_port);
+				// Keep process alive so GUI thread continues
+				while (1) {
+					sleep(60);
+				}
+			}
+		}
 	} else if (strcmp(cmd, "p") == 0 || strcmp(cmd, "player") == 0) {
+		pthread_t player_frontend_read_thrd, player_frontend_write_thrd;
 		bet_node_type = player;
-		retval = handle_verus_player();
+		
+		// Start GUI backend threads for player FIRST - they must run regardless of backend errors
+		if (OS_thread_create(&player_frontend_read_thrd, NULL, (void *)bet_player_frontend_read_loop, NULL) != 0) {
+			dlg_error("[GUI] Failed to start player read thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
+			retval = ERR_PTHREAD_LAUNCHING;
+		} else if (OS_thread_create(&player_frontend_write_thrd, NULL, (void *)bet_player_frontend_write_loop, NULL) != 0) {
+			dlg_error("[GUI] Failed to start player write thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
+			retval = ERR_PTHREAD_LAUNCHING;
+		} else {
+			dlg_info("[GUI] GUI backend threads started for player on ports %d and 9001", gui_ws_port);
+			// Detach the threads so they run in background independently
+			pthread_detach(player_frontend_read_thrd);
+			pthread_detach(player_frontend_write_thrd);
+			// Give GUI threads a moment to start
+			sleep(1);
+		}
+		
+		// Start backend initialization - GUI will continue even if this fails
+		if (retval == OK) {
+			retval = handle_verus_player();
+			if (retval != OK) {
+				dlg_warn("[Backend] Backend initialization failed: %s", bet_err_str(retval));
+				dlg_info("[GUI] GUI threads continue running on ports %d and 9001 despite backend error", gui_ws_port);
+				// Keep process alive so GUI threads continue
+				while (1) {
+					sleep(60);
+				}
+			}
+		}
 	}
 	// Game commands
 	else if (strcmp(cmd, "game") == 0) {

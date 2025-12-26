@@ -119,7 +119,9 @@ void bet_chat(struct lws *wsi, cJSON *argjson)
 
 	chat_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(chat_info, "chat", jstr(argjson, "value"));
-	lws_write(wsi, (unsigned char *)cJSON_Print(chat_info), strlen(cJSON_Print(chat_info)), 0);
+	// Use deferred write pattern for safety
+	bet_dcv_lws_write(chat_info);
+	cJSON_Delete(chat_info);
 }
 
 void initialize_seat(cJSON *seat_info, char *name, int32_t seat, int32_t chips, int32_t empty, int32_t playing)
@@ -207,17 +209,19 @@ int32_t bet_dcv_frontend(struct lws *wsi, cJSON *argjson)
 		(void)rendered; /* set but not used - may be used by UI */
 		// Nanomsg removed - no longer used
 	} else if (strcmp(method, "get_bal_info") == 0) {
-		cJSON *bal_info = cJSON_CreateObject();
-		cJSON_AddStringToObject(bal_info, "method", "bal_info");
-		cJSON_AddNumberToObject(bal_info, "chips_bal", chips_get_balance());
-		// Lightning Network support removed - ln_bal field removed
-		lws_write(wsi, (unsigned char *)cJSON_Print(bal_info), strlen(cJSON_Print(bal_info)), 0);
+		// Common wallet functionality - use deferred write pattern
+		cJSON *bal_info = bet_wallet_get_bal_info();
+		if (bal_info != NULL) {
+			bet_dcv_lws_write(bal_info);
+			cJSON_Delete(bal_info);
+		}
 	} else if (strcmp(method, "get_addr_info") == 0) {
-		cJSON *addr_info = cJSON_CreateObject();
-		cJSON_AddStringToObject(addr_info, "method", "addr_info");
-		cJSON_AddStringToObject(addr_info, "chips_addr", chips_get_new_address());
-		// Lightning Network support removed - ln_addr field removed
-		lws_write(wsi, (unsigned char *)cJSON_Print(addr_info), strlen(cJSON_Print(addr_info)), 0);
+		// Common wallet functionality - use deferred write pattern
+		cJSON *addr_info = bet_wallet_get_addr_info();
+		if (addr_info != NULL) {
+			bet_dcv_lws_write(addr_info);
+			cJSON_Delete(addr_info);
+		}
 	} else {
 		dlg_warn("Unknown Method::%s\n", method);
 	}
@@ -1673,7 +1677,8 @@ void bet_dcv_frontend_loop(void *_ptr)
 	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
 
 	lws_set_log_level(logs, NULL);
-	lwsl_user("LWS minimal ws broker | visit http://localhost:1234");
+	dlg_info("[GUI] Dealer WebSocket server starting on port %d | visit http://localhost:1234", gui_ws_port);
+	lwsl_user("[GUI] LWS minimal ws broker | visit http://localhost:1234");
 
 	memset(&dcv_info, 0, sizeof dcv_info); /* otherwise uninitialized garbage */
 	dcv_info.port = gui_ws_port;
@@ -1683,10 +1688,20 @@ void bet_dcv_frontend_loop(void *_ptr)
 
 	dcv_context = lws_create_context(&dcv_info);
 	if (!dcv_context) {
-		lwsl_err("lws init failed");
-		dlg_error("lws_context error");
+		lwsl_err("[GUI] lws init failed");
+		dlg_error("[GUI] lws_context error");
+		return;
 	}
-	while (n >= 0 && !interrupted) {
+	
+	dlg_info("[GUI] Dealer WebSocket server started successfully");
+	
+	// Keep running even if main thread exits
+	while (n >= 0) {
 		n = lws_service(dcv_context, 1000);
+	}
+	
+	dlg_info("[GUI] Dealer WebSocket server shutting down");
+	if (dcv_context) {
+		lws_context_destroy(dcv_context);
 	}
 }
