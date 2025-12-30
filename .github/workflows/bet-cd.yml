@@ -11,19 +11,19 @@ jobs:
 
   # Build Linux x86 64bit build
   linux-build-x86_64:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Extract branch name
       shell: bash
-      run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+      run: echo "branch=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_OUTPUT
       id: extract_branch
 
     - name: show extracted branch name
       run: echo ${{ steps.extract_branch.outputs.branch }}
 
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         ref: ${{ steps.extract_branch.outputs.branch }}
     - run: git fetch --prune --unshallow
@@ -33,33 +33,33 @@ jobs:
       
     - name: Installing dependencies
       run: |
-        sudo apt-get install autoconf automake build-essential sudo libtool libgmp-dev \
+        sudo apt-get install -y autoconf automake build-essential libtool libgmp-dev \
         libsqlite3-dev python3 python3-mako net-tools zlib1g-dev libsodium-dev \
-        gettext wget libcurl3-gnutls ninja-build libssl-dev \
-        libcurl4-gnutls-dev libevent-dev
+        gettext wget libcurl4-gnutls-dev ninja-build libssl-dev \
+        libevent-dev libwebsockets-dev
+    
+    - name: Build crypto library
+      run: make --directory libs/crypto
         
-    - name: configure
-      run: ./configure --enable-static
-      
-    - name: make
-      run: make
+    - name: Build poker application
+      run: make --directory poker
       
     - name: Extract git tag
       shell: bash
-      run: echo "##[set-output name=gittag;]$(IFS='-' read -r -a array <<< $(git describe --always) && echo "${array[0]}-${array[1]}")"
+      run: echo "gittag=$(IFS='-' read -r -a array <<< $(git describe --always) && echo "${array[0]}-${array[1]}")" >> $GITHUB_OUTPUT
       id: extract_git_tag
 
-    - name: List files
+    - name: Create release archive
       run: |
         pwd && \
-        tar -czvf bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz privatebet/bet privatebet/cashierd privatebet/config && \
+        tar -czvf bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz poker/bin/bet poker/bin/cashierd poker/config && \
         ls -lh bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
 
     - name: Upload bet-linux-x86_64 release files
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-        path: /home/runner/work/bet/bet/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+        path: bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
 
 
   # Build Linux ARM 64bit build
@@ -69,43 +69,43 @@ jobs:
      steps:
      - name: Extract branch name
        shell: bash
-       run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+       run: echo "branch=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_OUTPUT
        id: extract_branch
 
      - name: show extracted branch name
        run: echo ${{ steps.extract_branch.outputs.branch }}
 
      - name: Checkout code
-       uses: actions/checkout@v2
+       uses: actions/checkout@v4
        with:
         ref: ${{ steps.extract_branch.outputs.branch }}
      - run: git fetch --prune --unshallow
        
-     - name: configure
-       run: ./configure --enable-static
+     - name: Build crypto library
+       run: make --directory libs/crypto
        
-     - name: make
-       run: make
+     - name: Build poker application
+       run: make --directory poker
        
      - name: Extract git tag
        shell: bash
-       run: echo "##[set-output name=gittag;]$(IFS='-' read -r -a array <<< $(git describe --always) && echo "${array[0]}-${array[1]}")"
+       run: echo "gittag=$(IFS='-' read -r -a array <<< $(git describe --always) && echo "${array[0]}-${array[1]}")" >> $GITHUB_OUTPUT
        id: extract_git_tag
   
-     - name: List files
+     - name: Create release archive
        run: |
          pwd && \
-         tar -czvf bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz privatebet/bet privatebet/cashierd privatebet/config && \
+         tar -czvf bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz poker/bin/bet poker/bin/cashierd poker/config && \
          ls -lh bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
   
      - name: Cleanup after build
        run: sed -i 's/clean=.*/clean=1/' /home/pi/trigger
        
      - name: Upload bet-linux release files
-       uses: actions/upload-artifact@v2
+       uses: actions/upload-artifact@v4
        with:
          name: bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-         path: /home/pi/actions-runner/_work/bet/bet/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+         path: bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
 
 
 
@@ -116,14 +116,14 @@ jobs:
     steps:
     - name: Extract branch name
       shell: bash
-      run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+      run: echo "branch=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_OUTPUT
       id: extract_branch
 
     - name: show extracted branch name
       run: echo ${{ steps.extract_branch.outputs.branch }}
       
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         ref: ${{ steps.extract_branch.outputs.branch }}
     - run: git fetch --prune --unshallow
@@ -148,35 +148,36 @@ jobs:
           brew install python3
           brew install gnu-sed
           brew install pyenv
+          brew install libwebsockets
           pip3 install mako
 
-    - name: configure
-      run: ./configure
+    - name: Build crypto library
+      run: make --directory libs/crypto
       
-    - name: make
+    - name: Build poker application
       run: |
           export LDFLAGS="-L/usr/local/opt/openssl/lib"
           export CPPFLAGS="-I/usr/local/opt/openssl/include"
           export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig"
           export OPENSSL_ROOT_DIR=/usr/local/opt/openssl
-          make
+          make --directory poker
       
     - name: Extract git tag
       shell: bash
-      run: echo "##[set-output name=gittag;]$(array=($(echo $(git describe --always) | tr '-' "\n")) && echo "${array[0]}-${array[1]}")"
+      run: echo "gittag=$(array=($(echo $(git describe --always) | tr '-' "\n")) && echo "${array[0]}-${array[1]}")" >> $GITHUB_OUTPUT
       id: extract_git_tag
 
-    - name: List files
+    - name: Create release archive
       run: |
         pwd && \
-        tar -czvf bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz privatebet/bet privatebet/cashierd privatebet/config && \
+        tar -czvf bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz poker/bin/bet poker/bin/cashierd poker/config && \
         ls -lh bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
 
     - name: Upload bet-macos-x86_64 release files
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-        path: /Users/runner/work/bet/bet/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+        path: bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
 
 
 
@@ -184,29 +185,28 @@ jobs:
       name: Publishing CD releases
       runs-on: ubuntu-latest
       needs: [linux-build-x86_64, macos-build-x86_64, linux-build-arm64]
-      # needs: [linux-build-x86_64, linux-build-arm64]
       
       steps:
         - name: Extract branch name
           shell: bash
-          run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+          run: echo "branch=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_OUTPUT
           id: extract_branch
 
         - name: show extracted branch name
           run: echo ${{ steps.extract_branch.outputs.branch }}
 
         - name: Checkout code
-          uses: actions/checkout@v2
+          uses: actions/checkout@v4
           with:
             ref: ${{ steps.extract_branch.outputs.branch }}
         - run: git fetch --prune --unshallow
 
         - name: Extract git tag
           shell: bash
-          run: echo "##[set-output name=gittag;]$(IFS='-' read -r -a array <<< $(git describe --always) && echo "${array[0]}-${array[1]}")"
+          run: echo "gittag=$(IFS='-' read -r -a array <<< $(git describe --always) && echo "${array[0]}-${array[1]}")" >> $GITHUB_OUTPUT
           id: extract_git_tag
 
-        - uses: actions/download-artifact@v2
+        - uses: actions/download-artifact@v4
           with:
             path: artifacts
             
@@ -218,24 +218,22 @@ jobs:
 
         - name: Shortify commit sha
           shell: bash
-          run: echo "##[set-output name=sha_short;]$(echo ${GITHUB_SHA::7})"
+          run: echo "sha_short=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
           id: shortify_commit
 
         - name: List Downloaded files
           run: |
             pwd && \
-            ls -lh /home/runner/work/bet/bet/artifacts/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz && \
-            ls -lh /home/runner/work/bet/bet/artifacts/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz && \
-            ls -lh /home/runner/work/bet/bet/artifacts/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+            ls -lh artifacts/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz && \
+            ls -lh artifacts/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz && \
+            ls -lh artifacts/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
 
         - name: Create Release
           id: create_release
-          uses: actions/create-release@latest
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          uses: softprops/action-gh-release@v1
           with:
             tag_name: ${{ steps.extract_git_tag.outputs.gittag }}
-            release_name: ${{ steps.extract_git_tag.outputs.gittag }}
+            name: ${{ steps.extract_git_tag.outputs.gittag }}
             body: |
               CD Release:
               - From Branch: ${{ steps.extract_branch.outputs.branch }}
@@ -243,37 +241,7 @@ jobs:
               - Version tag: ${{ steps.extract_git_tag.outputs.gittag }}
             draft: false
             prerelease: false
-        
-        - name: Upload Linux Release Asset
-          id: upload-linux-release-asset 
-          uses: actions/upload-release-asset@latest
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-            asset_path: /home/runner/work/bet/bet/artifacts/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-            asset_name: bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-            asset_content_type: application/gzip
-        
-        - name: Upload Linux ARM64 Release Asset
-          id: upload-linux-arm64-release-asset 
-          uses: actions/upload-release-asset@latest
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-            asset_path: /home/runner/work/bet/bet/artifacts/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-            asset_name: bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-            asset_content_type: application/gzip
-          
-        - name: Upload MacOS Release Asset
-          id: upload-macos-release-asset 
-          uses: actions/upload-release-asset@latest
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-            asset_path: /home/runner/work/bet/bet/artifacts/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-            asset_name: bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-            asset_content_type: application/gzip
-
+            files: |
+              artifacts/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+              artifacts/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+              artifacts/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
