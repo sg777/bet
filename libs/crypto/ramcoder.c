@@ -19,7 +19,7 @@
 #ifndef crypto777_ramcoder_h
 #define crypto777_ramcoder_h
 #include <stdio.h>
-#include "../crypto777/OS_portable.h"
+#include "../crypto/OS_portable.h"
 #include "../../includes/curve25519.h"
 
 

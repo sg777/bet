@@ -100,9 +100,9 @@ void init_struct_vars()
 	dcv_vars->pot = 0;
 	dcv_vars->last_turn = 0;
 	dcv_vars->last_raise = 0;
-	for (int i = 0; i < CARDS777_MAXPLAYERS; i++) {
+	for (int i = 0; i < CARDS_MAXPLAYERS; i++) {
 		dcv_vars->funds[i] = 0;
-		for (int j = 0; j < CARDS777_MAXROUNDS; j++) {
+		for (int j = 0; j < CARDS_MAXROUNDS; j++) {
 			dcv_vars->bet_actions[i][j] = 0;
 			dcv_vars->betamount[i][j] = 0;
 		}

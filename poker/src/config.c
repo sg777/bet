@@ -1,6 +1,14 @@
+#define _GNU_SOURCE
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <limits.h>
+#include <libgen.h>
+#include <string.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 #include "bet.h"
 #include "config.h"
@@ -9,54 +17,123 @@
 #include "commands.h"
 #include "dealer.h"
 
-char *dealer_config_ini_file = "../config/dealer_config.ini";
-char *player_config_ini_file = "../config/player_config.ini";
-char *cashier_config_ini_file = "../config/cashier_config.ini";
-char *bets_config_ini_file = "../config/bets.ini";
-char *blockchain_config_ini_file = "../config/blockchain_config.ini";
-char *verus_dealer_config = "../config/verus_dealer.ini";
-char *verus_player_config_file = "../config/verus_player.ini";
+// Config file paths - will be initialized to absolute paths
+static char dealer_config_ini_file_buf[PATH_MAX];
+static char player_config_ini_file_buf[PATH_MAX];
+static char cashier_config_ini_file_buf[PATH_MAX];
+static char bets_config_ini_file_buf[PATH_MAX];
+static char blockchain_config_ini_file_buf[PATH_MAX];
+static char verus_dealer_config_buf[PATH_MAX];
+static char verus_player_config_file_buf[PATH_MAX];
+
+char *dealer_config_ini_file = dealer_config_ini_file_buf;
+char *player_config_ini_file = player_config_ini_file_buf;
+char *cashier_config_ini_file = cashier_config_ini_file_buf;
+char *bets_config_ini_file = bets_config_ini_file_buf;
+char *blockchain_config_ini_file = blockchain_config_ini_file_buf;
+char *verus_dealer_config = verus_dealer_config_buf;
+char *verus_player_config_file = verus_player_config_file_buf;
+
+/**
+ * Initialize config file paths relative to the executable location
+ * This allows the program to be run from any directory
+ */
+void bet_init_config_paths(void)
+{
+	char exe_path[PATH_MAX] = { 0 };
+	char exe_dir[PATH_MAX] = { 0 };
+	char exe_dir_copy[PATH_MAX] = { 0 };
+	ssize_t len = 0;
+
+	// Get the executable path
+	len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+	if (len == -1) {
+		// Fallback: use current directory
+		strncpy(exe_dir, ".", sizeof(exe_dir) - 1);
+	} else {
+		exe_path[len] = '\0';
+		// Get directory from executable path (dirname modifies the string, so use a copy)
+		strncpy(exe_dir_copy, exe_path, sizeof(exe_dir_copy) - 1);
+		char *dir = dirname(exe_dir_copy);
+		if (dir != NULL) {
+			strncpy(exe_dir, dir, sizeof(exe_dir) - 1);
+		}
+	}
+
+	// If executable is in bin/, go up one level to poker/ then to config/
+	// Otherwise assume we're in poker/ directory
+	char config_base[PATH_MAX];
+	if (strstr(exe_dir, "/bin") != NULL || strstr(exe_dir, "bin") != NULL) {
+		// Executable is in bin/, config is in ../config/
+		snprintf(config_base, sizeof(config_base), "%s/../config", exe_dir);
+	} else {
+		// Executable is in poker/, config is in ./config/
+		snprintf(config_base, sizeof(config_base), "%s/config", exe_dir);
+	}
+
+	// Initialize all config paths
+	snprintf(dealer_config_ini_file, sizeof(dealer_config_ini_file_buf), "%s/dealer_config.ini", config_base);
+	snprintf(player_config_ini_file, sizeof(player_config_ini_file_buf), "%s/player_config.ini", config_base);
+	snprintf(cashier_config_ini_file, sizeof(cashier_config_ini_file_buf), "%s/cashier_config.ini", config_base);
+	snprintf(bets_config_ini_file, sizeof(bets_config_ini_file_buf), "%s/bets.ini", config_base);
+	snprintf(blockchain_config_ini_file, sizeof(blockchain_config_ini_file_buf), "%s/blockchain_config.ini", config_base);
+	snprintf(verus_dealer_config, sizeof(verus_dealer_config_buf), "%s/verus_dealer.ini", config_base);
+	snprintf(verus_player_config_file, sizeof(verus_player_config_file_buf), "%s/verus_player.ini", config_base);
+}
 
 struct verus_player_config player_config = { 0 };
 
 bits256 game_id;
 
+/* Globals declared in include/common.h */
+int32_t is_table_private = 0;
+char table_password[128] = { 0 };
+char player_name[128] = { 0 };
+char verus_pid[128] = { 0 };
+// bet_ln_config removed - Lightning Network support removed, using CHIPS-only payments
+
 cJSON *bet_read_json_file(char *file_name)
 {
 	FILE *fp = NULL;
 	cJSON *json_data = NULL;
-	char *data = NULL, buf[256];
-	unsigned long data_size = 1024, buf_size = 256, temp_size = 0;
-	unsigned long new_size = data_size;
+	char *data = NULL;
+	char buf[256];
+	size_t cap = 4096;
+	size_t len = 0;
 
-	data = calloc(data_size, sizeof(char));
-	if (!data) {
+	data = calloc(cap, 1);
+	if (!data)
 		goto end;
-	}
 
 	fp = fopen(file_name, "r");
 	if (fp == NULL) {
 		dlg_error("Failed to open file %s\n", file_name);
 		goto end;
-	} else {
-		while (fgets(buf, buf_size, fp) != NULL) {
-			temp_size = temp_size + strlen(buf);
-			if (temp_size >= new_size) {
-				char *temp = calloc(new_size, sizeof(char));
-				strncpy(temp, data, strlen(data));
-				free(data);
-				new_size = new_size * 2;
-				data = calloc(new_size, sizeof(char));
-				strncpy(data, temp, strlen(temp));
-				free(temp);
-			}
-			strcat(data, buf);
-			memset(buf, 0x00, buf_size);
-		}
-		json_data = cJSON_CreateObject();
-		json_data = cJSON_Parse(data);
 	}
+
+	while (fgets(buf, sizeof(buf), fp) != NULL) {
+		size_t blen = strlen(buf);
+		if (len + blen + 1 > cap) {
+			size_t newcap = cap;
+			while (len + blen + 1 > newcap)
+				newcap *= 2;
+			char *tmp = realloc(data, newcap);
+			if (!tmp)
+				goto end;
+			data = tmp;
+			/* Ensure newly-allocated tail is NUL (for safety) */
+			memset(data + cap, 0x00, newcap - cap);
+			cap = newcap;
+		}
+		memcpy(data + len, buf, blen);
+		len += blen;
+		data[len] = '\0';
+	}
+
+	json_data = cJSON_Parse(data);
 end:
+	if (fp)
+		fclose(fp);
 	if (data)
 		free(data);
 	return json_data;
@@ -91,18 +168,19 @@ void bet_parse_dealer_config_ini_file()
 			dcv_commission_percentage = iniparser_getdouble(ini, "dealer:dcv_commission", 0);
 		}
 		if (NULL != iniparser_getstring(ini, "dealer:gui_host", NULL)) {
-			strcpy(dcv_hosted_gui_url, iniparser_getstring(ini, "dealer:gui_host", NULL));
+			/* Avoid overflowing fixed-size global buffer */
+			snprintf(dcv_hosted_gui_url, sizeof(dcv_hosted_gui_url), "%s",
+				 iniparser_getstring(ini, "dealer:gui_host", NULL));
 		}
 		threshold_value = iniparser_getint(ini, "dealer:min_cashiers", threshold_value);
 		if (-1 != iniparser_getboolean(ini, "private table:is_table_private", -1)) {
 			is_table_private = iniparser_getboolean(ini, "private table:is_table_private", -1);
 		}
 		if (NULL != iniparser_getstring(ini, "private table:table_password", NULL)) {
-			strcpy(table_password, iniparser_getstring(ini, "private table:table_password", NULL));
+			snprintf(table_password, sizeof(table_password), "%s",
+				 iniparser_getstring(ini, "private table:table_password", NULL));
 		}
-		if (-1 != iniparser_getboolean(ini, "dealer:bet_ln_config", -1)) {
-			bet_ln_config = iniparser_getboolean(ini, "dealer:bet_ln_config", -1);
-		}
+		// bet_ln_config removed - Lightning Network support removed, using CHIPS-only payments
 	}
 }
 
@@ -121,17 +199,17 @@ void bet_parse_player_config_ini_file()
 			table_stack_in_bb = iniparser_getint(ini, "player:table_stake_size", 0);
 		}
 		if (0 != iniparser_getstring(ini, "player:name", NULL)) {
-			strcpy(player_name, iniparser_getstring(ini, "player:name", NULL));
+			snprintf(player_name, sizeof(player_name), "%s",
+				 iniparser_getstring(ini, "player:name", NULL));
 		}
 		if (-1 != iniparser_getboolean(ini, "private table:is_table_private", -1)) {
 			is_table_private = iniparser_getboolean(ini, "private table:is_table_private", -1);
 		}
 		if (NULL != iniparser_getstring(ini, "private table:table_password", NULL)) {
-			strcpy(table_password, iniparser_getstring(ini, "private table:table_password", NULL));
+			snprintf(table_password, sizeof(table_password), "%s",
+				 iniparser_getstring(ini, "private table:table_password", NULL));
 		}
-		if (-1 != iniparser_getboolean(ini, "player:bet_ln_config", -1)) {
-			bet_ln_config = iniparser_getboolean(ini, "player:bet_ln_config", -1);
-		}
+		// bet_ln_config removed - Lightning Network support removed, using CHIPS-only payments
 	}
 }
 
@@ -144,14 +222,14 @@ void bet_parse_cashier_config_ini_file()
 	if (ini == NULL) {
 		dlg_error("error in parsing %s", cashier_config_ini_file);
 	} else {
-		char str[20];
+		char str[64];
 		int i = 1;
-		sprintf(str, "cashier:node-%d", i);
+		snprintf(str, sizeof(str), "cashier:node-%d", i);
 		cashiers_info = cJSON_CreateArray();
 		while (NULL != iniparser_getstring(ini, str, NULL)) {
 			cJSON_AddItemToArray(cashiers_info, cJSON_Parse(iniparser_getstring(ini, str, NULL)));
 			memset(str, 0x00, sizeof(str));
-			sprintf(str, "cashier:node-%d", ++i);
+			snprintf(str, sizeof(str), "cashier:node-%d", ++i);
 		}
 		no_of_notaries = cJSON_GetArraySize(cashiers_info);
 		notary_node_ips = (char **)malloc(no_of_notaries * sizeof(char *));
@@ -182,14 +260,14 @@ void bet_display_cashier_hosted_gui()
 	if (ini == NULL) {
 		dlg_error("error in parsing %s", player_config_ini_file);
 	} else {
-		char str[20];
+		char str[64];
 		int i = 1;
-		sprintf(str, "gui:cashier-%d", i);
+		snprintf(str, sizeof(str), "gui:cashier-%d", i);
 		while (NULL != iniparser_getstring(ini, str, NULL)) {
 			if (check_url(iniparser_getstring(ini, str, NULL)))
 				dlg_warn("%s", iniparser_getstring(ini, str, NULL));
 			memset(str, 0x00, sizeof(str));
-			sprintf(str, "gui:cashier-%d", ++i);
+			snprintf(str, sizeof(str), "gui:cashier-%d", ++i);
 		}
 	}
 }
@@ -269,9 +347,13 @@ bool bet_is_new_block_set()
 	const char *homedir = pw->pw_dir;
 
 	char *config_file = NULL;
-	config_file = calloc(1, 200);
-	strcpy(config_file, homedir);
-	strcat(config_file, "/bet/privatebet/config/blockchain_config.ini");
+	const char *suffix = "/bet/privatebet/config/blockchain_config.ini";
+	size_t need = strlen(homedir) + strlen(suffix) + 1;
+	config_file = calloc(1, need);
+	if (!config_file) {
+		return false;
+	}
+	snprintf(config_file, need, "%s%s", homedir, suffix);
 	ini = iniparser_load(config_file);
 	if (ini == NULL) {
 		dlg_error("error in parsing %s", config_file);
@@ -280,6 +362,8 @@ bool bet_is_new_block_set()
 			is_new_block_set = iniparser_getboolean(ini, "blockchain:new_block", -1);
 		}
 	}
+	if (config_file)
+		free(config_file);
 	return is_new_block_set;
 }
 

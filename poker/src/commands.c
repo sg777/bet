@@ -26,8 +26,8 @@
 #include "err.h"
 
 #include <stdarg.h>
-#include <stdlib.h>
 #include <inttypes.h>
+#include <math.h>
 
 double epsilon = 0.000000001;
 
@@ -111,7 +111,8 @@ char **bet_copy_args(int argc, ...)
 	va_copy(va_copy, valist);
 
 	for (int i = 0; i < argc; i++) {
-		if (strlen(va_arg(va_copy, char *)) > arg_size) {
+		/* Need room for terminating NUL in arg_size buffer */
+		if (strlen(va_arg(va_copy, char *)) >= arg_size) {
 			ret = ERR_ARG_SIZE_TOO_LONG;
 			dlg_error("Error::%s::%s", bet_err_str(ret), va_arg(valist, char *));
 			dlg_error("Error in running the command::%s", argv[1]);
@@ -727,14 +728,23 @@ double chips_get_balance()
 	double balance = 0;
 	char **argv = NULL;
 	cJSON *getbalanceInfo = NULL;
+	char *balance_str = NULL;
 
 	argc = 2;
 	argv = bet_copy_args(argc, blockchain_cli, "getbalance");
 	retval = make_command(argc, argv, &getbalanceInfo);
 	if (retval != OK) {
 		dlg_error("%s", bet_err_str(retval));
-	} else {
-		balance = atof(cJSON_Print(getbalanceInfo));
+	} else if (getbalanceInfo != NULL) {
+		// getbalance returns a plain number string (make_command creates cJSON_CreateString)
+		// Use unstringify to remove quotes from cJSON_Print output
+		balance_str = cJSON_Print(getbalanceInfo);
+		if (balance_str != NULL) {
+			char *clean_str = unstringify(balance_str);
+			balance = atof(clean_str);
+			free(balance_str);
+		}
+		cJSON_Delete(getbalanceInfo);
 	}
 	bet_dealloc_args(argc, &argv);
 	return balance;
@@ -1257,7 +1267,8 @@ static int32_t chips_get_vout_from_tx(char *tx_id)
 	vout = cJSON_GetObjectItem(decode_raw_tx_info, "vout");
 	for (int i = 0; i < cJSON_GetArraySize(vout); i++) {
 		cJSON *temp = cJSON_GetArrayItem(vout, i);
-		if (abs(value - jdouble(temp, "value") < epsilon)) {
+		/* Compare doubles correctly: fabs(a-b) < epsilon */
+		if (fabs(value - jdouble(temp, "value")) < epsilon) {
 			retval = jint(temp, "n");
 			break;
 		}
@@ -1351,12 +1362,24 @@ static void chips_read_valid_unspent(char *file_name, cJSON **argjson)
 	fp = fopen(file_name, "r");
 	if (fp) {
 		while ((ch = fgetc(fp)) != EOF) {
-			if ((ch != '[') || (ch != ']')) {
+			/* Skip JSON array brackets */
+			if ((ch != '[') && (ch != ']')) {
 				if (ch == '{') {
+					if (len >= (int32_t)sizeof(buf) - 2) {
+						dlg_error("Unspent JSON object too large; truncating parse");
+						memset(buf, 0x00, sizeof(buf));
+						len = 0;
+					}
 					buf[len++] = ch;
 				} else {
 					if (len > 0) {
 						if (ch == '}') {
+							if (len >= (int32_t)sizeof(buf) - 2) {
+								dlg_error("Unspent JSON object too large; truncating parse");
+								memset(buf, 0x00, sizeof(buf));
+								len = 0;
+								continue;
+							}
 							buf[len++] = ch;
 							buf[len] = '\0';
 							temp = cJSON_Parse(buf);
@@ -1367,6 +1390,12 @@ static void chips_read_valid_unspent(char *file_name, cJSON **argjson)
 							memset(buf, 0x00, len);
 							len = 0;
 						} else {
+							if (len >= (int32_t)sizeof(buf) - 2) {
+								dlg_error("Unspent JSON object too large; truncating parse");
+								memset(buf, 0x00, sizeof(buf));
+								len = 0;
+								continue;
+							}
 							buf[len++] = ch;
 						}
 					}
@@ -1388,12 +1417,24 @@ int32_t chips_check_tx_exists_in_unspent(char *file_name, char *tx_id)
 	fp = fopen(file_name, "r");
 	if (fp) {
 		while ((ch = fgetc(fp)) != EOF) {
-			if ((ch != '[') || (ch != ']')) {
+			/* Skip JSON array brackets */
+			if ((ch != '[') && (ch != ']')) {
 				if (ch == '{') {
+					if (len >= (int32_t)sizeof(buf) - 2) {
+						dlg_error("Unspent JSON object too large; truncating parse");
+						memset(buf, 0x00, sizeof(buf));
+						len = 0;
+					}
 					buf[len++] = ch;
 				} else {
 					if (len > 0) {
 						if (ch == '}') {
+							if (len >= (int32_t)sizeof(buf) - 2) {
+								dlg_error("Unspent JSON object too large; truncating parse");
+								memset(buf, 0x00, sizeof(buf));
+								len = 0;
+								continue;
+							}
 							buf[len++] = ch;
 							buf[len] = '\0';
 							temp = cJSON_Parse(buf);
@@ -1406,6 +1447,12 @@ int32_t chips_check_tx_exists_in_unspent(char *file_name, char *tx_id)
 							memset(buf, 0x00, len);
 							len = 0;
 						} else {
+							if (len >= (int32_t)sizeof(buf) - 2) {
+								dlg_error("Unspent JSON object too large; truncating parse");
+								memset(buf, 0x00, sizeof(buf));
+								len = 0;
+								continue;
+							}
 							buf[len++] = ch;
 						}
 					}
@@ -1426,13 +1473,29 @@ int32_t chips_check_tx_exists(char *file_name, char *tx_id)
 
 	temp = cJSON_CreateObject();
 	fp = fopen(file_name, "r");
+	if (!fp) {
+		dlg_error("Failed to open %s", file_name);
+		return 0;
+	}
 	while ((ch = fgetc(fp)) != EOF) {
-		if ((ch != '[') || (ch != ']')) {
+		/* Skip JSON array brackets */
+		if ((ch != '[') && (ch != ']')) {
 			if (ch == '{') {
+				if (len >= (int32_t)sizeof(buf) - 2) {
+					dlg_error("Unspent JSON object too large; truncating parse");
+					memset(buf, 0x00, sizeof(buf));
+					len = 0;
+				}
 				buf[len++] = ch;
 			} else {
 				if (len > 0) {
 					if (ch == '}') {
+						if (len >= (int32_t)sizeof(buf) - 2) {
+							dlg_error("Unspent JSON object too large; truncating parse");
+							memset(buf, 0x00, sizeof(buf));
+							len = 0;
+							continue;
+						}
 						buf[len++] = ch;
 						buf[len] = '\0';
 						temp = cJSON_Parse(buf);
@@ -1447,12 +1510,19 @@ int32_t chips_check_tx_exists(char *file_name, char *tx_id)
 						memset(buf, 0x00, len);
 						len = 0;
 					} else {
+						if (len >= (int32_t)sizeof(buf) - 2) {
+							dlg_error("Unspent JSON object too large; truncating parse");
+							memset(buf, 0x00, sizeof(buf));
+							len = 0;
+							continue;
+						}
 						buf[len++] = ch;
 					}
 				}
 			}
 		}
 	}
+	fclose(fp);
 	return tx_exists;
 }
 
@@ -1529,7 +1599,8 @@ int32_t run_command(int argc, char **argv)
 end:
 	if (command)
 		free(command);
-	pclose(fp);
+	if (fp)
+		pclose(fp);
 
 	return ret;
 }
@@ -1561,8 +1632,10 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		strcat(command, " ");
 	}
 	dlg_info("command :: %s\n", command);
-	if (strcmp(argv[0], "lightning-cli") == 0)
-		dlg_info("LN command :: %s\n", command);
+	// Lightning Network support removed - lightning-cli commands no longer supported
+	if (strcmp(argv[0], "lightning-cli") == 0) {
+		dlg_warn("Lightning Network support removed - lightning-cli command ignored: %s", command);
+	}
 
 	//dlg_info("\nchips-pbaas command :: %s\n", command);
 	// Redirect stderr to stdout to capture error messages (2>&1)
@@ -1580,8 +1653,11 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 			  command);
 		if (strcmp(argv[0], blockchain_cli) == 0)
 			retval = ERR_CHIPS_COMMAND;
-		if (strcmp(argv[0], "lightning-cli") == 0)
+		// Lightning Network support removed
+		if (strcmp(argv[0], "lightning-cli") == 0) {
+			dlg_warn("Lightning Network support removed - command not executed");
 			retval = ERR_LN_COMMAND;
+		}
 		free(command_with_stderr);
 		free(command);
 		return retval;
@@ -1626,6 +1702,8 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 				retval = ERR_ID_NOT_FOUND;
 			}
 		} else if (strcmp(argv[0], "lightning-cli") == 0) {
+			// Lightning Network support removed
+			dlg_warn("Lightning Network support removed - command not executed");
 			retval = ERR_LN_COMMAND;
 		} else {
 			retval = ERR_COMMAND_FAILED;
@@ -1646,6 +1724,8 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		if (strcmp(argv[0], blockchain_cli) == 0) {
 			retval = ERR_CHIPS_COMMAND;
 		} else if (strcmp(argv[0], "lightning-cli") == 0) {
+			// Lightning Network support removed
+			dlg_warn("Lightning Network support removed - command not executed");
 			retval = ERR_LN_COMMAND;
 		} else {
 			retval = ERR_COMMAND_FAILED;
@@ -1659,6 +1739,8 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		if (strcmp(argv[0], blockchain_cli) == 0) {
 			retval = ERR_CHIPS_COMMAND;
 		} else if (strcmp(argv[0], "lightning-cli") == 0) {
+			// Lightning Network support removed
+			dlg_warn("Lightning Network support removed - command not executed");
 			retval = ERR_LN_COMMAND;
 		} else {
 			retval = ERR_COMMAND_FAILED;
@@ -1670,7 +1752,7 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		*argjson = cJSON_CreateString((const char *)data);
 	} else if (strcmp(argv[0], "lightning-cli") == 0) {
 		// Lightning Network support removed
-		dlg_error("Lightning Network support has been removed");
+		dlg_warn("Lightning Network support removed - command not executed");
 		retval = ERR_LN_COMMAND;
 	} else if (strcmp(argv[0], blockchain_cli) == 0) {
 		if (strlen(data) == 0) {

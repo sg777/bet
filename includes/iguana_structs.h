@@ -532,7 +532,7 @@ struct iguana_info
     double txidfind_totalmillis,txidfind_num,spendtxid_totalmillis,spendtxid_num;
     struct iguana_monitorinfo monitoring[256];
     int32_t notarychain,didaddresses;
-    struct datachain_info dPoW;
+    struct datachain_info *dPoW;  // Changed to pointer since datachain folder removed
     struct iguana_zblock newblock; char *newblockstr;
     int32_t relay_RTheights[BASILISK_MAXRELAYS];
     struct iguana_blocks blocks; void *mempool; void *mempools[BASILISK_MAXRELAYS];

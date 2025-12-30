@@ -1717,7 +1717,7 @@ uint64_t conv_NXTpassword(unsigned char *mysecret,unsigned char *mypublic,uint8_
 
 bits256 GENESIS_PUBKEY,GENESIS_PRIVKEY;
 
-bits256 acct777_pubkey(bits256 privkey)
+bits256 crypto_account_pubkey(bits256 privkey)
 {
     static uint8_t basepoint[32] = {9};
     bits256 pubkey;
@@ -1726,26 +1726,26 @@ bits256 acct777_pubkey(bits256 privkey)
     return(pubkey);
 }
 
-uint64_t acct777_nxt64bits(bits256 pubkey)
+uint64_t crypto_account_next64bits(bits256 pubkey)
 {
     bits256 acct;
     vcalc_sha256(0,acct.bytes,pubkey.bytes,sizeof(pubkey));
     return(acct.txid);
 }
 
-bits256 acct777_msgprivkey(uint8_t *data,int32_t datalen)
+bits256 crypto_account_msgprivkey(uint8_t *data,int32_t datalen)
 {
     bits256 hash;
     vcalc_sha256(0,hash.bytes,data,datalen);
     return(hash);
 }
 
-bits256 acct777_msgpubkey(uint8_t *data,int32_t datalen)
+bits256 crypto_account_msgpubkey(uint8_t *data,int32_t datalen)
 {
-    return(acct777_pubkey(acct777_msgprivkey(data,datalen)));
+    return(crypto_account_pubkey(crypto_account_msgprivkey(data,datalen)));
 }
 
-bits256 acct777_hashiter(bits256 privkey,bits256 pubkey,int32_t lockdays,uint8_t chainlen)
+bits256 crypto_account_hashiter(bits256 privkey,bits256 pubkey,int32_t lockdays,uint8_t chainlen)
 {
     uint16_t lockseed,signlen = 0; uint8_t signbuf[16]; bits256 shared,lockhash;
     lockseed = (chainlen & 0x7f) | (lockdays << 7);
@@ -1757,29 +1757,29 @@ bits256 acct777_hashiter(bits256 privkey,bits256 pubkey,int32_t lockdays,uint8_t
     return(lockhash);
 }
 
-bits256 acct777_lockhash(bits256 pubkey,int32_t lockdays,uint8_t chainlen)
+bits256 crypto_account_lockhash(bits256 pubkey,int32_t lockdays,uint8_t chainlen)
 {
     bits256 lockhash = GENESIS_PRIVKEY;
     while ( chainlen > 0 )
-        lockhash = acct777_hashiter(lockhash,pubkey,lockdays,chainlen--);
+        lockhash = crypto_account_hashiter(lockhash,pubkey,lockdays,chainlen--);
     return(lockhash);
 }
 
-bits256 acct777_invoicehash(bits256 *invoicehash,uint16_t lockdays,uint8_t chainlen)
+bits256 crypto_account_invoicehash(bits256 *invoicehash,uint16_t lockdays,uint8_t chainlen)
 {
     int32_t i; bits256 lockhash,privkey;
     OS_randombytes(privkey.bytes,sizeof(privkey)); // both privkey and pubkey are sensitive. pubkey allows verification, privkey proves owner
     lockhash = privkey;
     for (i=0; i<chainlen; i++)
-        lockhash = acct777_hashiter(lockhash,GENESIS_PUBKEY,chainlen - i,lockdays);
+        lockhash = crypto_account_hashiter(lockhash,GENESIS_PUBKEY,chainlen - i,lockdays);
     *invoicehash = lockhash;
     return(privkey);
 }
 
 //char *bits256_str();
-//struct acct777_sig { bits256 sigbits,pubkey; uint64_t signer64bits; uint32_t timestamp,allocsize; };
+//struct crypto_account_sig { bits256 sigbits,pubkey; uint64_t signer64bits; uint32_t timestamp,allocsize; };
 
-void acct777_rwsig(int32_t rwflag,uint8_t *serialized,struct acct777_sig *sig)
+void crypto_account_rwsig(int32_t rwflag,uint8_t *serialized,struct crypto_account_sig *sig)
 {
     int32_t len = 0;
     iguana_rwbignum(rwflag,&serialized[len],sizeof(bits256),sig->sigbits.bytes), len += sizeof(bits256);
@@ -1789,28 +1789,28 @@ void acct777_rwsig(int32_t rwflag,uint8_t *serialized,struct acct777_sig *sig)
     iguana_rwnum(rwflag,&serialized[len],sizeof(sig->allocsize),&sig->allocsize),len += sizeof(sig->allocsize);
 }
 
-int32_t acct777_sigcheck(struct acct777_sig *sig)
+int32_t crypto_account_sigcheck(struct crypto_account_sig *sig)
 {
 #define IGUANA_GENESIS 1453075200
 #define IGUANA_MAXPACKETSIZE (1024 * 1024 * 4)
 #define TEN_YEARS (10 * 365 * 24 * 3600)
    if ( sig->allocsize < sizeof(*sig) || sig->allocsize > IGUANA_MAXPACKETSIZE )
     {
-        //printf("acct777_sign: invalid datalen.%d hex.%08x\n",sig->allocsize,sig->allocsize);
+        //printf("crypto_account_sign: invalid datalen.%d hex.%08x\n",sig->allocsize,sig->allocsize);
         return(-1);
     }
     if ( sig->timestamp < IGUANA_GENESIS || sig->timestamp > (long)IGUANA_GENESIS+TEN_YEARS )
     {
-        printf("acct777_sign: invalid timestamp.%u (%u %u)\n",sig->timestamp,IGUANA_GENESIS,IGUANA_GENESIS+TEN_YEARS);
+        printf("crypto_account_sign: invalid timestamp.%u (%u %u)\n",sig->timestamp,IGUANA_GENESIS,IGUANA_GENESIS+TEN_YEARS);
         return(-1);
     }
     return(sig->allocsize);
 }
 
-uint64_t acct777_sign(struct acct777_sig *sig,bits256 privkey,bits256 otherpubkey,uint32_t timestamp,uint8_t *serialized,int32_t datalen)
+uint64_t crypto_account_sign(struct crypto_account_sig *sig,bits256 privkey,bits256 otherpubkey,uint32_t timestamp,uint8_t *serialized,int32_t datalen)
 {
     bits256 pubkey; bits256 shared; uint8_t buf[sizeof(*sig)];
-    pubkey = acct777_pubkey(privkey);
+    pubkey = crypto_account_pubkey(privkey);
     if ( memcmp(sig->pubkey.bytes,otherpubkey.bytes,sizeof(bits256)) != 0 )
     {
         //char str[65],str2[65];
@@ -1818,13 +1818,13 @@ uint64_t acct777_sign(struct acct777_sig *sig,bits256 privkey,bits256 otherpubke
         sig->pubkey = pubkey;
         sig->timestamp = timestamp;
         sig->allocsize = (int32_t)(datalen + sizeof(*sig));
-        sig->signer64bits = acct777_nxt64bits(sig->pubkey);
+        sig->signer64bits = crypto_account_next64bits(sig->pubkey);
     }
     sig->sigbits = shared = curve25519(privkey,otherpubkey);
-    if ( acct777_sigcheck(sig) < 0 )
+    if ( crypto_account_sigcheck(sig) < 0 )
         return(0);
     memset(buf,0,sizeof(buf));
-    acct777_rwsig(1,buf,sig);
+    crypto_account_rwsig(1,buf,sig);
     //int32_t i; for (i=0; i<sizeof(buf); i++)
     //    printf("%02x ",buf[i]);
     //printf(" <<<<<<<<< SIGN.%d allocsize.%d signer.%llu t%u\n",datalen,sig->allocsize,(long long)sig->signer64bits,sig->timestamp);
@@ -1834,9 +1834,9 @@ uint64_t acct777_sign(struct acct777_sig *sig,bits256 privkey,bits256 otherpubke
     return(sig->signer64bits);
 }
 
-uint64_t acct777_validate(struct acct777_sig *sig,bits256 privkey,bits256 pubkey)
+uint64_t crypto_account_validate(struct crypto_account_sig *sig,bits256 privkey,bits256 pubkey)
 {
-    struct acct777_sig checksig; uint64_t signerbits; int32_t datalen; uint8_t *serialized;
+    struct crypto_account_sig checksig; uint64_t signerbits; int32_t datalen; uint8_t *serialized;
     datalen = (int32_t)(sig->allocsize - sizeof(*sig));
     checksig = *sig;
 #if defined(_M_X64)
@@ -1845,30 +1845,30 @@ uint64_t acct777_validate(struct acct777_sig *sig,bits256 privkey,bits256 pubkey
     serialized = (uint8_t *)((long)sig + sizeof(*sig));
 #endif
     //{ int32_t i; for (i=0; i<datalen; i++) printf("%02x",serialized[i]); printf(" VALIDATE.%d?\n",datalen); }
-    acct777_sign(&checksig,privkey,pubkey,sig->timestamp,serialized,datalen);
+    crypto_account_sign(&checksig,privkey,pubkey,sig->timestamp,serialized,datalen);
     if ( memcmp(checksig.sigbits.bytes,sig->sigbits.bytes,sizeof(checksig.sigbits)) != 0 )
     {
         //char *bits256_str();
-        //char str[65],str2[65]; printf("sig compare error using sig->pub from %llu\n>>>>>>>> sig.(%s) vs (%s)",(long long)acct777_nxt64bits(sig->pubkey),bits256_str(str,checksig.sigbits),bits256_str(str2,sig->sigbits));
+        //char str[65],str2[65]; printf("sig compare error using sig->pub from %llu\n>>>>>>>> sig.(%s) vs (%s)",(long long)crypto_account_next64bits(sig->pubkey),bits256_str(str,checksig.sigbits),bits256_str(str2,sig->sigbits));
         return(0);
     }
-    signerbits = acct777_nxt64bits(sig->pubkey);
+    signerbits = crypto_account_next64bits(sig->pubkey);
     if ( signerbits == checksig.signer64bits )
         return(signerbits);
     else return(0);
 }
 
-uint64_t acct777_signtx(struct acct777_sig *sig,bits256 privkey,uint32_t timestamp,uint8_t *data,int32_t datalen)
+uint64_t crypto_account_signtx(struct crypto_account_sig *sig,bits256 privkey,uint32_t timestamp,uint8_t *data,int32_t datalen)
 {
-    return(acct777_sign(sig,privkey,acct777_msgpubkey(data,datalen),timestamp,data,datalen));
+    return(crypto_account_sign(sig,privkey,crypto_account_msgpubkey(data,datalen),timestamp,data,datalen));
 }
 
-/*uint64_t acct777_swaptx(bits256 privkey,struct acct777_sig *sig,uint32_t timestamp,uint8_t *data,int32_t datalen)
+/*uint64_t crypto_account_swaptx(bits256 privkey,struct crypto_account_sig *sig,uint32_t timestamp,uint8_t *data,int32_t datalen)
 {
     uint64_t othernxt;
-    if ( (othernxt= acct777_validate(sig)) != sig->signer64bits )
+    if ( (othernxt= crypto_account_validate(sig)) != sig->signer64bits )
         return(0);
-    return(acct777_sign(sig,privkey,acct777_msgpubkey(data,datalen),timestamp,data,datalen));
+    return(crypto_account_sign(sig,privkey,crypto_account_msgpubkey(data,datalen),timestamp,data,datalen));
 }*/
 
 int32_t _SuperNET_cipher(uint8_t nonce[crypto_box_NONCEBYTES],uint8_t *cipher,uint8_t *message,int32_t len,bits256 destpub,bits256 srcpriv,uint8_t *buf)

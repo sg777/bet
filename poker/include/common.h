@@ -38,11 +38,11 @@ enum bet_dcv_state {
 #define satoshis_per_unit       1000
 #define normalization_factor    100
 
-#define CARDS777_MAXCARDS       10 // 52    //
-#define CARDS777_MAXPLAYERS     9 // 9   //
-#define CARDS777_MAXROUNDS      4 // 9   //
-#define CARDS777_MAXCHIPS       1000
-#define CARDS777_CHIPSIZE       (SATOSHIDEN / CARDS777_MAXCHIPS)
+#define CARDS_MAXCARDS       10 // 52    //
+#define CARDS_MAXPLAYERS     9 // 9   //
+#define CARDS_MAXROUNDS      4 // 9   //
+#define CARDS_MAXCHIPS       1000
+#define CARDS_CHIPSIZE       (SATOSHIDEN / CARDS_MAXCHIPS)
 #define BET_PLAYERTIMEOUT       15
 #define BET_GAMESTART_DELAY     10
 #define BET_RESERVERATE         1.025
@@ -64,38 +64,37 @@ enum bet_dcv_state {
 #define default_min_stake_in_bb     20
 #define default_max_stake_in_bb     100
 
-#define BET_WITHOUT_LN 0
-#define BET_WITH_LN    1      
+// BET_WITHOUT_LN and BET_WITH_LN removed - Lightning Network support removed, using CHIPS-only payments      
 
-extern bits256 v_hash[CARDS777_MAXCARDS][CARDS777_MAXCARDS];
-extern bits256 g_hash[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
+extern bits256 v_hash[CARDS_MAXCARDS][CARDS_MAXCARDS];
+extern bits256 g_hash[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
 
-extern bits256 all_v_hash[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS][CARDS777_MAXCARDS];
-extern bits256 all_g_hash[CARDS777_MAXPLAYERS][CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
+extern bits256 all_v_hash[CARDS_MAXPLAYERS][CARDS_MAXCARDS][CARDS_MAXCARDS];
+extern bits256 all_g_hash[CARDS_MAXPLAYERS][CARDS_MAXPLAYERS][CARDS_MAXCARDS];
 
 extern struct privatebet_info *bet_dcv;
 extern struct privatebet_vars *dcv_vars;
 
-extern int32_t no_of_signers, max_no_of_signers, is_signed[CARDS777_MAXPLAYERS];
+extern int32_t no_of_signers, max_no_of_signers, is_signed[CARDS_MAXPLAYERS];
 
 extern struct privatebet_info *bet_bvv;
 extern struct privatebet_vars *bvv_vars;
 // bet_dcv_bvv removed - nanomsg sockets no longer used
 
-extern struct privatebet_info *BET_player[CARDS777_MAXPLAYERS];
+extern struct privatebet_info *BET_player[CARDS_MAXPLAYERS];
 
-extern int32_t all_sharesflag[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS][CARDS777_MAXPLAYERS];
+extern int32_t all_sharesflag[CARDS_MAXPLAYERS][CARDS_MAXCARDS][CARDS_MAXPLAYERS];
 
-extern int32_t all_player_card_values[CARDS777_MAXPLAYERS][hand_size]; // where 7 is hand_size
-extern int32_t all_number_cards_drawn[CARDS777_MAXPLAYERS];
-extern int32_t all_player_cards[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
-extern int32_t all_no_of_player_cards[CARDS777_MAXPLAYERS];
-extern bits256 all_playershares[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS][CARDS777_MAXPLAYERS];
+extern int32_t all_player_card_values[CARDS_MAXPLAYERS][hand_size]; // where 7 is hand_size
+extern int32_t all_number_cards_drawn[CARDS_MAXPLAYERS];
+extern int32_t all_player_cards[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
+extern int32_t all_no_of_player_cards[CARDS_MAXPLAYERS];
+extern bits256 all_playershares[CARDS_MAXPLAYERS][CARDS_MAXCARDS][CARDS_MAXPLAYERS];
 
-extern int32_t permis_d[CARDS777_MAXCARDS], permis_b[CARDS777_MAXCARDS];
+extern int32_t permis_d[CARDS_MAXCARDS], permis_b[CARDS_MAXCARDS];
 extern bits256 deckid;
 extern uint8_t sharenrs[256];
-extern bits256 playershares[CARDS777_MAXCARDS][CARDS777_MAXPLAYERS];
+extern bits256 playershares[CARDS_MAXCARDS][CARDS_MAXPLAYERS];
 
 extern struct lws *wsi_global_client;
 
@@ -122,7 +121,7 @@ extern double dev_fund_commission;
 extern char *legacy_m_of_n_msig_addr;
 
 extern int32_t no_of_txs;
-extern char tx_ids[CARDS777_MAXPLAYERS][100];
+extern char tx_ids[CARDS_MAXPLAYERS][100];
 extern int32_t *notary_status;
 extern int32_t live_notaries;
 
@@ -138,12 +137,13 @@ extern double dcv_commission_percentage;
 extern double max_allowed_dcv_commission;
 extern char dcv_hosted_gui_url[128];
 
-int32_t is_table_private;
-char table_password[128];
-char player_name[128];
-char verus_pid[128]; // This is the verus ID owned by the player to which player updates during the game.
+/* These are globals; define them in exactly one .c file */
+extern int32_t is_table_private;
+extern char table_password[128];
+extern char player_name[128];
+extern char verus_pid[128]; // This is the verus ID owned by the player to which player updates during the game.
 
-int32_t bet_ln_config; 
+// bet_ln_config removed - Lightning Network support removed, using CHIPS-only payments
 extern int64_t sc_start_block;
 
 extern char dealer_ip_for_bvv[128];

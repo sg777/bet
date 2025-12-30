@@ -14,21 +14,13 @@
  ******************************************************************************/
 #define _DEFAULT_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <netdb.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 #include "network.h"
 #include "bet.h"
-#include "cards777.h"
+#include "cards.h"
 #include "gfshare.h"
 #include "err.h"
 
@@ -36,15 +28,35 @@ char *bet_get_etho_ip()
 {
 	struct ifreq ifr;
 	int fd;
-	unsigned char ip_address[15];
+	static char ipbuf[INET_ADDRSTRLEN];
+
+	memset(&ifr, 0, sizeof(ifr));
+	memset(ipbuf, 0, sizeof(ipbuf));
 
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (fd < 0) {
+		dlg_error("socket() failed: %s", strerror(errno));
+		return NULL;
+	}
+
 	ifr.ifr_addr.sa_family = AF_INET;
-	memcpy(ifr.ifr_name, "eth0", IFNAMSIZ - 1);
-	ioctl(fd, SIOCGIFADDR, &ifr);
+	/* Prefer eth0 if present; callers can fall back if NULL */
+	strncpy(ifr.ifr_name, "eth0", IFNAMSIZ - 1);
+	ifr.ifr_name[IFNAMSIZ - 1] = '\0';
+
+	if (ioctl(fd, SIOCGIFADDR, &ifr) != 0) {
+		dlg_error("ioctl(SIOCGIFADDR) failed for %s: %s", ifr.ifr_name, strerror(errno));
+		close(fd);
+		return NULL;
+	}
 	close(fd);
-	strcpy((char *)ip_address, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
-	return (inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+
+	if (!inet_ntop(AF_INET, &((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr, ipbuf, sizeof(ipbuf))) {
+		dlg_error("inet_ntop() failed: %s", strerror(errno));
+		return NULL;
+	}
+
+	return ipbuf;
 }
 
 char *bet_tcp_sock_address(int32_t bindflag, char *str, char *ipaddr, uint16_t port)
@@ -54,14 +66,11 @@ char *bet_tcp_sock_address(int32_t bindflag, char *str, char *ipaddr, uint16_t p
 	return (str);
 }
 
-// bet_nanosock removed - nanomsg/nano sockets no longer used
-
-// bet_msg_dealer_with_response_id - stub implementation (nanomsg removed, but still called)
+// Legacy pub-sub/nanomsg functions - stubs (to be replaced with Verus ID communication)
 cJSON *bet_msg_dealer_with_response_id(cJSON *argjson, char *dealer_ip, char *message)
 {
-	// Nanomsg removed - function no longer functional
-	dlg_error("bet_msg_dealer_with_response_id: nanomsg removed - not implemented");
+	dlg_warn("bet_msg_dealer_with_response_id: Legacy pub-sub removed - use Verus ID updates instead");
+	dlg_warn("  Replace with: append_game_state() or update_cmm_from_id_key_data_cJSON()");
+	(void)argjson; (void)dealer_ip; (void)message;
 	return NULL;
 }
-
-// bet_send_data removed - nanomsg/nano sockets no longer used, function never called

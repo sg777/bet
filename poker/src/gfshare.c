@@ -109,7 +109,7 @@ struct gfshare_ctx_bet *gfshare_initdec(uint8_t *sharenrs, uint32_t sharecount, 
 }
 
 // Initialise a gfshare context for recombining shares
-struct gfshare_ctx_bet *gfshare_sg777_initdec(uint8_t *sharenrs, uint32_t sharecount, uint8_t threshold, uint32_t size,
+struct gfshare_ctx_bet *gfshare_initdec_threshold(uint8_t *sharenrs, uint32_t sharecount, uint8_t threshold, uint32_t size,
 					      void *space, int32_t spacesize)
 {
 	struct gfshare_ctx_bet *ctx = _gfshare_init_core(sharenrs, sharecount, threshold, size, space, spacesize);

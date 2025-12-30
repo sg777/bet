@@ -330,7 +330,8 @@ add_var FUZZING "$FUZZING"
 
 # Hack to avoid sha256 name clash with libwally: will be fixed when that
 # becomes a standalone shared lib.
-echo '#include "ccan_compat.h"' >> $CONFIG_HEADER
+# Removed: ccan_compat.h not used by poker build
+# echo '#include "ccan_compat.h"' >> $CONFIG_HEADER
 
 # Now we set them all and check.
 while IFS='=' read VAR VAL; do

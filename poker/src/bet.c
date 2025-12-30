@@ -14,8 +14,8 @@
  ******************************************************************************/
 #include "bet.h"
 #include "../../includes/curl/curl.h"
-#include "../../log/macrologger.h"
-#include "cards777.h"
+#include "macrologger.h"
+#include "cards.h"
 #include "cashier.h"
 #include "client.h"
 #include "commands.h"
@@ -37,12 +37,7 @@
 #include "blinder.h"
 #include "dealer_registration.h"
 
-#include <netinet/in.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <unistd.h>
 #include <strings.h>
 
 //#define LIVE_THREAD 0
@@ -57,19 +52,18 @@ struct privatebet_vars *player_vars = NULL;
 
 uint8_t sharenrs[256];
 bits256 deckid;
-bits256 playershares[CARDS777_MAXCARDS][CARDS777_MAXPLAYERS];
-int32_t permis_d[CARDS777_MAXCARDS], permis_b[CARDS777_MAXCARDS];
-bits256 v_hash[CARDS777_MAXCARDS][CARDS777_MAXCARDS];
-bits256 g_hash[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
+bits256 playershares[CARDS_MAXCARDS][CARDS_MAXPLAYERS];
+int32_t permis_d[CARDS_MAXCARDS], permis_b[CARDS_MAXCARDS];
+bits256 v_hash[CARDS_MAXCARDS][CARDS_MAXCARDS];
+bits256 g_hash[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
 struct enc_share *g_shares = NULL;
 
 char dealer_ip[20];
-char cashier_ip[20];
 char unique_id[65];
 
-struct seat_info player_seats_info[CARDS777_MAXPLAYERS];
+struct seat_info player_seats_info[CARDS_MAXPLAYERS];
 
-int32_t player_pos[CARDS777_MAXPLAYERS];
+int32_t player_pos[CARDS_MAXPLAYERS];
 
 /**************************************************************************************************
 This value is read from dealer_config.json file, it defines the exact number of players that needs
@@ -94,9 +88,9 @@ static void bet_player_initialize(char *dcv_ip)
 	player_vars = calloc(1, sizeof(struct privatebet_vars));
 
 	bet_player = calloc(1, sizeof(struct privatebet_info));
-	bet_player->maxplayers = (max_players < CARDS777_MAXPLAYERS) ? max_players : CARDS777_MAXPLAYERS;
-	bet_player->maxchips = CARDS777_MAXCHIPS;
-	bet_player->chipsize = CARDS777_CHIPSIZE;
+	bet_player->maxplayers = (max_players < CARDS_MAXPLAYERS) ? max_players : CARDS_MAXPLAYERS;
+	bet_player->maxchips = CARDS_MAXCHIPS;
+	bet_player->chipsize = CARDS_CHIPSIZE;
 	bet_player->numplayers = max_players;
 	bet_info_set(bet_player, "demo", poker_deck_size, 0, max_players);
 }
@@ -147,9 +141,9 @@ static void bet_bvv_initialize(char *dcv_ip, const int32_t port)
 	// Nanomsg sockets removed - no longer used
 	bvv_vars = calloc(1, sizeof(struct privatebet_vars));
 	bet_bvv = calloc(1, sizeof(struct privatebet_info));
-	bet_bvv->maxplayers = (max_players < CARDS777_MAXPLAYERS) ? max_players : CARDS777_MAXPLAYERS;
-	bet_bvv->maxchips = CARDS777_MAXCHIPS;
-	bet_bvv->chipsize = CARDS777_CHIPSIZE;
+	bet_bvv->maxplayers = (max_players < CARDS_MAXPLAYERS) ? max_players : CARDS_MAXPLAYERS;
+	bet_bvv->maxchips = CARDS_MAXCHIPS;
+	bet_bvv->chipsize = CARDS_CHIPSIZE;
 	bet_bvv->numplayers = max_players;
 	bet_bvv->myplayerid = -1;
 	bet_info_set(bet_bvv, "demo", poker_deck_size, 0, max_players);
@@ -185,9 +179,9 @@ static int32_t bet_dcv_initialize(char *dcv_ip)
 	int32_t retval = OK;
 	// Nanomsg sockets removed - no longer used
 	bet_dcv = calloc(1, sizeof(struct privatebet_info));
-	bet_dcv->maxplayers = (max_players < CARDS777_MAXPLAYERS) ? max_players : CARDS777_MAXPLAYERS;
-	bet_dcv->maxchips = CARDS777_MAXCHIPS;
-	bet_dcv->chipsize = CARDS777_CHIPSIZE;
+	bet_dcv->maxplayers = (max_players < CARDS_MAXPLAYERS) ? max_players : CARDS_MAXPLAYERS;
+	bet_dcv->maxchips = CARDS_MAXCHIPS;
+	bet_dcv->chipsize = CARDS_CHIPSIZE;
 	bet_dcv->numplayers = 0;
 	bet_dcv->myplayerid = -2;
 	bet_dcv->cardid = -1;
@@ -203,15 +197,15 @@ static int32_t bet_dcv_initialize(char *dcv_ip)
 	dcv_vars->pot = 0;
 	dcv_vars->last_turn = 0;
 	dcv_vars->last_raise = 0;
-	for (int i = 0; i < CARDS777_MAXPLAYERS; i++) {
+	for (int i = 0; i < CARDS_MAXPLAYERS; i++) {
 		dcv_vars->funds[i] = 0;
-		for (int j = 0; j < CARDS777_MAXROUNDS; j++) {
+		for (int j = 0; j < CARDS_MAXROUNDS; j++) {
 			dcv_vars->bet_actions[i][j] = 0;
 			dcv_vars->betamount[i][j] = 0;
 		}
 	}
 
-	for (int32_t i = 0; i < CARDS777_MAXPLAYERS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXPLAYERS; i++) {
 		player_pos[i] = 0;
 	}
 	return retval;
@@ -392,6 +386,7 @@ void bet_start(int argc, char **argv)
 	}
 
 	// Initialize common components for other commands
+	bet_init_config_paths(); // Initialize config paths relative to executable
 	bet_set_unique_id();
 	bet_parse_blockchain_config_ini_file();
 
@@ -411,15 +406,91 @@ void bet_start(int argc, char **argv)
 	}
 	// Node type commands
 	else if (strcmp(cmd, "c") == 0 || strcmp(cmd, "cashier") == 0) {
+		pthread_t cashier_frontend_thrd;
 		dlg_info("Starting cashier node");
 		bet_node_type = cashier;
-		cashier_game_init("sg777_t");
+		
+		// Start GUI backend thread for cashier FIRST - it must run regardless of backend errors
+		if (OS_thread_create(&cashier_frontend_thrd, NULL, (void *)bet_cashier_frontend_loop, NULL) != 0) {
+			dlg_error("[GUI] Failed to start GUI thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
+			retval = ERR_PTHREAD_LAUNCHING;
+		} else {
+			dlg_info("[GUI] GUI backend thread started for cashier on port %d", gui_ws_port);
+			// Detach the thread so it runs in background independently
+			pthread_detach(cashier_frontend_thrd);
+			// Give GUI thread a moment to start
+			sleep(1);
+		}
+		
+		// Start backend initialization - GUI will continue even if this fails
+		if (retval == OK) {
+			cashier_game_init("sg777_t");
+			dlg_info("[GUI] GUI thread continues running on port %d", gui_ws_port);
+			// Keep process alive so GUI thread continues
+			while (1) {
+				sleep(60);
+			}
+		}
 	} else if (strcmp(cmd, "d") == 0 || strcmp(cmd, "dcv") == 0 || strcmp(cmd, "dealer") == 0) {
+		pthread_t dcv_frontend_thrd;
 		bet_node_type = dealer;
-		retval = bet_parse_verus_dealer();
+		
+		// Start GUI backend thread for dealer FIRST - it must run regardless of backend errors
+		if (OS_thread_create(&dcv_frontend_thrd, NULL, (void *)bet_dcv_frontend_loop, NULL) != 0) {
+			dlg_error("[GUI] Failed to start GUI thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
+			retval = ERR_PTHREAD_LAUNCHING;
+		} else {
+			dlg_info("[GUI] GUI backend thread started for dealer on port %d", gui_ws_port);
+			// Detach the thread so it runs in background independently
+			pthread_detach(dcv_frontend_thrd);
+			// Give GUI thread a moment to start
+			sleep(1);
+		}
+		
+		// Start backend initialization - GUI will continue even if this fails
+		if (retval == OK) {
+			retval = bet_parse_verus_dealer();
+			if (retval != OK) {
+				dlg_warn("[Backend] Backend initialization failed: %s", bet_err_str(retval));
+				dlg_info("[GUI] GUI thread continues running on port %d despite backend error", gui_ws_port);
+				// Keep process alive so GUI thread continues
+				while (1) {
+					sleep(60);
+				}
+			}
+		}
 	} else if (strcmp(cmd, "p") == 0 || strcmp(cmd, "player") == 0) {
+		pthread_t player_frontend_read_thrd, player_frontend_write_thrd;
 		bet_node_type = player;
-		retval = handle_verus_player();
+		
+		// Start GUI backend threads for player FIRST - they must run regardless of backend errors
+		if (OS_thread_create(&player_frontend_read_thrd, NULL, (void *)bet_player_frontend_read_loop, NULL) != 0) {
+			dlg_error("[GUI] Failed to start player read thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
+			retval = ERR_PTHREAD_LAUNCHING;
+		} else if (OS_thread_create(&player_frontend_write_thrd, NULL, (void *)bet_player_frontend_write_loop, NULL) != 0) {
+			dlg_error("[GUI] Failed to start player write thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
+			retval = ERR_PTHREAD_LAUNCHING;
+		} else {
+			dlg_info("[GUI] GUI backend threads started for player on ports %d and 9001", gui_ws_port);
+			// Detach the threads so they run in background independently
+			pthread_detach(player_frontend_read_thrd);
+			pthread_detach(player_frontend_write_thrd);
+			// Give GUI threads a moment to start
+			sleep(1);
+		}
+		
+		// Start backend initialization - GUI will continue even if this fails
+		if (retval == OK) {
+			retval = handle_verus_player();
+			if (retval != OK) {
+				dlg_warn("[Backend] Backend initialization failed: %s", bet_err_str(retval));
+				dlg_info("[GUI] GUI threads continue running on ports %d and 9001 despite backend error", gui_ws_port);
+				// Keep process alive so GUI threads continue
+				while (1) {
+					sleep(60);
+				}
+			}
+		}
 	}
 	// Game commands
 	else if (strcmp(cmd, "game") == 0) {
@@ -573,13 +644,13 @@ struct pair256 deckgen_player(bits256 *playerprivs, bits256 *playercards, int32_
 	return (key);
 }
 
-int32_t sg777_deckgen_vendor(int32_t playerid, bits256 *cardprods, bits256 *finalcards, int32_t numcards,
+int32_t deckgen_vendor(int32_t playerid, bits256 *cardprods, bits256 *finalcards, int32_t numcards,
 			     bits256 *playercards,
 			     bits256 deckid) // given playercards[], returns cardprods[] and finalcards[]
 {
 	int32_t retval = OK;
 	static struct pair256 randcards[256];
-	static bits256 hash_temp[CARDS777_MAXCARDS];
+	static bits256 hash_temp[CARDS_MAXCARDS];
 	bits256 hash, xoverz, tmp[256];
 
 	deckgen_common2(randcards, numcards);
@@ -604,7 +675,7 @@ struct pair256 p2p_bvv_init(bits256 *keys, struct pair256 b_key, bits256 *blindi
 {
 	int32_t i, j, M;
 	uint8_t space[8192];
-	bits256 cardshares[CARDS777_MAXPLAYERS];
+	bits256 cardshares[CARDS_MAXPLAYERS];
 	struct enc_share temp;
 
 	for (i = 0; i < numcards; i++) {

@@ -6,9 +6,11 @@
 #include "commands.h"
 #include "storage.h"
 #include "misc.h"
-#include "cards777.h"
+#include "cards.h"
 #include "err.h"
 #include "switchs.h"
+#include "payment.h"
+// Legacy pub-sub functions removed - use Verus ID communication instead
 
 int32_t no_of_notaries;
 
@@ -97,9 +99,19 @@ void bet_compute_m_of_n_msig_addr()
 	msig_addr = chips_add_multisig_address();
 	dlg_info("The msig_address of the cashier nodes for payin tx \n %s", cJSON_Print(msig_addr));
 	if (msig_addr) {
-		legacy_m_of_n_msig_addr = (char *)malloc(strlen(jstr(msig_addr, "address")) + 1);
-		memset(legacy_m_of_n_msig_addr, 0x00, strlen(jstr(msig_addr, "address")) + 1);
-		strncpy(legacy_m_of_n_msig_addr, jstr(msig_addr, "address"), strlen(jstr(msig_addr, "address")));
+		const char *addr = jstr(msig_addr, "address");
+		if (addr == NULL) {
+			dlg_error("Invalid address in msig_addr");
+			return;
+		}
+		size_t addr_len = strlen(addr);
+		legacy_m_of_n_msig_addr = (char *)malloc(addr_len + 1);
+		if (legacy_m_of_n_msig_addr == NULL) {
+			dlg_error("Memory allocation failed for legacy_m_of_n_msig_addr");
+			return;
+		}
+		memcpy(legacy_m_of_n_msig_addr, addr, addr_len);
+		legacy_m_of_n_msig_addr[addr_len] = '\0';
 		//Import the multisig address incase if its not 1-of-1 and not belong to the local wallet.
 		if ((!chips_ismine(legacy_m_of_n_msig_addr)) && (chips_iswatchonly(legacy_m_of_n_msig_addr) == 0)) {
 			dlg_info("Importing msig_address ::%s, it takes a while", legacy_m_of_n_msig_addr);
@@ -208,13 +220,37 @@ int32_t bet_process_payout_tx(cJSON *argjson, struct cashier *cashier_info)
 {
 	int32_t retval = OK;
 	char *sql_query = NULL;
+	const char *tx_info_str = NULL;
+	const char *table_id_str = NULL;
+	int required_size;
 
-	sql_query = calloc(sql_query_size, sizeof(char));
-	sprintf(sql_query,
+	tx_info_str = cJSON_Print(cJSON_GetObjectItem(argjson, "tx_info"));
+	table_id_str = jstr(argjson, "table_id");
+	if (tx_info_str == NULL || table_id_str == NULL) {
+		dlg_error("Invalid tx_info or table_id");
+		return ERR_ARGS_NULL;
+	}
+
+	required_size = snprintf(NULL, 0,
 		"UPDATE c_tx_addr_mapping set payin_tx_id_status = 0, payout_tx_id = %s where table_id = \"%s\";",
-		cJSON_Print(cJSON_GetObjectItem(argjson, "tx_info")), jstr(argjson, "table_id"));
+		tx_info_str, table_id_str) + 1;
+
+	if (required_size > sql_query_size) {
+		sql_query = calloc(required_size, sizeof(char));
+	} else {
+		sql_query = calloc(sql_query_size, sizeof(char));
+	}
+	if (sql_query == NULL) {
+		if (tx_info_str) free((void *)tx_info_str);
+		return ERR_MEMORY_ALLOC;
+	}
+
+	snprintf(sql_query, required_size,
+		"UPDATE c_tx_addr_mapping set payin_tx_id_status = 0, payout_tx_id = %s where table_id = \"%s\";",
+		tx_info_str, table_id_str);
 	dlg_info("sql_query::%s", sql_query);
 	retval = bet_run_query(sql_query);
+	if (tx_info_str) free((void *)tx_info_str);
 	if (sql_query)
 		free(sql_query);
 
@@ -227,11 +263,33 @@ int32_t bet_process_game_info(cJSON *argjson, struct cashier *cashier_info)
 	char *sql_query = NULL;
 	cJSON *game_state = NULL;
 
-	sql_query = calloc(sql_query_size, sizeof(char));
 	game_state = cJSON_GetObjectItem(argjson, "game_state");
-	sprintf(sql_query, "INSERT into cashier_game_state values(\"%s\", \'%s\');", jstr(argjson, "table_id"),
-		cJSON_Print(game_state));
+	const char *table_id_str = jstr(argjson, "table_id");
+	const char *game_state_str = cJSON_Print(game_state);
+	int required_size;
+
+	if (table_id_str == NULL || game_state_str == NULL) {
+		dlg_error("Invalid table_id or game_state");
+		return ERR_ARGS_NULL;
+	}
+
+	required_size = snprintf(NULL, 0, "INSERT into cashier_game_state values(\"%s\", \'%s\');",
+		table_id_str, game_state_str) + 1;
+
+	if (required_size > sql_query_size) {
+		sql_query = calloc(required_size, sizeof(char));
+	} else {
+		sql_query = calloc(sql_query_size, sizeof(char));
+	}
+	if (sql_query == NULL) {
+		if (game_state_str) free((void *)game_state_str);
+		return ERR_MEMORY_ALLOC;
+	}
+
+	snprintf(sql_query, required_size, "INSERT into cashier_game_state values(\"%s\", \'%s\');",
+		table_id_str, game_state_str);
 	retval = bet_run_query(sql_query);
+	if (game_state_str) free((void *)game_state_str);
 	if (sql_query)
 		free(sql_query);
 	return retval;
@@ -254,12 +312,37 @@ cJSON *bet_resolve_game_dispute(cJSON *game_info)
 	validation_status = calloc(no_of_cashier_nodes, sizeof(int));
 	cashier_node_ips = calloc(no_of_cashier_nodes, sizeof(char *));
 
+	if (cashier_node_status == NULL || validation_status == NULL || cashier_node_ips == NULL) {
+		if (cashier_node_status) free(cashier_node_status);
+		if (validation_status) free(validation_status);
+		if (cashier_node_ips) free(cashier_node_ips);
+		return NULL;
+	}
+
 	min_cashiers = jint(game_info, "min_cashiers");
 
 	for (int32_t i = 0; i < cJSON_GetArraySize(msig_addr_nodes); i++) {
 		cashier_node_status[i] = 0;
 		cashier_node_ips[i] = calloc(ip_length, sizeof(char));
-		strcpy(cashier_node_ips[i], unstringify(cJSON_Print(cJSON_GetArrayItem(msig_addr_nodes, i))));
+		if (cashier_node_ips[i] == NULL) {
+			// Cleanup all previous allocations
+			for (int32_t j = 0; j < i; j++) {
+				free(cashier_node_ips[j]);
+			}
+			free(cashier_node_status);
+			free(validation_status);
+			free(cashier_node_ips);
+			return NULL;
+		}
+		char *ip_json = cJSON_Print(cJSON_GetArrayItem(msig_addr_nodes, i));
+		if (ip_json != NULL) {
+			const char *ip_str = unstringify(ip_json);
+			if (ip_str != NULL) {
+				strncpy(cashier_node_ips[i], ip_str, ip_length - 1);
+				cashier_node_ips[i][ip_length - 1] = '\0';
+			}
+			free(ip_json);
+		}
 		for (int32_t j = 0; j < no_of_notaries; j++) {
 			if (notary_status[j] == 1) {
 				if (strcmp(notary_node_ips[j], cashier_node_ips[i]) == 0) {
@@ -297,7 +380,13 @@ cJSON *bet_resolve_game_dispute(cJSON *game_info)
 		int signers = 0;
 		cJSON *hex = NULL, *tx = NULL;
 
-		strcpy(tx_ids[0], jstr(game_info, "tx_id"));
+		const char *tx_id_str = jstr(game_info, "tx_id");
+		if (tx_id_str != NULL) {
+			strncpy(tx_ids[0], tx_id_str, sizeof(tx_ids[0]) - 1);
+			tx_ids[0][sizeof(tx_ids[0]) - 1] = '\0';
+		} else {
+			tx_ids[0][0] = '\0';
+		}
 		raw_tx = chips_create_tx_from_tx_list(jstr(game_info, "addr"), no_of_in_txs, tx_ids);
 		dlg_info("raw_tx::%s", cJSON_Print(raw_tx));
 		for (int i = 0; i < no_of_cashier_nodes; i++) {
@@ -346,13 +435,33 @@ cJSON *bet_resolve_game_dispute(cJSON *game_info)
 			cJSON_AddStringToObject(update_tx_info, "payout_tx_id", unstringify(cJSON_Print(tx)));
 			bet_msg_multiple_cashiers(update_tx_info, cashier_node_ips, no_of_cashier_nodes);
 			char *sql_query = NULL;
-			sql_query = calloc(sql_query_size, sizeof(char));
-			sprintf(sql_query, "UPDATE player_tx_mapping set status = 0 where tx_id = \'%s\';",
-				jstr(game_info, "tx_id"));
-			bet_run_query(sql_query);
-			if (sql_query)
-				free(sql_query);
-			free_json(update_tx_info);
+			const char *tx_id_str = jstr(game_info, "tx_id");
+			int required_size;
+
+			if (tx_id_str == NULL) {
+				dlg_error("Invalid tx_id in game_info");
+				free_json(update_tx_info);
+			} else {
+				required_size = snprintf(NULL, 0, "UPDATE player_tx_mapping set status = 0 where tx_id = \'%s\';",
+					tx_id_str) + 1;
+
+				if (required_size > sql_query_size) {
+					sql_query = calloc(required_size, sizeof(char));
+				} else {
+					sql_query = calloc(sql_query_size, sizeof(char));
+				}
+				if (sql_query == NULL) {
+					dlg_error("Memory allocation failed for sql_query");
+					free_json(update_tx_info);
+				} else {
+					snprintf(sql_query, required_size, "UPDATE player_tx_mapping set status = 0 where tx_id = \'%s\';",
+						tx_id_str);
+					bet_run_query(sql_query);
+					if (sql_query)
+						free(sql_query);
+					free_json(update_tx_info);
+				}
+			}
 		}
 	}
 
@@ -404,10 +513,31 @@ static int32_t bet_update_tx_spent(cJSON *argjson)
 	int retval = OK;
 	char *sql_query = NULL;
 
-	sql_query = calloc(sql_query_size, sizeof(char));
-	sprintf(sql_query,
+	const char *payout_tx_id_str = jstr(argjson, "payout_tx_id");
+	const char *payin_tx_id_str = jstr(argjson, "payin_tx_id");
+	int required_size;
+
+	if (payout_tx_id_str == NULL || payin_tx_id_str == NULL) {
+		dlg_error("Invalid payout_tx_id or payin_tx_id");
+		return ERR_ARGS_NULL;
+	}
+
+	required_size = snprintf(NULL, 0,
 		"UPDATE c_tx_addr_mapping set payin_tx_id_status = 0, payout_tx_id = \'%s\' where payin_tx_id_status =\'%s\';",
-		jstr(argjson, "payout_tx_id"), jstr(argjson, "payin_tx_id"));
+		payout_tx_id_str, payin_tx_id_str) + 1;
+
+	if (required_size > sql_query_size) {
+		sql_query = calloc(required_size, sizeof(char));
+	} else {
+		sql_query = calloc(sql_query_size, sizeof(char));
+	}
+	if (sql_query == NULL) {
+		return ERR_MEMORY_ALLOC;
+	}
+
+	snprintf(sql_query, required_size,
+		"UPDATE c_tx_addr_mapping set payin_tx_id_status = 0, payout_tx_id = \'%s\' where payin_tx_id_status =\'%s\';",
+		payout_tx_id_str, payin_tx_id_str);
 	retval = bet_run_query(sql_query);
 	if (sql_query)
 		free(sql_query);
@@ -431,12 +561,35 @@ static cJSON *bet_reverse_disputed_tx(cJSON *game_info)
 	cashier_node_status = calloc(no_of_cashier_nodes, sizeof(int));
 	cashier_node_ips = calloc(no_of_cashier_nodes, sizeof(char *));
 
+	if (cashier_node_status == NULL || cashier_node_ips == NULL) {
+		if (cashier_node_status) free(cashier_node_status);
+		if (cashier_node_ips) free(cashier_node_ips);
+		return NULL;
+	}
+
 	min_cashiers = jint(game_info, "min_cashiers");
 
 	for (int32_t i = 0; i < cJSON_GetArraySize(msig_addr_nodes); i++) {
 		cashier_node_status[i] = 0;
 		cashier_node_ips[i] = calloc(ip_addr_len, sizeof(char));
-		strcpy(cashier_node_ips[i], unstringify(cJSON_Print(cJSON_GetArrayItem(msig_addr_nodes, i))));
+		if (cashier_node_ips[i] == NULL) {
+			// Cleanup all previous allocations
+			for (int32_t j = 0; j < i; j++) {
+				free(cashier_node_ips[j]);
+			}
+			free(cashier_node_status);
+			free(cashier_node_ips);
+			return NULL;
+		}
+		char *ip_json = cJSON_Print(cJSON_GetArrayItem(msig_addr_nodes, i));
+		if (ip_json != NULL) {
+			const char *ip_str = unstringify(ip_json);
+			if (ip_str != NULL) {
+				strncpy(cashier_node_ips[i], ip_str, ip_addr_len - 1);
+				cashier_node_ips[i][ip_addr_len - 1] = '\0';
+			}
+			free(ip_json);
+		}
 		for (int32_t j = 0; j < no_of_notaries; j++) {
 			if (notary_status[j] == 1) {
 				if (strcmp(notary_node_ips[j], cashier_node_ips[i]) == 0) {
@@ -455,7 +608,13 @@ static cJSON *bet_reverse_disputed_tx(cJSON *game_info)
 		int signers = 0;
 		cJSON *tx_to_sign = NULL;
 
-		strcpy(tx_ids[0], jstr(game_info, "tx_id"));
+		const char *tx_id_str = jstr(game_info, "tx_id");
+		if (tx_id_str != NULL) {
+			strncpy(tx_ids[0], tx_id_str, sizeof(tx_ids[0]) - 1);
+			tx_ids[0][sizeof(tx_ids[0]) - 1] = '\0';
+		} else {
+			tx_ids[0][0] = '\0';
+		}
 		if (chips_iswatchonly(jstr(game_info, "msig_addr")) == 0) {
 			dlg_info("Importing the msigaddress::%s", jstr(game_info, "msig_addr"));
 			chips_import_address(jstr(game_info, "msig_addr"));
@@ -532,13 +691,29 @@ int32_t bet_process_dispute(cJSON *argjson, struct cashier *cashier_info)
 	cJSON_AddStringToObject(dispute_response, "id", jstr(argjson, "id"));
 
 	hex_data = calloc(tx_data_size * 2, sizeof(char));
+	if (hex_data == NULL) {
+		dlg_error("Memory allocation failed for hex_data");
+		return ERR_MEMORY_ALLOC;
+	}
+
 	retval = chips_extract_data(jstr(argjson, "tx_id"), &hex_data);
 
-	if ((retval == OK) && (hex_data)) {
+	if (retval == OK && hex_data != NULL) {
 		data = calloc(tx_data_size, sizeof(char));
+		if (data == NULL) {
+			free(hex_data);
+			dlg_error("Memory allocation failed for data");
+			return ERR_MEMORY_ALLOC;
+		}
+
 		hexstr_to_str(hex_data, data);
-		player_info = cJSON_CreateObject();
 		player_info = cJSON_Parse(data);
+		if (player_info == NULL) {
+			free(hex_data);
+			free(data);
+			dlg_error("Failed to parse player_info from data");
+			return ERR_JSON_PARSING;
+		}
 
 		dlg_info("%s", cJSON_Print(player_info));
 		cJSON_AddStringToObject(player_info, "tx_id", jstr(argjson, "tx_id"));
@@ -546,6 +721,12 @@ int32_t bet_process_dispute(cJSON *argjson, struct cashier *cashier_info)
 		tx = bet_reverse_disputed_tx(player_info);
 		cJSON_AddItemToObject(dispute_response, "payout_tx", tx);
 	}
+
+	// Cleanup
+	if (hex_data) free(hex_data);
+	if (data) free(data);
+	if (player_info) cJSON_Delete(player_info);
+
 	dlg_info("%s", cJSON_Print(dispute_response));
 	// Nanomsg removed - no longer used
 	retval = OK;
@@ -557,8 +738,26 @@ static int32_t bet_process_dealer_info(cJSON *argjson)
 	int32_t retval = OK;
 	char *sql_query = NULL;
 
-	sql_query = calloc(sql_query_size, sizeof(char));
-	sprintf(sql_query, "INSERT OR IGNORE into dealers_info values(\'%s\');", jstr(argjson, "ip"));
+	const char *ip_str = jstr(argjson, "ip");
+	int required_size;
+
+	if (ip_str == NULL) {
+		dlg_error("Invalid ip in argjson");
+		return ERR_ARGS_NULL;
+	}
+
+	required_size = snprintf(NULL, 0, "INSERT OR IGNORE into dealers_info values(\'%s\');", ip_str) + 1;
+
+	if (required_size > sql_query_size) {
+		sql_query = calloc(required_size, sizeof(char));
+	} else {
+		sql_query = calloc(sql_query_size, sizeof(char));
+	}
+	if (sql_query == NULL) {
+		return ERR_MEMORY_ALLOC;
+	}
+
+	snprintf(sql_query, required_size, "INSERT OR IGNORE into dealers_info values(\'%s\');", ip_str);
 	retval = bet_run_query(sql_query);
 	if (sql_query)
 		free(sql_query);
@@ -637,7 +836,11 @@ static void bet_process_add_bvv(cJSON *argjson, struct cashier *cashier_info)
 	if (bvv_state == 0) {
 		bvv_state = 1;
 		memset(dealer_ip_for_bvv, 0x00, sizeof(dealer_ip_for_bvv));
-		strncpy(dealer_ip_for_bvv, jstr(argjson, "dealer_ip"), sizeof(dealer_ip_for_bvv));
+		const char *dealer_ip_str = jstr(argjson, "dealer_ip");
+		if (dealer_ip_str != NULL) {
+			strncpy(dealer_ip_for_bvv, dealer_ip_str, sizeof(dealer_ip_for_bvv) - 1);
+			dealer_ip_for_bvv[sizeof(dealer_ip_for_bvv) - 1] = '\0';
+		}
 		bet_bvv_thrd(jstr(argjson, "dealer_ip"), dealer_bvv_pub_sub_port);
 	}
 }
@@ -690,11 +893,9 @@ void bet_cashier_backend_thrd(void *_ptr)
 }
 void bet_cashier_server_loop(void *_ptr)
 {
-	int32_t recvlen = 0;
-	void *ptr = NULL;
-	cJSON *msgjson = NULL;
 	struct cashier *cashier_info = _ptr;
 	uint8_t flag = 1;
+	(void)_ptr; /* unused parameters */
 
 	dlg_info("cashier server node started");
 	// Nanomsg removed - communication now via websockets only
@@ -705,7 +906,7 @@ void bet_cashier_server_loop(void *_ptr)
 int32_t bet_submit_msig_raw_tx(cJSON *tx)
 {
 	cJSON *msig_raw_tx = NULL;
-	int32_t bytes, retval = 0;
+	int32_t retval = 0;
 
 	msig_raw_tx = cJSON_CreateObject();
 	cJSON_AddStringToObject(msig_raw_tx, "method", "raw_msig_tx");
@@ -743,43 +944,38 @@ char *bet_send_message_to_notary(cJSON *argjson, char *notary_node_ip)
 	return NULL;
 }
 
+// Legacy pub-sub functions - stubs (to be replaced with Verus ID communication)
 cJSON *bet_msg_cashier_with_response_id(cJSON *argjson, char *cashier_ip, char *method_name)
 {
-// Nanomsg removed - no longer used
-	char bind_sub_addr[128] = { 0 }, bind_push_addr[128] = { 0 };
-	void *ptr;
-	cJSON *response_info = NULL;
-
-	memset(bind_sub_addr, 0x00, sizeof(bind_sub_addr));
-	memset(bind_push_addr, 0x00, sizeof(bind_push_addr));
-
-	// Nanomsg removed - function no longer functional
-	dlg_error("bet_msg_cashier_with_response_id: nanomsg removed - not implemented");
+	dlg_warn("bet_msg_cashier_with_response_id: Legacy pub-sub removed - use Verus ID updates instead");
+	dlg_warn("  Replace with: get_cJSON_from_id_key() or update_cmm_from_id_key_data_cJSON()");
+	(void)argjson; (void)cashier_ip; (void)method_name;
 	return NULL;
-
-	return response_info;
 }
 
 int32_t bet_msg_cashier(cJSON *argjson, char *cashier_ip)
 {
-// Nanomsg removed - no longer used
-	char bind_push_addr[128] = { 0 };
-
-	memset(bind_push_addr, 0x00, sizeof(bind_push_addr));
-
-	// Nanomsg removed - function no longer functional
-	dlg_error("bet_msg_cashier: nanomsg removed - not implemented");
+	dlg_warn("bet_msg_cashier: Legacy pub-sub removed - use Verus ID updates instead");
+	(void)argjson; (void)cashier_ip;
 	return -1;
 }
 
 int32_t *bet_msg_multiple_cashiers(cJSON *argjson, char **cashier_ips, int no_of_cashiers)
 {
 	int *sent_status = NULL;
-
+	dlg_warn("bet_msg_multiple_cashiers: Legacy pub-sub removed - use Verus ID updates instead");
+	
 	sent_status = (int *)malloc(sizeof(int) * no_of_cashiers);
+	if (sent_status == NULL) {
+		dlg_error("bet_msg_multiple_cashiers: Memory allocation failed");
+		return NULL;
+	}
+	
+	// Mark all as failed since function is not functional
 	for (int32_t i = 0; i < no_of_cashiers; i++) {
 		sent_status[i] = bet_msg_cashier(argjson, cashier_ips[i]);
 	}
+	
 	return sent_status;
 }
 
@@ -822,18 +1018,50 @@ void bet_raise_dispute(char *tx_id)
 		}
 	}
 
-	sql_query = calloc(sql_query_size, sizeof(char));
+	const char *payout_tx_str = NULL;
+	const char *tx_id_str = jstr(dispute_info, "tx_id");
+	int required_size;
+
 	if ((response_info) && (jstr(response_info, "payout_tx"))) {
-		dlg_info("The tx::%s has been reversed with the payout_tx::%s", jstr(dispute_info, "tx_id"),
-			 jstr(response_info, "payout_tx"));
-		sprintf(sql_query,
+		payout_tx_str = jstr(response_info, "payout_tx");
+		dlg_info("The tx::%s has been reversed with the payout_tx::%s", tx_id_str, payout_tx_str);
+		if (payout_tx_str == NULL || tx_id_str == NULL) {
+			dlg_error("Invalid payout_tx or tx_id");
+			return;
+		}
+		required_size = snprintf(NULL, 0,
 			"UPDATE player_tx_mapping set status = 0, payout_tx_id = \'%s\' where tx_id = \'%s\';",
-			(jstr(response_info, "payout_tx")), tx_id);
+			payout_tx_str, tx_id_str) + 1;
 	} else {
-		dlg_info("Notaries are failed to recover this disputed tx :: %s", jstr(dispute_info, "tx_id"));
-		sprintf(sql_query,
+		dlg_info("Notaries are failed to recover this disputed tx :: %s", tx_id_str);
+		payout_tx_str = jstr(response_info, "payout_tx");
+		if (payout_tx_str == NULL || tx_id_str == NULL) {
+			dlg_error("Invalid payout_tx or tx_id");
+			return;
+		}
+		required_size = snprintf(NULL, 0,
 			"UPDATE player_tx_mapping set status = 2, payout_tx_id = \'%s\' where tx_id = \'%s\';",
-			(jstr(response_info, "payout_tx")), tx_id);
+			payout_tx_str, tx_id_str) + 1;
+	}
+
+	if (required_size > sql_query_size) {
+		sql_query = calloc(required_size, sizeof(char));
+	} else {
+		sql_query = calloc(sql_query_size, sizeof(char));
+	}
+	if (sql_query == NULL) {
+		dlg_error("Memory allocation failed for sql_query");
+		return;
+	}
+
+	if ((response_info) && (jstr(response_info, "payout_tx"))) {
+		snprintf(sql_query, required_size,
+			"UPDATE player_tx_mapping set status = 0, payout_tx_id = \'%s\' where tx_id = \'%s\';",
+			payout_tx_str, tx_id_str);
+	} else {
+		snprintf(sql_query, required_size,
+			"UPDATE player_tx_mapping set status = 2, payout_tx_id = \'%s\' where tx_id = \'%s\';",
+			payout_tx_str, tx_id_str);
 	}
 	bet_run_query(sql_query);
 	if (sql_query)
@@ -901,8 +1129,13 @@ void find_bvv()
 				cJSON_AddStringToObject(bvv_info, "method", "add_bvv");
 				cJSON_AddStringToObject(bvv_info, "dealer_ip", dealer_ip);
 				bet_msg_cashier(bvv_info, notary_node_ips[bvv_node_permutation[i]]);
-				strcpy(bvv_unique_id, jstr(response_info, "bvv_unique_id"));
-				bvv_unique_id[sizeof(bvv_unique_id) - 1] = '\0';
+				const char *bvv_id_str = jstr(response_info, "bvv_unique_id");
+				if (bvv_id_str != NULL) {
+					strncpy(bvv_unique_id, bvv_id_str, sizeof(bvv_unique_id) - 1);
+					bvv_unique_id[sizeof(bvv_unique_id) - 1] = '\0';
+				} else {
+					bvv_unique_id[0] = '\0';
+				}
 				dlg_info("BVV node IP is ::%s, its unique id is :: %s",
 					 notary_node_ips[bvv_node_permutation[i]], bvv_unique_id);
 				break;
@@ -916,11 +1149,193 @@ int32_t bet_clear_tables()
 	int32_t retval = -1;
 	char *sql_query = NULL;
 
+	// This query is fixed size, safe to use sql_query_size
 	sql_query = calloc(sql_query_size, sizeof(char));
-	sprintf(sql_query, "DELETE from dealers_info");
+	if (sql_query == NULL) {
+		return ERR_MEMORY_ALLOC;
+	}
+	snprintf(sql_query, sql_query_size, "DELETE from dealers_info");
 	retval = bet_run_query(sql_query);
 	if (sql_query)
 		free(sql_query);
 
 	return retval;
+}
+
+/***************************************************************
+Cashier frontend loop for GUI communication
+Handles wallet operations common to all node types
+****************************************************************/
+
+static char lws_cashier_buf[4096];
+static int lws_cashier_buf_length = 0;
+static struct lws *wsi_global_cashier = NULL;
+static int ws_cashier_connection_status = 0;
+
+/**
+ * Cashier frontend handler - handles wallet operations using common wallet functions
+ */
+int32_t bet_cashier_frontend(struct lws *wsi, cJSON *argjson)
+{
+	int32_t retval = OK;
+	char *method = NULL;
+	cJSON *response = NULL;
+
+	if (argjson == NULL) {
+		return ERR_ARGS_NULL;
+	}
+
+	method = jstr(argjson, "method");
+	if (method == NULL) {
+		dlg_warn("Cashier frontend: No method specified");
+		return ERR_ARGS_NULL;
+	}
+
+	dlg_info("Cashier frontend method::%s", method);
+
+	// Handle common wallet operations
+	if (strcmp(method, "get_bal_info") == 0) {
+		response = bet_wallet_get_bal_info();
+		if (response != NULL) {
+			char *response_str = cJSON_Print(response);
+			lws_write(wsi, (unsigned char *)response_str, strlen(response_str), 0);
+			free(response_str);
+			cJSON_Delete(response);
+		}
+	} else if (strcmp(method, "get_addr_info") == 0) {
+		response = bet_wallet_get_addr_info();
+		if (response != NULL) {
+			char *response_str = cJSON_Print(response);
+			lws_write(wsi, (unsigned char *)response_str, strlen(response_str), 0);
+			free(response_str);
+			cJSON_Delete(response);
+		}
+	} else if (strcmp(method, "withdrawRequest") == 0) {
+		response = bet_wallet_withdraw_request();
+		if (response != NULL) {
+			char *response_str = cJSON_Print(response);
+			lws_write(wsi, (unsigned char *)response_str, strlen(response_str), 0);
+			free(response_str);
+			cJSON_Delete(response);
+		}
+	} else if (strcmp(method, "withdraw") == 0) {
+		response = bet_wallet_withdraw(argjson);
+		if (response != NULL) {
+			char *response_str = cJSON_Print(response);
+			lws_write(wsi, (unsigned char *)response_str, strlen(response_str), 0);
+			free(response_str);
+			cJSON_Delete(response);
+		}
+	} else {
+		dlg_warn("Cashier frontend: Unknown method::%s", method);
+		retval = ERR_JSON_PARSING;
+	}
+
+	return retval;
+}
+
+/**
+ * WebSocket callback for cashier frontend
+ */
+int lws_callback_http_cashier(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
+{
+	cJSON *argjson = NULL;
+
+	switch (reason) {
+	case LWS_CALLBACK_RECEIVE:
+		memcpy(lws_cashier_buf + lws_cashier_buf_length, in, len);
+		lws_cashier_buf_length += len;
+		if (!lws_is_final_fragment(wsi))
+			break;
+		argjson = cJSON_Parse(lws_cashier_buf);
+		if (bet_cashier_frontend(wsi, argjson) != OK) {
+			dlg_warn("Failed to process cashier frontend command");
+		}
+		if (argjson != NULL) {
+			cJSON_Delete(argjson);
+		}
+		memset(lws_cashier_buf, 0x00, sizeof(lws_cashier_buf));
+		lws_cashier_buf_length = 0;
+		break;
+	case LWS_CALLBACK_ESTABLISHED:
+		wsi_global_cashier = wsi;
+		dlg_info("Cashier WebSocket connection established");
+		ws_cashier_connection_status = 1;
+		break;
+	case LWS_CALLBACK_SERVER_WRITEABLE:
+		// Handle writeable events if needed
+		break;
+	default:
+		break;
+	}
+	return 0;
+}
+
+static struct lws_protocols cashier_protocols[] = {
+	{ "http", lws_callback_http_cashier, 0, 0 },
+	{ NULL, NULL, 0, 0 } /* terminator */
+};
+
+static const struct lws_http_mount cashier_mount = {
+	/* .mount_next */ NULL,
+	/* .mountpoint */ "/",
+	/* .origin */ "./mount-origin",
+	/* .def */ "index.html",
+	/* .protocol */ NULL,
+	/* .cgienv */ NULL,
+	/* .extra_mimetypes */ NULL,
+	/* .interpret */ NULL,
+	/* .cgi_timeout */ 0,
+	/* .cache_max_age */ 0,
+	/* .auth_mask */ 0,
+	/* .cache_reusable */ 0,
+	/* .cache_revalidate */ 0,
+	/* .cache_intermediaries */ 0,
+	/* .origin_protocol */ LWSMPRO_FILE,
+	/* .mountpoint_len */ 1,
+	/* .basic_auth_login_file */ NULL,
+};
+
+static int cashier_interrupted = 0;
+
+/**
+ * Cashier frontend loop - WebSocket server for cashier GUI
+ */
+void bet_cashier_frontend_loop(void *_ptr)
+{
+	struct lws_context_creation_info cashier_info;
+	struct lws_context *cashier_context = NULL;
+	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
+
+	(void)_ptr; /* unused parameter */
+
+	lws_set_log_level(logs, NULL);
+	dlg_info("[GUI] Cashier WebSocket server starting on port %d | visit http://localhost:%d", gui_ws_port, gui_ws_port);
+	lwsl_user("[GUI] Cashier WebSocket server | visit http://localhost:%d", gui_ws_port);
+
+	memset(&cashier_info, 0, sizeof cashier_info);
+	cashier_info.port = gui_ws_port;
+	cashier_info.mounts = &cashier_mount;
+	cashier_info.protocols = cashier_protocols;
+	cashier_info.options = LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
+
+	cashier_context = lws_create_context(&cashier_info);
+	if (!cashier_context) {
+		lwsl_err("[GUI] Cashier lws init failed");
+		dlg_error("[GUI] Cashier lws_context error");
+		return;
+	}
+
+	dlg_info("[GUI] Cashier WebSocket server started successfully");
+	
+	// Keep running even if main thread exits
+	while (n >= 0) {
+		n = lws_service(cashier_context, 1000);
+	}
+	
+	dlg_info("[GUI] Cashier WebSocket server shutting down");
+
+	if (cashier_context) {
+		lws_context_destroy(cashier_context);
+	}
 }

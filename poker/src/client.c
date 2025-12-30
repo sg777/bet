@@ -15,14 +15,12 @@
 #define _POSIX_C_SOURCE 200809L /* For pclose, popen, strdup */
 
 #include <sqlite3.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "../../includes/cJSON.h"
 #include "../../includes/ppapi/c/pp_stdint.h"
-#include "../../log/macrologger.h"
+#include "macrologger.h"
 #include "bet.h"
-#include "cards777.h"
+#include "cards.h"
 #include "client.h"
 #include "commands.h"
 #include "gfshare.h"
@@ -37,6 +35,7 @@
 #include "config.h"
 #include "err.h"
 #include "switchs.h"
+// Legacy Lightning Network functions removed - use CHIPS transactions instead
 
 #define LWS_PLUGIN_STATIC
 
@@ -52,7 +51,7 @@ int32_t player_card_matrix[hand_size];
 int32_t player_card_values[hand_size];
 int32_t number_cards_drawn = 0;
 
-int32_t sharesflag[CARDS777_MAXCARDS][CARDS777_MAXPLAYERS];
+int32_t sharesflag[CARDS_MAXCARDS][CARDS_MAXPLAYERS];
 
 int32_t data_exists = 0;
 char player_gui_data[8196];
@@ -61,28 +60,28 @@ char player_payin_txid[100];
 struct deck_player_info player_info;
 struct deck_bvv_info bvv_info;
 int32_t no_of_shares = 0;
-int32_t player_cards[CARDS777_MAXCARDS];
+int32_t player_cards[CARDS_MAXCARDS];
 int32_t no_of_player_cards = 0;
 
 int32_t player_id = 0;
 int32_t player_joined = 0;
 
-bits256 all_v_hash[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS][CARDS777_MAXCARDS];
-bits256 all_g_hash[CARDS777_MAXPLAYERS][CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
-int32_t all_sharesflag[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS][CARDS777_MAXPLAYERS];
+bits256 all_v_hash[CARDS_MAXPLAYERS][CARDS_MAXCARDS][CARDS_MAXCARDS];
+bits256 all_g_hash[CARDS_MAXPLAYERS][CARDS_MAXPLAYERS][CARDS_MAXCARDS];
+int32_t all_sharesflag[CARDS_MAXPLAYERS][CARDS_MAXCARDS][CARDS_MAXPLAYERS];
 
-int32_t all_player_card_values[CARDS777_MAXPLAYERS][hand_size];
-int32_t all_number_cards_drawn[CARDS777_MAXPLAYERS];
-int32_t all_no_of_player_cards[CARDS777_MAXPLAYERS];
-bits256 all_playershares[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS][CARDS777_MAXPLAYERS];
+int32_t all_player_card_values[CARDS_MAXPLAYERS][hand_size];
+int32_t all_number_cards_drawn[CARDS_MAXPLAYERS];
+int32_t all_no_of_player_cards[CARDS_MAXPLAYERS];
+bits256 all_playershares[CARDS_MAXPLAYERS][CARDS_MAXCARDS][CARDS_MAXPLAYERS];
 
-struct enc_share *all_g_shares[CARDS777_MAXPLAYERS];
+struct enc_share *all_g_shares[CARDS_MAXPLAYERS];
 
 struct privatebet_info *bet_bvv = NULL;
 struct privatebet_vars *bvv_vars = NULL;
 
-struct privatebet_info *BET_player[CARDS777_MAXPLAYERS] = { NULL };
-struct deck_player_info all_players_info[CARDS777_MAXPLAYERS];
+struct privatebet_info *BET_player[CARDS_MAXPLAYERS] = { NULL };
+struct deck_player_info all_players_info[CARDS_MAXPLAYERS];
 
 char lws_buf_1[65536];
 int32_t lws_buf_length_1 = 0;
@@ -157,9 +156,9 @@ int32_t bet_bvv_init(cJSON *argjson, struct privatebet_info *bet, struct private
 	char str[65], enc_str[177];
 	cJSON *cjson_dcv_blind_cards = NULL, *cjson_peer_pubkeys = NULL, *bvv_init_info = NULL,
 	      *cjson_bvv_blind_cards = NULL, *cjson_shamir_shards = NULL;
-	bits256 dcv_blind_cards[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS], peer_pubkeys[CARDS777_MAXPLAYERS];
-	bits256 bvv_blinding_values[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
-	bits256 bvv_blind_cards[CARDS777_MAXPLAYERS][CARDS777_MAXCARDS];
+	bits256 dcv_blind_cards[CARDS_MAXPLAYERS][CARDS_MAXCARDS], peer_pubkeys[CARDS_MAXPLAYERS];
+	bits256 bvv_blinding_values[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
+	bits256 bvv_blind_cards[CARDS_MAXPLAYERS][CARDS_MAXCARDS];
 
 	bvv_info.deckid = jbits256(argjson, "deckid");
 	bvv_info.bvv_key.priv = curve25519_keypair(&bvv_info.bvv_key.prod);
@@ -172,8 +171,12 @@ int32_t bet_bvv_init(cJSON *argjson, struct privatebet_info *bet, struct private
 			dcv_blind_cards[i][j] = jbits256i(cjson_dcv_blind_cards, i * bet->range + j);
 		}
 	}
-	g_shares = (struct enc_share *)malloc(CARDS777_MAXPLAYERS * CARDS777_MAXPLAYERS * CARDS777_MAXCARDS *
+	g_shares = (struct enc_share *)malloc(CARDS_MAXPLAYERS * CARDS_MAXPLAYERS * CARDS_MAXCARDS *
 					      sizeof(struct enc_share));
+	if (g_shares == NULL) {
+		dlg_error("Memory allocation failed for g_shares");
+		return ERR_MEMORY_ALLOC;
+	}
 
 	for (uint32_t i = 0; i < bvv_info.maxplayers; i++) {
 		p2p_bvv_init(peer_pubkeys, bvv_info.bvv_key, bvv_blinding_values[i], bvv_blind_cards[i],
@@ -245,13 +248,15 @@ void bet_bvv_reset(struct privatebet_info *bet, struct privatebet_vars *vars)
 
 void bet_bvv_backend_loop(void *_ptr)
 {
-	int32_t recvlen, retval = OK;
-	cJSON *argjson = NULL;
-	void *ptr = NULL;
 	struct privatebet_info *bet = _ptr;
+	(void)_ptr; /* unused parameters */
 	struct privatebet_vars *VARS = NULL;
 
 	VARS = calloc(1, sizeof(*VARS));
+	if (VARS == NULL) {
+		dlg_error("Memory allocation failed for VARS");
+		return;
+	}
 	bet_permutation(bvv_info.permis, bet->range);
 	for (int i = 0; i < bet->range; i++) {
 		permis_b[i] = bvv_info.permis[i];
@@ -299,8 +304,26 @@ bits256 bet_decode_card(cJSON *argjson, struct privatebet_info *bet, struct priv
 
 	numplayers = bet->maxplayers;
 	shares = calloc(numplayers, sizeof(uint8_t *));
-	for (int i = 0; i < numplayers; i++)
+	if (shares == NULL) {
+		dlg_error("Memory allocation failed for shares");
+		if (retval) *retval = ERR_MEMORY_ALLOC;
+		bits256 zero = {0};
+		return zero;
+	}
+	for (int i = 0; i < numplayers; i++) {
 		shares[i] = calloc(sizeof(bits256), sizeof(uint8_t));
+		if (shares[i] == NULL) {
+			// Cleanup previous allocations
+			for (int j = 0; j < i; j++) {
+				free(shares[j]);
+			}
+			free(shares);
+			dlg_error("Memory allocation failed for shares[%d]", i);
+			if (retval) *retval = ERR_MEMORY_ALLOC;
+			bits256 zero = {0};
+			return zero;
+		}
+	}
 
 	M = (numplayers / 2) + 1;
 	for (int i = 0; i < M; i++) {
@@ -365,35 +388,19 @@ end:
 	return tmp;
 }
 
-// Lightning Network code removed - ln_pay_invoice() no longer used
-
+// Legacy Lightning Network functions - stubs (to be replaced with Verus/CHIPS)
 static int32_t bet_player_betting_invoice(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
 {
-	int argc, player_id, retval = OK;
-	char **argv = NULL, *invoice = NULL;
-	cJSON *invoice_info = NULL, *pay_response = NULL;
-	cJSON *action_response = NULL;
+	dlg_warn("bet_player_betting_invoice: Lightning Network deprecated - use CHIPS transactions instead");
+	(void)argjson; (void)bet; (void)vars;
+	return ERR_LN;
+}
 
-	player_id = jint(argjson, "playerID");
-	invoice = jstr(argjson, "invoice");
-	invoice_info = cJSON_Parse(invoice);
-	if (player_id == bet->myplayerid) {
-		argc = 3;
-		bet_alloc_args(argc, &argv);
-		argv = bet_copy_args(argc, "lightning-cli", "pay", jstr(invoice_info, "bolt11"));
-		pay_response = cJSON_CreateObject();
-		retval = make_command(argc, argv, &pay_response);
-		if (retval != OK) {
-			dlg_error("%s", cJSON_Print(pay_response));
-		}
-
-		action_response = cJSON_CreateObject();
-		action_response = cJSON_GetObjectItem(argjson, "actionResponse");
-		// Nanomsg removed - no longer used
-		retval = OK;
-	}
-	bet_dealloc_args(argc, &argv);
-	return retval;
+static int32_t bet_player_create_invoice(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars, char *deckid)
+{
+	dlg_warn("bet_player_create_invoice: Lightning Network deprecated - use CHIPS transactions instead");
+	(void)argjson; (void)bet; (void)vars; (void)deckid;
+	return ERR_LN;
 }
 
 static int32_t bet_player_winner(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
@@ -406,7 +413,9 @@ static int32_t bet_player_winner(cJSON *argjson, struct privatebet_info *bet, st
 		argc = 5;
 		bet_alloc_args(argc, &argv);
 
-		sprintf(params, "%s_%d", bits256_str(hexstr, player_info.deckid), jint(argjson, "winning_amount"));
+		const char *deckid_str = bits256_str(hexstr, player_info.deckid);
+		int winning_amount = jint(argjson, "winning_amount");
+		snprintf(params, sizeof(params), "%s_%d", deckid_str, winning_amount);
 		argv = bet_copy_args(argc, "lightning-cli", "invoice", jint(argjson, "winning_amount"), params,
 				     "Winning claim");
 
@@ -644,11 +653,15 @@ int32_t bet_client_bvv_init(cJSON *argjson, struct privatebet_info *bet, struct 
 {
 	int32_t retval = OK;
 	cJSON *cjson_bvv_blind_cards, *cjson_shamir_shards;
-	bits256 temp, player_privs[CARDS777_MAXCARDS];
+	bits256 temp, player_privs[CARDS_MAXCARDS];
 
 	player_info.bvvpubkey = jbits256(argjson, "bvvpubkey");
-	g_shares = (struct enc_share *)malloc(CARDS777_MAXPLAYERS * CARDS777_MAXPLAYERS * CARDS777_MAXCARDS *
+	g_shares = (struct enc_share *)malloc(CARDS_MAXPLAYERS * CARDS_MAXPLAYERS * CARDS_MAXCARDS *
 					      sizeof(struct enc_share));
+	if (g_shares == NULL) {
+		dlg_error("Memory allocation failed for g_shares");
+		return ERR_MEMORY_ALLOC;
+	}
 	cjson_bvv_blind_cards = cJSON_GetObjectItem(argjson, "bvvblindcards");
 
 	for (int i = 0; i < bet->numplayers; i++) {
@@ -824,31 +837,7 @@ static void bet_player_handle_invalid_method(char *method)
 	player_lws_write(error_info);
 }
 
-static void bet_player_withdraw_request()
-{
-	cJSON *withdraw_response_info = NULL;
-
-	withdraw_response_info = cJSON_CreateObject();
-	cJSON_AddStringToObject(withdraw_response_info, "method", "withdrawResponse");
-	cJSON_AddNumberToObject(withdraw_response_info, "balance", chips_get_balance());
-	cJSON_AddNumberToObject(withdraw_response_info, "tx_fee", chips_tx_fee);
-	cJSON_AddItemToObject(withdraw_response_info, "addrs", chips_list_address_groupings());
-	player_lws_write(withdraw_response_info);
-}
-
-static void bet_player_withdraw(cJSON *argjson)
-{
-	cJSON *withdraw_info = NULL;
-	double amount = 0.0;
-	char *addr = NULL;
-
-	amount = jdouble(argjson, "amount");
-	addr = jstr(argjson, "addr");
-	withdraw_info = cJSON_CreateObject();
-	cJSON_AddStringToObject(withdraw_info, "method", "withdrawInfo");
-	cJSON_AddItemToObject(withdraw_info, "tx", chips_transfer_funds(amount, addr));
-	player_lws_write(withdraw_info);
-}
+// bet_player_withdraw_request and bet_player_withdraw removed - now using common wallet handler bet_wallet_withdraw_request() and bet_wallet_withdraw()
 
 static void bet_player_wallet_info()
 {
@@ -894,11 +883,12 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 			break;
 		cases("get_bal_info")
 			{
-				cJSON *bal_info = cJSON_CreateObject();
-				cJSON_AddStringToObject(bal_info, "method", "bal_info");
-				cJSON_AddNumberToObject(bal_info, "chips_bal", chips_get_balance());
-				// Lightning Network support removed - ln_bal field removed
-				player_lws_write(bal_info);
+				// Common wallet functionality
+				cJSON *bal_info = bet_wallet_get_bal_info();
+				if (bal_info != NULL) {
+					player_lws_write(bal_info);
+					cJSON_Delete(bal_info);
+				}
 			}
 			break;
 		cases("player_join")
@@ -914,10 +904,24 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 			bet_player_wallet_info();
 			break;
 		cases("withdraw")
-			bet_player_withdraw(argjson);
+			{
+				// Common wallet functionality
+				cJSON *withdraw_info = bet_wallet_withdraw(argjson);
+				if (withdraw_info != NULL) {
+					player_lws_write(withdraw_info);
+					cJSON_Delete(withdraw_info);
+				}
+			}
 			break;
 		cases("withdrawRequest")
-			bet_player_withdraw_request();
+			{
+				// Common wallet functionality
+				cJSON *withdraw_response = bet_wallet_withdraw_request();
+				if (withdraw_response != NULL) {
+					player_lws_write(withdraw_response);
+					cJSON_Delete(withdraw_response);
+				}
+			}
 			break;
 		defaults
 			bet_player_handle_invalid_method(method);
@@ -1127,6 +1131,7 @@ void bet_player_frontend_read_loop(void *_ptr)
 	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
 
 	lws_set_log_level(logs, NULL);
+	dlg_info("[GUI] Player WebSocket read server starting on port 9001");
 
 	memset(&lws_player_info_read, 0, sizeof lws_player_info_read); /* otherwise uninitialized garbage */
 	lws_player_info_read.port = 9001;
@@ -1136,10 +1141,20 @@ void bet_player_frontend_read_loop(void *_ptr)
 
 	player_context_read = lws_create_context(&lws_player_info_read);
 	if (!player_context_read) {
-		dlg_error("lws init failed\n");
+		dlg_error("[GUI] Player read lws init failed");
+		return;
 	}
-	while (n >= 0 && !interrupted1) {
+	
+	dlg_info("[GUI] Player WebSocket read server started successfully");
+	
+	// Keep running even if main thread exits
+	while (n >= 0) {
 		n = lws_service(player_context_read, 1000);
+	}
+	
+	dlg_info("[GUI] Player WebSocket read server shutting down");
+	if (player_context_read) {
+		lws_context_destroy(player_context_read);
 	}
 }
 
@@ -1149,6 +1164,7 @@ void bet_player_frontend_write_loop(void *_ptr)
 
 	// signal(SIGINT,player_sigint_handler);
 	lws_set_log_level(logs, NULL);
+	dlg_info("[GUI] Player WebSocket write server starting on port %d", gui_ws_port);
 
 	memset(&lws_player_info_write, 0, sizeof lws_player_info_write); /* otherwise uninitialized garbage */
 	lws_player_info_write.port = gui_ws_port;
@@ -1158,10 +1174,20 @@ void bet_player_frontend_write_loop(void *_ptr)
 
 	player_context_write = lws_create_context(&lws_player_info_write);
 	if (!player_context_write) {
-		dlg_error("lws init failed\n");
+		dlg_error("[GUI] Player write lws init failed");
+		return;
 	}
-	while (n >= 0 && !interrupted1) {
+	
+	dlg_info("[GUI] Player WebSocket write server started successfully");
+	
+	// Keep running even if main thread exits
+	while (n >= 0) {
 		n = lws_service(player_context_write, 1000);
+	}
+	
+	dlg_info("[GUI] Player WebSocket write server shutting down");
+	if (player_context_write) {
+		lws_context_destroy(player_context_write);
 	}
 }
 
@@ -1180,6 +1206,10 @@ void bet_player_frontend_loop(void *_ptr)
 	if (lws_player_info.vhost_name == NULL) {
 		dlg_info("vhost is NULL");
 		lws_player_info.vhost_name = (char *)malloc(100 * sizeof(char));
+		if (lws_player_info.vhost_name == NULL) {
+			dlg_error("Memory allocation failed for vhost_name");
+			return;
+		}
 	} else {
 		dlg_info("vhost::%s\n", lws_player_info.vhost_name);
 	}
@@ -1230,18 +1260,66 @@ static int32_t bet_update_payin_tx_across_cashiers(cJSON *argjson, cJSON *txid)
 	char *sql_query = NULL;
 	cJSON *msig_addr_nodes = NULL, *payin_tx_insert_query = NULL;
 
-	sql_query = calloc(sql_query_size, sizeof(char));
-	sprintf(sql_query, "INSERT INTO player_tx_mapping values(%s,\'%s\',\'%s\',\'%s\',%d,%d, NULL);",
-		cJSON_Print(txid), table_id, req_identifier,
-		cJSON_Print(cJSON_GetObjectItem(argjson, "msig_addr_nodes")), tx_unspent, threshold_value);
+	const char *txid_str = cJSON_Print(txid);
+	const char *msig_addr_nodes_str = cJSON_Print(cJSON_GetObjectItem(argjson, "msig_addr_nodes"));
+	int required_size;
+
+	if (txid_str == NULL || msig_addr_nodes_str == NULL) {
+		dlg_error("Invalid txid or msig_addr_nodes");
+		if (txid_str) free((void *)txid_str);
+		if (msig_addr_nodes_str) free((void *)msig_addr_nodes_str);
+		return ERR_ARGS_NULL;
+	}
+
+	required_size = snprintf(NULL, 0, "INSERT INTO player_tx_mapping values(%s,\'%s\',\'%s\',\'%s\',%d,%d, NULL);",
+		txid_str, table_id, req_identifier, msig_addr_nodes_str, tx_unspent, threshold_value) + 1;
+
+	if (required_size > sql_query_size) {
+		sql_query = calloc(required_size, sizeof(char));
+	} else {
+		sql_query = calloc(sql_query_size, sizeof(char));
+	}
+	if (sql_query == NULL) {
+		free((void *)txid_str);
+		free((void *)msig_addr_nodes_str);
+		return ERR_MEMORY_ALLOC;
+	}
+
+	snprintf(sql_query, required_size, "INSERT INTO player_tx_mapping values(%s,\'%s\',\'%s\',\'%s\',%d,%d, NULL);",
+		txid_str, table_id, req_identifier, msig_addr_nodes_str, tx_unspent, threshold_value);
 	retval = bet_run_query(sql_query); // This is to update payin_tx in the players DB
+	free((void *)txid_str);
+	free((void *)msig_addr_nodes_str);
 
 	memset(sql_query, 0x00, sql_query_size);
 	msig_addr_nodes = cJSON_CreateArray();
 	msig_addr_nodes = cJSON_GetObjectItem(argjson, "msig_addr_nodes");
-	sprintf(sql_query, "INSERT INTO c_tx_addr_mapping values(%s,\'%s\',%d,\'%s\',\'%s\',1,NULL);",
-		cJSON_Print(txid), legacy_m_of_n_msig_addr, threshold_value, table_id,
-		unstringify(cJSON_Print(cJSON_GetObjectItem(argjson, "msig_addr_nodes"))));
+	
+	const char *msig_addr_nodes_unstr = unstringify(cJSON_Print(cJSON_GetObjectItem(argjson, "msig_addr_nodes")));
+	txid_str = cJSON_Print(txid);
+	if (txid_str == NULL || msig_addr_nodes_unstr == NULL) {
+		dlg_error("Invalid txid or msig_addr_nodes for second query");
+		if (txid_str) free((void *)txid_str);
+		if (sql_query) free(sql_query);
+		return ERR_ARGS_NULL;
+	}
+
+	required_size = snprintf(NULL, 0, "INSERT INTO c_tx_addr_mapping values(%s,\'%s\',%d,\'%s\',\'%s\',1,NULL);",
+		txid_str, legacy_m_of_n_msig_addr, threshold_value, table_id, msig_addr_nodes_unstr) + 1;
+
+	if (required_size > sql_query_size) {
+		char *new_sql_query = realloc(sql_query, required_size);
+		if (new_sql_query == NULL) {
+			free((void *)txid_str);
+			free(sql_query);
+			return ERR_MEMORY_ALLOC;
+		}
+		sql_query = new_sql_query;
+	}
+
+	snprintf(sql_query, required_size, "INSERT INTO c_tx_addr_mapping values(%s,\'%s\',%d,\'%s\',\'%s\',1,NULL);",
+		txid_str, legacy_m_of_n_msig_addr, threshold_value, table_id, msig_addr_nodes_unstr);
+	free((void *)txid_str);
 
 	payin_tx_insert_query = cJSON_CreateObject();
 	cJSON_AddStringToObject(payin_tx_insert_query, "method", "lock_in_tx");
@@ -1452,7 +1530,7 @@ static int32_t bet_player_handle_stack_info_resp(cJSON *argjson, struct privateb
 
 int32_t bet_player_stack_info_req(struct privatebet_info *bet)
 {
-	int32_t bytes, retval = OK;
+	int32_t retval = OK;
 	cJSON *stack_info_req = NULL;
 	char rand_str[65] = { 0 };
 	bits256 randval;
@@ -1761,9 +1839,8 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 
 void bet_player_backend_loop(void *_ptr)
 {
-	int32_t recvlen = 0, retval = OK;
-	void *ptr = NULL;
-	cJSON *msgjson = NULL;
+	int32_t retval = OK;
+	(void)_ptr; /* unused parameter */
 	struct privatebet_info *bet = _ptr;
 
 	retval = bet_player_stack_info_req(bet);
@@ -1794,7 +1871,7 @@ int32_t bet_player_reset(struct privatebet_info *bet, struct privatebet_vars *va
 
 	vars->pot = 0;
 	for (int i = 0; i < bet->maxplayers; i++) {
-		for (int j = 0; j < CARDS777_MAXROUNDS; j++) {
+		for (int j = 0; j < CARDS_MAXROUNDS; j++) {
 			vars->bet_actions[i][j] = 0;
 			vars->betamount[i][j] = 0;
 		}

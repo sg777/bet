@@ -15,13 +15,13 @@
 
 #include "bet.h"
 #include "gfshare.h"
-#include "cards777.h"
+#include "cards.h"
 
 int32_t bet_permutation(int32_t *permi, int32_t numcards)
 {
 	uint32_t x;
-	int32_t i, nonz, n, pos, desti[CARDS777_MAXCARDS];
-	uint8_t mask[CARDS777_MAXCARDS / 8 + 1];
+	int32_t i, nonz, n, pos, desti[CARDS_MAXCARDS];
+	uint8_t mask[CARDS_MAXCARDS / 8 + 1];
 	memset(desti, 0, sizeof(desti));
 	for (i = 0; i < numcards; i++)
 		desti[i] = i;

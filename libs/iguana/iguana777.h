@@ -92,14 +92,25 @@
 struct supernet_info;
 struct exchange_info;
 
-#include "../crypto777/OS_portable.h"
-#include "../../datachain/datachain.h"
+#include "../crypto/OS_portable.h"
+// Removed: datachain, gecko, basilisk folders are not used by poker
+// #include "../../datachain/datachain.h"
 
 #include "../../includes/iguana_defines.h"
 #include "../../includes/iguana_types.h"
 #include "../../includes/iguana_structs.h"
-#include "../../basilisk/basilisk.h"
+// #include "../../basilisk/basilisk.h"
 #include "dPoW.h"
+
+// Forward declarations for removed basilisk/datachain/gecko types (not used by poker)
+#ifndef INSTANTDEX_DECKSIZE
+#define INSTANTDEX_DECKSIZE 52
+#endif
+struct basilisk_rawtx;
+struct basilisk_swapinfo;
+struct basilisk_info;
+struct datachain_info;
+struct delayedPoW_info;
 
 struct supernet_address
 {
@@ -154,7 +165,7 @@ struct supernet_info
     int32_t maxdelay,IAMRELAY,IAMNOTARY,IAMLP,publicRPC,basilisk_busy,genesisresults,remoteorigin;
     uint32_t expiration,dirty,DEXactive,DEXpoll,totalcoins,nanoinit,lastdexrequestid,dexcrcs[1024];
     uint16_t argport,rpcport;
-    struct basilisk_info basilisks;
+    struct basilisk_info *basilisks;  // Changed to pointer since type is incomplete
     struct jumblr_item *jumblrs;
     struct exchange_info *tradingexchanges[SUPERNET_MAXEXCHANGES]; int32_t numexchanges;
     struct iguana_waccount *wallet;
@@ -168,7 +179,7 @@ struct supernet_info
     struct basilisk_request DEXaccept;
     FILE *dexfp;
     struct dpow_info *DPOWS[8192]; int32_t numdpows,dpowsock,dexsock,pubsock,repsock,subsock,reqsock;
-    struct delayedPoW_info dPoW;
+    struct delayedPoW_info *dPoW;  // Changed to pointer since type is incomplete
     struct basilisk_spend *spends; int32_t numspends;
     char bindaddr[64];
     char blocktrail_apikey[256];
@@ -209,8 +220,8 @@ struct basilisk_swap
     int32_t subsock,pushsock,connected,aliceunconf,depositunconf,paymentunconf; uint32_t lasttime,aborted;
     FILE *fp;
     bits256 persistent_privkey,persistent_pubkey;
-    struct basilisk_swapinfo I;
-    struct basilisk_rawtx bobdeposit,bobpayment,alicepayment,myfee,otherfee,aliceclaim,alicespend,bobreclaim,bobspend,bobrefund,alicereclaim;
+    struct basilisk_swapinfo *I;  // Changed to pointer since type is incomplete
+    struct basilisk_rawtx *bobdeposit,*bobpayment,*alicepayment,*myfee,*otherfee,*aliceclaim,*alicespend,*bobreclaim,*bobspend,*bobrefund,*alicereclaim;  // Changed to pointers
     bits256 privkeys[INSTANTDEX_DECKSIZE];
     struct basilisk_swapmessage *messages; int32_t nummessages;
     char Bdeposit[64],Bpayment[64];
@@ -221,7 +232,7 @@ struct basilisk_swap
 
 #include "../includes/iguana_funcs.h"
 #include "../includes/iguana_globals.h"
-#include "../gecko/gecko.h"
+// #include "../gecko/gecko.h"  // Removed: gecko folder not used by poker
 
 #ifndef MAX
 #define MAX(a,b) ((a) >= (b) ? (a) : (b))

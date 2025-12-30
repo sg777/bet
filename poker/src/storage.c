@@ -4,10 +4,7 @@
 #include "err.h"
 #include "vdxf.h"
 
-#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
 #include <pwd.h>
 
 #define no_of_tables 13
@@ -68,9 +65,11 @@ int32_t sqlite3_check_if_table_id_exists(const char *table_id)
 			break;
 		}
 	}
-	sqlite3_finalize(stmt);
-	sqlite3_close(db);
 end:
+	if (stmt)
+		sqlite3_finalize(stmt);
+	if (db)
+		sqlite3_close(db);
 	if (sql_query)
 		free(sql_query);
 	return retval;
@@ -98,9 +97,11 @@ int32_t sqlite3_check_if_table_exists(sqlite3 *db, const char *table_name)
 			break;
 		}
 	}
-	sqlite3_finalize(stmt);
-	sqlite3_close(db);
 end:
+	if (stmt)
+		sqlite3_finalize(stmt);
+	if (db)
+		sqlite3_close(db);
 	if (sql_query)
 		free(sql_query);
 	return retval;
@@ -186,7 +187,6 @@ void bet_create_schema()
 	sqlite3_close(db);
 	if (sql_query)
 		free(sql_query);
-	sqlite3_close(db);
 }
 
 void bet_sqlite3_init()
@@ -213,7 +213,7 @@ cJSON *sqlite3_get_dealer_info_details()
 {
 	sqlite3_stmt *stmt = NULL;
 	int rc;
-	sqlite3 *db;
+	sqlite3 *db = NULL;
 	char *sql_query = NULL;
 	cJSON *dealers_info = NULL;
 
@@ -229,12 +229,13 @@ cJSON *sqlite3_get_dealer_info_details()
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
 		cJSON_AddItemToArray(dealers_info, cJSON_CreateString((const char *)sqlite3_column_text(stmt, 0)));
 	}
-	sqlite3_finalize(stmt);
-	sqlite3_close(db);
 end:
+	if (stmt)
+		sqlite3_finalize(stmt);
+	if (db)
+		sqlite3_close(db);
 	if (sql_query)
 		free(sql_query);
-	sqlite3_close(db);
 	return dealers_info;
 }
 
@@ -243,7 +244,7 @@ cJSON *sqlite3_get_game_details(int32_t opt)
 	sqlite3_stmt *stmt = NULL, *sub_stmt = NULL;
 	char *sql_query = NULL, *sql_sub_query = NULL;
 	int rc;
-	sqlite3 *db;
+	sqlite3 *db = NULL;
 	cJSON *game_info = NULL;
 
 	game_info = cJSON_CreateArray();
@@ -286,14 +287,17 @@ cJSON *sqlite3_get_game_details(int32_t opt)
 		memset(sql_sub_query, 0x00, sql_query_size);
 		cJSON_AddItemToArray(game_info, game_obj);
 	}
-	sqlite3_finalize(stmt);
-	sqlite3_close(db);
 end:
+	if (sub_stmt)
+		sqlite3_finalize(sub_stmt);
+	if (stmt)
+		sqlite3_finalize(stmt);
+	if (db)
+		sqlite3_close(db);
 	if (sql_query)
 		free(sql_query);
 	if (sql_sub_query)
 		free(sql_sub_query);
-	sqlite3_close(db);
 	return game_info;
 }
 
@@ -301,7 +305,7 @@ cJSON *bet_show_fail_history()
 {
 	sqlite3_stmt *stmt = NULL;
 	int retval = OK;
-	sqlite3 *db;
+	sqlite3 *db = NULL;
 	char *sql_query = NULL, *data = NULL, *hex_data = NULL;
 	cJSON *game_fail_info = NULL;
 
@@ -336,16 +340,17 @@ cJSON *bet_show_fail_history()
 		cJSON_AddItemToObject(game_obj, "game_details", cJSON_Parse(data));
 		cJSON_AddItemToArray(game_fail_info, game_obj);
 	}
-	sqlite3_finalize(stmt);
-	sqlite3_close(db);
 end:
+	if (stmt)
+		sqlite3_finalize(stmt);
+	if (db)
+		sqlite3_close(db);
 	if (sql_query)
 		free(sql_query);
 	if (data)
 		free(data);
 	if (hex_data)
 		free(hex_data);
-	sqlite3_close(db);
 
 	return game_fail_info;
 }
@@ -355,7 +360,7 @@ cJSON *bet_show_success_history()
 	int32_t retval = OK;
 	char *sql_query = NULL, *hex_data = NULL, *data = NULL;
 	cJSON *game_success_info = NULL;
-	sqlite3 *db;
+	sqlite3 *db = NULL;
 	sqlite3_stmt *stmt = NULL;
 
 	db = bet_get_db_instance();
@@ -390,16 +395,17 @@ cJSON *bet_show_success_history()
 		cJSON_AddItemToObject(game_obj, "game_details", cJSON_Parse(data));
 		cJSON_AddItemToArray(game_success_info, game_obj);
 	}
-	sqlite3_finalize(stmt);
-	sqlite3_close(db);
 end:
+	if (stmt)
+		sqlite3_finalize(stmt);
+	if (db)
+		sqlite3_close(db);
 	if (sql_query)
 		free(sql_query);
 	if (data)
 		free(data);
 	if (hex_data)
 		free(hex_data);
-	sqlite3_close(db);
 
 	return game_success_info;
 }
@@ -466,7 +472,7 @@ int32_t sqlite3_get_highest_bh()
 {
 	sqlite3_stmt *stmt = NULL;
 	int32_t rc = OK, bh = 0;
-	sqlite3 *db;
+	sqlite3 *db = NULL;
 	char *sql_query = NULL;
 
 	db = bet_get_db_instance();
@@ -479,13 +485,14 @@ int32_t sqlite3_get_highest_bh()
 		if ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
 			bh = sqlite3_column_int(stmt, 0);
 		}
-		sqlite3_finalize(stmt);
 	}
-	sqlite3_close(db);
 end:
+	if (stmt)
+		sqlite3_finalize(stmt);
+	if (db)
+		sqlite3_close(db);
 	if (sql_query)
 		free(sql_query);
-	sqlite3_close(db);
 	return bh;
 }
 
@@ -499,7 +506,8 @@ int32_t insert_player_deck_info_txid_pa_t_d(char *tx_id, char *pa, char *table_i
 		"insert into player_deck_info(tx_id, pa, table_id, dealer_id) values(\'%s\', \'%s\', \'%s\', \'%s\')",
 		tx_id, pa, table_id, dealer_id);
 	retval = bet_run_query(sql_query);
-
+	if (sql_query)
+		free(sql_query);
 	return retval;
 }
 
@@ -512,7 +520,7 @@ int32_t update_player_deck_info_a_rG(char *tx_id)
 	bits256_str(player_priv, p_deck_info.p_kp.priv);
 
 	cardinfo = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddistr(cardinfo, bits256_str(str, p_deck_info.player_r[i].priv));
 	}
 	cJSON_hex(cardinfo, &player_deck_priv);
@@ -521,6 +529,12 @@ int32_t update_player_deck_info_a_rG(char *tx_id)
 	sprintf(sql_query, "update player_deck_info set player_priv = \'%s\', deck_priv = \'%s\' where tx_id = \'%s\'",
 		player_priv, player_deck_priv, tx_id);
 	retval = bet_run_query(sql_query);
+	if (sql_query)
+		free(sql_query);
+	if (player_deck_priv)
+		free(player_deck_priv);
+	if (cardinfo)
+		cJSON_Delete(cardinfo);
 	return retval;
 }
 
@@ -533,6 +547,8 @@ int32_t update_player_deck_info_game_id_p_id(char *tx_id)
 	sprintf(sql_query, "update player_deck_info set game_id = \'%s\', player_id = %d where tx_id = \'%s\'",
 		bits256_str(game_id_str, p_deck_info.game_id), p_deck_info.player_id, tx_id);
 	retval = bet_run_query(sql_query);
+	if (sql_query)
+		free(sql_query);
 	return retval;
 }
 
@@ -543,13 +559,13 @@ int32_t insert_dealer_deck_info()
 	cJSON *d_perm = NULL, *d_blindinfo = NULL;
 
 	d_perm = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddi64bits(d_perm, d_deck_info.d_permi[i]);
 	}
 	cJSON_hex(d_perm, &perm);
 
 	d_blindinfo = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddistr(d_blindinfo, bits256_str(str, d_deck_info.dealer_r[i].priv));
 	}
 	cJSON_hex(d_blindinfo, &dealer_deck_priv);
@@ -559,6 +575,16 @@ int32_t insert_dealer_deck_info()
 		"insert into dealer_deck_info(game_id, perm, dealer_deck_priv) values(\'%s\', \'%s\', \'%s\')",
 		game_id_str, perm, dealer_deck_priv);
 	retval = bet_run_query(sql_query);
+	if (sql_query)
+		free(sql_query);
+	if (perm)
+		free(perm);
+	if (dealer_deck_priv)
+		free(dealer_deck_priv);
+	if (d_perm)
+		cJSON_Delete(d_perm);
+	if (d_blindinfo)
+		cJSON_Delete(d_blindinfo);
 	return retval;
 }
 
@@ -569,7 +595,7 @@ int32_t insert_cashier_deck_info(char *table_id)
 	cJSON *t_player_info = NULL, *b_perm = NULL, *b_blindinfo = NULL;
 
 	b_perm = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddi64bits(b_perm, b_deck_info.b_permi[i]);
 	}
 	cJSON_hex(b_perm, &perm);
@@ -582,7 +608,7 @@ int32_t insert_cashier_deck_info(char *table_id)
 	for (int32_t i = 0; i < num_players; i++) {
 		memset(sql_query, 0x00, sql_query_size);
 		b_blindinfo = cJSON_CreateArray();
-		for (int j = 0; j < CARDS777_MAXCARDS; j++) {
+		for (int j = 0; j < CARDS_MAXCARDS; j++) {
 			jaddistr(b_blindinfo, bits256_str(str, b_deck_info.cashier_r[i][j].priv));
 		}
 		cJSON_hex(b_blindinfo, &cashier_deck_priv);
@@ -590,6 +616,20 @@ int32_t insert_cashier_deck_info(char *table_id)
 			"insert into cashier_deck_info(game_id, perm, player_id, cashier_deck_priv) values(\'%s\', \'%s\', %d, \'%s\')",
 			game_id_str, perm, i, cashier_deck_priv);
 		retval = bet_run_query(sql_query);
+		if (cashier_deck_priv) {
+			free(cashier_deck_priv);
+			cashier_deck_priv = NULL;
+		}
+		if (b_blindinfo) {
+			cJSON_Delete(b_blindinfo);
+			b_blindinfo = NULL;
+		}
 	}
+	if (sql_query)
+		free(sql_query);
+	if (perm)
+		free(perm);
+	if (b_perm)
+		cJSON_Delete(b_perm);
 	return retval;
 }

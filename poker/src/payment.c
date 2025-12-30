@@ -24,136 +24,51 @@
 /***************************************************************
 Here contains the functions which are specific to DCV
 ****************************************************************/
-// bet_dcv_create_invoice_request removed - broken code (references undefined 'bytes'), Lightning Network removed
-
-// bet_dcv_invoice_pay removed - Lightning Network removed, calls removed bet_dcv_create_invoice_request
-
+// Legacy Lightning Network functions - stubs (to be replaced with CHIPS transactions)
 int32_t bet_dcv_pay(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
 {
-	cJSON *invoiceInfo = NULL, *payResponse = NULL;
-	int argc, retval = OK;
-	char **argv = NULL, *invoice = NULL;
-
-	invoice = jstr(argjson, "invoice");
-	invoiceInfo = cJSON_Parse(invoice);
-	argc = 3;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, "lightning-cli", "pay", jstr(invoiceInfo, "bolt11"));
-
-	payResponse = cJSON_CreateObject();
-	retval = make_command(argc, argv, &payResponse);
-	if (retval != OK) {
-		dlg_error("%s", bet_err_str(retval));
-	}
-	bet_dealloc_args(argc, &argv);
-	return retval;
+	dlg_warn("bet_dcv_pay: Lightning Network deprecated - use CHIPS transactions instead");
+	(void)argjson; (void)bet; (void)vars;
+	return ERR_LN;
 }
 
 void bet_dcv_paymentloop(void *_ptr)
 {
-	int32_t recvlen;
-	uint8_t flag = 1;
-	void *ptr;
-	cJSON *msgjson = NULL;
-	char *method = NULL;
-	struct privatebet_info *bet = _ptr;
-	// Nanomsg removed - communication now via websockets only
-	// The payment loop is handled through websocket callbacks
-	(void)flag; // Suppress unused parameter warning
-	(void)bet; // Suppress unused parameter warning
+	// Legacy function - no longer used
+	(void)_ptr;
+	dlg_warn("bet_dcv_paymentloop: Legacy function called - no longer functional");
 }
 
 /***************************************************************
 Here contains the functions which are specific to players and BVV
 ****************************************************************/
-
-int32_t bet_player_create_invoice(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars,
-				  char *deckid)
-{
-	int argc, retval = OK;
-	char **argv = NULL, params[2][arg_size];
-	cJSON *invoiceInfo = NULL, *invoice = NULL;
-
-	if (jint(argjson, "playerid") == bet->myplayerid) {
-		vars->player_funds += jint(argjson, "betAmount");
-
-		argc = 5;
-		bet_alloc_args(argc, &argv);
-		argv = bet_copy_args(argc, "lightning-cli", "invoice", params[0], params[1], "Winning claim");
-		invoice = cJSON_CreateObject();
-		retval = make_command(argc, argv, &invoice);
-		if (retval != OK) {
-			dlg_error("%s", bet_err_str(retval));
-		}
-		dlg_info("invoice::%s\n", cJSON_Print(invoice));
-		invoiceInfo = cJSON_CreateObject();
-		cJSON_AddStringToObject(invoiceInfo, "method", "invoice");
-		cJSON_AddNumberToObject(invoiceInfo, "playerid", bet->myplayerid);
-		cJSON_AddStringToObject(invoiceInfo, "label", params[1]);
-		cJSON_AddStringToObject(invoiceInfo, "invoice", cJSON_Print(invoice));
-		// Nanomsg removed - no longer used
-		retval = OK;
-	}
-	bet_dealloc_args(argc, &argv);
-	return retval;
-}
-
+// Legacy Lightning Network invoice functions - stubs (to be replaced with CHIPS transactions)
 int32_t bet_player_create_invoice_request(cJSON *argjson, struct privatebet_info *bet, int32_t amount)
 {
-	int32_t retval = OK;
-	cJSON *betInfo = NULL;
-
-	betInfo = cJSON_CreateObject();
-	cJSON_AddStringToObject(betInfo, "method", "invoiceRequest");
-	cJSON_AddNumberToObject(betInfo, "round", jint(argjson, "round"));
-	cJSON_AddNumberToObject(betInfo, "playerID", bet->myplayerid);
-	cJSON_AddNumberToObject(betInfo, "betAmount", amount);
-
-	// Nanomsg removed - no longer used
-	retval = OK;
-	return retval;
+	dlg_warn("bet_player_create_invoice_request: Lightning Network deprecated");
+	(void)argjson; (void)bet; (void)amount;
+	return ERR_LN;
 }
 
 int32_t bet_player_invoice_request(cJSON *argjson, cJSON *actionResponse, struct privatebet_info *bet, int32_t amount)
 {
-	int32_t retval = OK;
-	cJSON *betInfo = NULL;
-
-	betInfo = cJSON_CreateObject();
-	cJSON_AddStringToObject(betInfo, "method", "bettingInvoiceRequest");
-	cJSON_AddNumberToObject(betInfo, "round", jint(argjson, "round"));
-	cJSON_AddNumberToObject(betInfo, "playerID", bet->myplayerid);
-	cJSON_AddNumberToObject(betInfo, "invoice_amount", amount);
-	cJSON_AddItemToObject(betInfo, "actionResponse", actionResponse);
-	dlg_info("%s", cJSON_Print(betInfo));
-	// Nanomsg removed - no longer used
-	retval = OK;
-	return retval;
+	dlg_warn("bet_player_invoice_request: Lightning Network deprecated");
+	(void)argjson; (void)actionResponse; (void)bet; (void)amount;
+	return ERR_LN;
 }
 
 int32_t bet_player_invoice_pay(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars, int amount)
 {
-	pthread_t pay_t;
-	int32_t retval = OK;
-
-	retval = bet_player_create_invoice_request(argjson, bet, amount);
-	if (retval != OK)
-		return retval;
-
-	if (OS_thread_create(&pay_t, NULL, (void *)bet_player_paymentloop, (void *)bet) != 0) {
-		retval = ERR_PTHREAD_LAUNCHING;
-	}
-	if (pthread_join(pay_t, NULL)) {
-		retval = ERR_PTHREAD_JOINING;
-	}
-	return retval;
+	dlg_warn("bet_player_invoice_pay: Lightning Network deprecated - use CHIPS transactions instead");
+	(void)argjson; (void)bet; (void)vars; (void)amount;
+	return ERR_LN;
 }
 
 void bet_player_paymentloop(void *_ptr)
 {
-	// Nanomsg removed - communication now via websockets only
-	// The payment loop is handled through websocket callbacks
-	(void)_ptr; // Suppress unused parameter warning
+	// Legacy function - no longer used
+	(void)_ptr;
+	dlg_warn("bet_player_paymentloop: Legacy function called - no longer functional");
 }
 
 int32_t bet_player_log_bet_info(cJSON *argjson, struct privatebet_info *bet, int32_t amount, int32_t action)
@@ -188,4 +103,84 @@ int32_t bet_player_log_bet_info(cJSON *argjson, struct privatebet_info *bet, int
 		dlg_error("%s", bet_err_str(retval));
 	}
 	return retval;
+}
+
+/***************************************************************
+Common wallet functionality for all node types (dealer, player, cashier)
+These functions return cJSON response objects that can be sent via
+the node-specific WebSocket write functions.
+****************************************************************/
+
+/**
+ * Handle get_bal_info wallet request - common for all node types
+ * Returns a cJSON object with balance information
+ */
+cJSON *bet_wallet_get_bal_info(void)
+{
+	cJSON *bal_info = NULL;
+
+	bal_info = cJSON_CreateObject();
+	cJSON_AddStringToObject(bal_info, "method", "bal_info");
+	cJSON_AddNumberToObject(bal_info, "chips_bal", chips_get_balance());
+	// Lightning Network support removed - ln_bal field removed
+
+	return bal_info;
+}
+
+/**
+ * Handle get_addr_info wallet request - common for all node types
+ * Returns a cJSON object with address information
+ */
+cJSON *bet_wallet_get_addr_info(void)
+{
+	cJSON *addr_info = NULL;
+
+	addr_info = cJSON_CreateObject();
+	cJSON_AddStringToObject(addr_info, "method", "addr_info");
+	cJSON_AddStringToObject(addr_info, "chips_addr", chips_get_new_address());
+	// Lightning Network support removed - ln_addr field removed
+
+	return addr_info;
+}
+
+/**
+ * Handle withdrawRequest wallet request - common for all node types
+ * Returns a cJSON object with withdrawal request information
+ */
+cJSON *bet_wallet_withdraw_request(void)
+{
+	cJSON *withdraw_response_info = NULL;
+
+	withdraw_response_info = cJSON_CreateObject();
+	cJSON_AddStringToObject(withdraw_response_info, "method", "withdrawResponse");
+	cJSON_AddNumberToObject(withdraw_response_info, "balance", chips_get_balance());
+	cJSON_AddNumberToObject(withdraw_response_info, "tx_fee", chips_tx_fee);
+	cJSON_AddItemToObject(withdraw_response_info, "addrs", chips_list_address_groupings());
+
+	return withdraw_response_info;
+}
+
+/**
+ * Handle withdraw wallet request - common for all node types
+ * Returns a cJSON object with withdrawal transaction information
+ */
+cJSON *bet_wallet_withdraw(cJSON *argjson)
+{
+	cJSON *withdraw_info = NULL;
+	double amount = 0.0;
+	char *addr = NULL;
+
+	amount = jdouble(argjson, "amount");
+	addr = jstr(argjson, "addr");
+	
+	if (addr == NULL || amount <= 0.0) {
+		dlg_error("Invalid withdraw parameters");
+		return NULL;
+	}
+
+	withdraw_info = cJSON_CreateObject();
+	cJSON_AddStringToObject(withdraw_info, "method", "withdrawInfo");
+	cJSON_AddItemToObject(withdraw_info, "tx", chips_transfer_funds(amount, addr));
+
+	return withdraw_info;
 }

@@ -9,7 +9,7 @@ struct gfshare_ctx_bet *gfshare_initenc(uint8_t *sharenrs, uint32_t sharecount, 
 					void *space, int32_t spacesize);
 struct gfshare_ctx_bet *gfshare_initdec(uint8_t *sharenrs, uint32_t sharecount, uint32_t size, void *space,
 					int32_t spacesize);
-struct gfshare_ctx_bet *gfshare_sg777_initdec(uint8_t *sharenrs, uint32_t sharecount, uint8_t threshold, uint32_t size,
+struct gfshare_ctx_bet *gfshare_initdec_threshold(uint8_t *sharenrs, uint32_t sharecount, uint8_t threshold, uint32_t size,
 					      void *space, int32_t spacesize);
 void gfshare_free(struct gfshare_ctx_bet *ctx);
 void gfshare_enc_setsecret(struct gfshare_ctx_bet *ctx, uint8_t *secret);

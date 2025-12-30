@@ -1,7 +1,7 @@
 #include "bet.h"
 #include "dealer.h"
 #include "deck.h"
-#include "cards777.h"
+#include "cards.h"
 #include "game.h"
 #include "err.h"
 #include "misc.h"
@@ -24,7 +24,7 @@ char all_game_keys[all_game_keys_no][128] = { T_GAME_INFO_KEY };
 char all_game_key_names[all_game_keys_no][128] = { "t_game_info" };
 
 int32_t num_of_players;
-char player_ids[CARDS777_MAXPLAYERS][MAX_ID_LEN];
+char player_ids[CARDS_MAXPLAYERS][MAX_ID_LEN];
 
 int32_t add_dealer(char *dealer_id)
 {
@@ -68,19 +68,19 @@ int32_t dealer_sb_deck(char *id, bits256 *player_r, int32_t player_id)
 	game_id_str = get_str_from_id_key(id, T_GAME_ID_KEY);
 
 	dlg_info("Player::%d deck...", player_id);
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		dlg_info("%s", bits256_str(str, player_r[i]));
 	}
-	shuffle_deck_db(player_r, CARDS777_MAXCARDS, d_deck_info.d_permi);
-	blind_deck_d(player_r, CARDS777_MAXCARDS, d_deck_info.dealer_r);
+	shuffle_deck_db(player_r, CARDS_MAXCARDS, d_deck_info.d_permi);
+	blind_deck_d(player_r, CARDS_MAXCARDS, d_deck_info.dealer_r);
 
 	dlg_info("Player::%d deck blinded with dealer secret key...", player_id);
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		dlg_info("%s", bits256_str(str, player_r[i]));
 	}
 
 	d_blinded_deck = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddistr(d_blinded_deck, bits256_str(str, player_r[i]));
 	}
 	dlg_info("Updating Player ::%d blinded deck at the key ::%s by dealer..", player_id, all_t_d_p_keys[player_id]);
@@ -96,8 +96,8 @@ int32_t dealer_sb_deck(char *id, bits256 *player_r, int32_t player_id)
 
 void dealer_init_deck()
 {
-	bet_permutation(d_deck_info.d_permi, CARDS777_MAXCARDS);
-	gen_deck(d_deck_info.dealer_r, CARDS777_MAXCARDS);
+	bet_permutation(d_deck_info.d_permi, CARDS_MAXCARDS);
+	gen_deck(d_deck_info.dealer_r, CARDS_MAXCARDS);
 }
 
 int32_t dealer_table_init(struct table t)
@@ -178,7 +178,7 @@ int32_t dealer_shuffle_deck(char *id)
 	int32_t retval = OK;
 	char *game_id_str = NULL, str[65];
 	cJSON *t_d_deck_info = NULL;
-	bits256 t_p_r[CARDS777_MAXCARDS];
+	bits256 t_p_r[CARDS_MAXCARDS];
 
 	dealer_init_deck();
 	game_id_str = get_str_from_id_key(id, T_GAME_ID_KEY);
@@ -196,7 +196,7 @@ int32_t dealer_shuffle_deck(char *id)
 	}
 
 	t_d_deck_info = cJSON_CreateArray();
-	for (int32_t i = 0; i < CARDS777_MAXCARDS; i++) {
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		jaddistr(t_d_deck_info, bits256_str(str, d_deck_info.dealer_r[i].prod));
 	}
 	dlg_info("Updating the key :: %s, which contains public points of dealer blinded values..", T_D_DECK_KEY);
@@ -212,7 +212,6 @@ int32_t dealer_shuffle_deck(char *id)
 int32_t handle_game_state(char *table_id)
 {
 	int32_t game_state, retval = OK;
-	cJSON *game_state_info = NULL;
 
 	game_state = get_game_state(table_id);
 	dlg_info("%s", game_state_str(game_state));
@@ -261,7 +260,7 @@ int32_t register_table(struct table t)
 
 int32_t dealer_init(struct table t)
 {
-	int32_t retval = OK, game_state;
+	int32_t retval = OK;
 	double balance = 0;
 
 	balance = chips_get_balance();

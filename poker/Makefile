@@ -7,10 +7,11 @@ SRC_DIR := src
 INCLUDE_DIR := include
 BUILD_DIR := build
 BIN_DIR := bin
-BIN_DIR := bin
+
+EXTERNAL_DIR := ../external
 
 # Updated source files path
-SRCFILES := $(SRC_DIR)/cards777.c  $(SRC_DIR)/client.c  $(SRC_DIR)/commands.c  $(SRC_DIR)/gfshare.c  \
+SRCFILES := $(SRC_DIR)/cards.c  $(SRC_DIR)/client.c  $(SRC_DIR)/commands.c  $(SRC_DIR)/gfshare.c  \
             $(SRC_DIR)/host.c  $(SRC_DIR)/network.c  $(SRC_DIR)/oracle.c  $(SRC_DIR)/payment.c  \
             $(SRC_DIR)/states.c  $(SRC_DIR)/table.c $(SRC_DIR)/poker.c $(SRC_DIR)/cashier.c \
             $(SRC_DIR)/storage.c $(SRC_DIR)/config.c $(SRC_DIR)/misc.c $(SRC_DIR)/heartbeat.c \
@@ -20,6 +21,11 @@ SRCFILES := $(SRC_DIR)/cards777.c  $(SRC_DIR)/client.c  $(SRC_DIR)/commands.c  $
 
 # Object files go in build directory
 OBJFILES := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCFILES))
+
+# Build a couple of small vendored deps directly into the binary
+EXT_OBJFILES := $(BUILD_DIR)/dlg.o $(BUILD_DIR)/jsmn.o
+OBJFILES += $(EXT_OBJFILES)
+
 CC := gcc
 
 UNAME_S := $(shell uname -s)
@@ -32,11 +38,10 @@ endif
 
 CFLAGS := -g -fPIC -std=c99 $(WARNINGS) \
           -I$(INCLUDE_DIR) \
-          -I../libs/crypto777 \
-          -I$(EXTERNAL_DIR)/includes/curl \
+          -I../libs/crypto \
+          -I../includes/curl \
           -I$(EXTERNAL_DIR)/dlg/include \
           -I$(EXTERNAL_DIR)/iniparser/src \
-          -I$(EXTERNAL_DIR)/nng/include \
           -I$(EXTERNAL_DIR)/jsmn
 
 .PHONY: all clean test
@@ -62,17 +67,6 @@ clean:
 	$(RM) *.o
 	$(RM) $(SRC_DIR)/*.o
 
-EXTERNAL_LIBS_DIR := $(shell cd ../external; pwd)
-
-TARGET_DIR := $(shell cd ../external; cd $(shell ${CC} -dumpmachine); pwd)
-
-LIBWEBSOCKETS_HEADERS = "$(TARGET_DIR)/libwebsockets-build/include"
-LIBJSMN_HEADERS = "$(EXTERNAL_LIBS_DIR)/jsmn"
-LIBDLG_HEADERS = "$(EXTERNAL_LIBS_DIR)/dlg"
-LIBINIPARSER_HEADERS = "$(EXTERNAL_LIBS_DIR)/iniparser-build/src"
-LIBINIPARSER_LDFLAGS = "$(EXTERNAL_LIBS_DIR)/iniparser"
-LIBWEBSOCKETS_LDFLAGS = "$(TARGET_DIR)/libwebsockets-build/lib"
-
 ifeq ($(UNAME_S),Darwin)
 	ifneq ($(filter arm%,$(UNAME_P)),)
 		export LDFLAGS+="-L/opt/homebrew/opt/openssl/lib"
@@ -83,18 +77,19 @@ endif
 $(info $$CC is [${CC}])
 
 $(BIN_DIR)/$(PROJNAME): $(OBJFILES) | $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $(SRC_DIR)/bet.c $^ ../external/iniparser/libiniparser.a ../libs/crypto777/libcrypto777.a \
-	-L$(TARGET_DIR) -I$(LIBWEBSOCKETS_HEADERS) -I$(LIBJSMN_HEADERS) -I$(LIBINIPARSER_HEADERS) \
-	-L$(LIBWEBSOCKETS_LDFLAGS) $(LDFLAGS) $(CPPFLAGS) -lcurl -ldl -lnng -lpthread -lm -ljsmn \
-	-lwebsockets -ldlg -L/usr/local/lib -lm -lgmp -lsqlite3 -L/usr/local/lib -lssl -lcrypto \
-	-levent -lpthread -lstdc++
+	$(CC) $(CFLAGS) -o $@ $(SRC_DIR)/bet.c $^ ../external/iniparser/libiniparser.a ../libs/crypto/libcrypto.a \
+	$(LDFLAGS) $(CPPFLAGS) -lcurl -ldl -lpthread -lm -lwebsockets -lgmp -lsqlite3 -lssl -lcrypto -levent -lstdc++
 	cp $(BIN_DIR)/$(PROJNAME) $(BIN_DIR)/$(CASHIER)
 
 # Pattern rule to compile .c files to .o files in build directory
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -L$(TARGET_DIR) -I$(LIBINIPARSER_HEADERS) -I$(LIBWEBSOCKETS_HEADERS) \
-	-I$(LIBJSMN_HEADERS) -L$(LIBINIPARSER_LDFLAGS) -L$(LIBWEBSOCKETS_LDFLAGS) $(LDFLAGS) \
-	$(CPPFLAGS) -c $< -o $@ -I ../includes/curl
+	$(CC) $(CFLAGS) $(LDFLAGS) $(CPPFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/dlg.o: ../external/dlg/src/dlg/dlg.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(CPPFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/jsmn.o: ../external/jsmn/jsmn.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(CPPFLAGS) -c $< -o $@
 
 build_dir_tree:
 	sh ./scripts/build_dir_tree.sh
