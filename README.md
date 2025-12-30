@@ -1,24 +1,26 @@
 [![bet CD](https://github.com/chips-blockchain/bet/actions/workflows/bet-cd.yml/badge.svg?branch=master)](https://github.com/chips-blockchain/bet/actions/workflows/bet-cd.yml)
 # Pangea-Bet
 
-The details about verus migration using vdxf ID's is mentioning here in [verus_migration.md](./docs/verus_migration/verus_migration.md)
+The details about Verus migration using VDXF IDs are mentioned here in [verus_migration.md](./docs/verus_migration/verus_migration.md)
 
 ## Abstract
-Bet is a decentralized adopatable gaming platform that meet the needs of any card game and predictable betting scenarios. The initial draft is written by jl777 is [here](./docs/BET_Initial_Draft.md). The detailed technical whitepaper is [here.](https://cdn.discordapp.com/attachments/455737840668770315/456036359870611457/Unsolicited_PANGEA_WP.pdf)
+Bet is a decentralized adaptable gaming platform that meets the needs of any card game and predictable betting scenarios. The initial draft is written by jl777 is [here](./docs/BET_Initial_Draft.md). The detailed technical whitepaper is [here.](https://cdn.discordapp.com/attachments/455737840668770315/456036359870611457/Unsolicited_PANGEA_WP.pdf)
 
 ## Underlying Blockchain
-The underlying blockchain and cryptocurrency that bet uses is [CHIPS](https://github.com/chips-blockchain/chips).  CHIPS is initially a bitcoin fork and jl777 made improvements to it to have the reduced blocktime to 10 seconds and for security chips chain is notarized on komodo and which is further notarized on bitcoin blockchain. For real time betting initially CHIPS is integrated with [lightning network]((https://github.com/chips-blockchain/lightning)) but later due to the portability issues with LN across the platforms the design changes are made to bet such that it can also be worked without LN.  
+The underlying blockchain and cryptocurrency that bet uses is [CHIPS](https://github.com/chips-blockchain/chips). CHIPS is initially a bitcoin fork and jl777 made improvements to it to have the reduced blocktime to 10 seconds and for security chips chain is notarized on komodo and which is further notarized on bitcoin blockchain. 
 
-Now the development work is going on to launch the PBaaS chain of chips on verus. The reason to launch is to improve the usability in using the bet platform. 
+CHIPS is now available as a PBaaS (Public Blockchain as a Service) chain on Verus, which improves usability and enables identity-based communication using Verus IDs. The platform primarily operates without Lightning Network, recording all game actions directly on the CHIPS blockchain. Lightning Network support is available as legacy/optional functionality for backward compatibility. 
 
 ## Configuration
-Bet can be played with or without LN. please go through the [existing tradeoffs](./docs/protocol/architecture_doc.md) we have at the moment to understand the ecosystem in a better way also please go through the [bet without ln](./docs/protocol/bet_without_ln.md) on how to play poker without using ln and it contains some nice info about various methods and info about [various tx's](./docs/protocol/tx_flow.md) involved during the gameplay.
+Bet primarily operates without Lightning Network, recording all game actions directly on the CHIPS blockchain. Please go through the [existing tradeoffs](./docs/protocol/architecture_doc.md) to understand the ecosystem, and the [bet without ln](./docs/protocol/bet_without_ln.md) documentation for details on how poker works without LN, including information about [various transactions](./docs/protocol/tx_flow.md) involved during gameplay.
+
+The platform uses Verus IDs (VDXF) for node communication and data storage, eliminating the need for static IP addresses and improving reliability. See [verus migration documentation](./docs/verus_migration/verus_migration.md) for details.
 
 ## To Play
 
-It's simple, just follow these steps to play poker on bet plarform using CHIPS.
+It's simple, just follow these steps to play poker on the bet platform using CHIPS.
 * **Setup:** Setup the nodes by following any of the approaches mentioned in the [setup documentation](./README.md#setup).
-* **Load the funds:** Load the chips wallet with whatever the amount of the CHIPS that you willing to play. Lets say if you are joining the talbe of stake_size 10 CHIPS, its always advisable to load the CHIPS wallet with >10 CHIPS why because the actions occur during the game are recorded in the CHIPS blockchain and every action of user costs 0.0005 CHIPS tx_fee to the user. 
+* **Load the funds:** Load the chips wallet with whatever the amount of the CHIPS that you are willing to play. Let's say if you are joining a table of stake_size 10 CHIPS, it's always advisable to load the CHIPS wallet with >10 CHIPS because the actions that occur during the game are recorded in the CHIPS blockchain and every action costs 0.0001 CHIPS tx_fee to the user. 
 ```
 To get the chips address on the setup node run
 $chips-cli getnewaddress
@@ -36,25 +38,24 @@ Withdraw using the following command
 ```
 ## Setup
 There are many different ways in which you can setup the nodes to play the poker using bet. Here are some of the ways in which you can setup the nodes:
-* The easy approach - Using the docker 
-* The hardway way -  By compiling the chips and bet repos all the way. 
+* The easy approach - Using Docker
+* The hard way - By compiling the chips and bet repos from scratch 
 * Using the precompiled binaries
 * Using the compilation script
 
 Irrespective of whichever approach you follow, the prerequisites and configuration of nodes remain same
 ## Prerequisites
 ##### For Player and Dealer nodes
-* Ports used by the respective entities must be open. Below are the list of the ports used and should be remained open incase if you have any firewall configurations.
+* Ports used by the respective entities must be open. Below are the ports used and should remain open if you have any firewall configurations:
 ```
-* 7797 - This port is used to have pub-sub communication between Dealer and player nodes.
-* 7798 - This port is used to have pull-push communication between Dealer and player nodes.
-* 7901 - This port is used to have pub-sub communication between Cashier and any other{player,dealer} nodes.
-* 7902 - This port is used to have push-pull communication between Cashier and any other{player,dealer} nodes.
-* 9000 - This port is used to have websocket communication between GUI and {player,dealer} nodes.
-* 1234 - This is the port on which the webserver runs on, this port should be opened if the player is hosting its own GUI.
+* 9000 - This port is used for WebSocket communication between GUI and {player,dealer} nodes.
+* 1234 - This is the port on which the webserver runs, this port should be opened if the player is hosting its own GUI.
 ```
+
+**Note:** Legacy pub-sub/pull-push ports (7797, 7798, 7901, 7902) are no longer used. The platform now uses Verus IDs for node communication, eliminating the need for static IP addresses and legacy socket-based communication.
+
 #### For Dealer and Cashier nodes
-* The dealer and cashier nodes should need the static public IP for the nodes on which they setup.
+* Dealer and cashier nodes require Verus IDs for operation. Static public IP addresses are no longer required due to Verus ID-based communication.
 
 ## Configuring the nodes
 The behaviour of the node is based on how you configure it. We can enable/disable few functionalities of the players and dealers by making corresponding settings in the configuration files. All the configuration files are located in the path`./bet/poker/config`.
@@ -131,8 +132,10 @@ cd
 #### step4 :-  If you are the dealer run the dealer as follows
 ```
 cd
-./bet/poker/bin/bet dcv <host_ip>
+./bet/poker/bin/bet dealer
 
+# Or using the legacy command:
+./bet/poker/bin/bet dcv
 ```
 #### step5 :-  Hosting the GUI
 ##### Using the GUI hosted by the cashier and dealer nodes
@@ -176,7 +179,7 @@ Now we have everything ready to play. All you need to just connect to player bac
 
 ### Approach3 :- Using the precompiled binaries
 We making automated [ binary releases](https://github.com/chips-blockchain/bet/releases) for various platforms. The latest binaries from here can be taken to setup the nodes.
-#### Downloading precomipled binaries & CHIPS bootstrap node
+#### Downloading precompiled binaries & CHIPS bootstrap node
 1. [Precompiled binaries](./docs/protocol/release.md#downloading-precombiled-binaries-for-linux)
 2. [CHIPS bootstrap node](./docs/protocol/release.md#downloading-chips-bootstrap-node)
 
@@ -189,11 +192,13 @@ If you wish to install everything required for setting up Pangea Poker, you can 
 ```
 
 
-## Coomunication b/w Bet Nodes
-The communication b/w the nodes at very high level is described [here](./docs/protocol/node_communication.md). 
+## Communication between Bet Nodes
+The communication between nodes is described [here](./docs/protocol/node_communication.md). The platform uses Verus IDs (VDXF) for node discovery and communication, eliminating the need for static IP addresses. See [verus migration documentation](./docs/verus_migration/verus_migration.md) for details on how Verus IDs are used for storing game state and enabling reliable node communication. 
 
 ## CHIPS & LN Upgrade
-[Here](./docs/protocol/upgrade.md) contains the list of API's that bet uses from chips and ln. So whenever any upstream changes made to either chips and ln repos one must be careful to check if there is any change in these API functionalities, inputs and outputs.
+[Here](./docs/protocol/upgrade.md) contains the list of APIs that bet uses from chips and ln. So whenever any upstream changes are made to either chips or ln repos, one must be careful to check if there is any change in these API functionalities, inputs and outputs.
+
+**Note:** Lightning Network support is now legacy/optional. The platform primarily operates using direct CHIPS blockchain transactions and Verus IDs for communication.
 
 ## Glossary
 Many of the times we use short hand abbreviations, so glossary for it is [here](./docs/protocol/glossary.md). 
