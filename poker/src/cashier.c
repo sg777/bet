@@ -178,8 +178,6 @@ int32_t bet_send_status(struct cashier *cashier_info, char *id)
 	cJSON_AddStringToObject(live_info, "method", "live");
 	cJSON_AddStringToObject(live_info, "id", id);
 // Nanomsg removed - no longer used
-			 OK :
-			 OK;
 	return retval;
 }
 
@@ -193,8 +191,6 @@ int32_t bet_process_lock_in_tx(cJSON *argjson, struct cashier *cashier_info)
 	cJSON_AddStringToObject(status, "method", "query_status");
 	cJSON_AddNumberToObject(status, "status", retval);
 // Nanomsg removed - no longer used
-			 OK :
-			 OK;
 	return retval;
 }
 
@@ -211,8 +207,6 @@ int32_t bet_cashier_process_raw_msig_tx(cJSON *argjson, struct cashier *cashier_
 	cJSON_AddItemToObject(signed_tx, "signed_tx", chips_sign_raw_tx_with_wallet(tx));
 	dlg_info("signed_tx::%s", cJSON_Print(signed_tx));
 // Nanomsg removed - no longer used
-			 OK :
-			 OK;
 	return retval;
 }
 
@@ -826,8 +820,6 @@ static int32_t bet_process_find_bvv(cJSON *argjson, struct cashier *cashier_info
 	cJSON_AddStringToObject(bvv_status, "id", jstr(argjson, "id"));
 	cJSON_AddStringToObject(bvv_status, "bvv_unique_id", unique_id);
 // Nanomsg removed - no longer used
-			 OK :
-			 OK;
 	return retval;
 }
 

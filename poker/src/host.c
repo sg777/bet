@@ -557,8 +557,6 @@ static int32_t bet_check_bvv_ready(struct privatebet_info *bet)
 	}
 	dlg_info("%s\n", cJSON_Print(bvv_ready));
 // Nanomsg removed - no longer used
-			 ERR_NNG_SEND :
-			 OK;
 	return retval;
 }
 

@@ -517,8 +517,6 @@ int32_t chips_publish_multisig_tx(char *tx)
 		cJSON_AddStringToObject(tx_info, "method", "signrawtransaction");
 		cJSON_AddStringToObject(tx_info, "tx", tx);
 // Nanomsg removed - no longer used
-				 OK :
-				 OK;
 	}
 	return retval;
 }

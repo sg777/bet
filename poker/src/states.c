@@ -49,8 +49,6 @@ int32_t bet_initiate_statemachine(cJSON *argjson, struct privatebet_info *bet, s
 	cJSON_AddNumberToObject(dealerInfo, "playerid", vars->dealer);
 
 // Nanomsg removed - no longer used
-			 OK :
-			 OK;
 	bet_push_dcv_to_gui(dealerInfo);
 
 	return retval;
@@ -277,8 +275,6 @@ int32_t bet_dcv_round_betting(cJSON *argjson, struct privatebet_info *bet, struc
 	cJSON_AddNumberToObject(roundBetting, "min_amount", (maxamount - vars->betamount[vars->turni][vars->round]));
 
 // Nanomsg removed - no longer used
-			 OK :
-			 OK;
 
 end:
 	return retval;
@@ -373,8 +369,6 @@ int32_t bet_dcv_big_blind(cJSON *argjson, struct privatebet_info *bet, struct pr
 	cJSON_AddNumberToObject(big_blind_info, "pot", vars->pot);
 
 // Nanomsg removed - no longer used
-			 OK :
-			 OK;
 	return retval;
 }
 
@@ -411,8 +405,6 @@ int32_t bet_dcv_small_blind(cJSON *argjson, struct privatebet_info *bet, struct 
 	cJSON_AddNumberToObject(smallBlindInfo, "round", vars->round);
 	cJSON_AddNumberToObject(smallBlindInfo, "pot", vars->pot);
 // Nanomsg removed - no longer used
-			 OK :
-			 OK;
 	return retval;
 }
 /***************************************************************
@@ -575,8 +567,6 @@ int32_t bet_player_dealer_info(cJSON *argjson, struct privatebet_info *bet, stru
 		dealerReady = cJSON_CreateObject();
 		cJSON_AddStringToObject(dealerReady, "method", "dealer_ready");
 // Nanomsg removed - no longer used
-				 OK :
-				 OK;
 	}
 	bet_push_client(argjson);
 	return retval;
@@ -605,8 +595,6 @@ int32_t bet_player_small_blind(cJSON *argjson, struct privatebet_info *bet, stru
 	cJSON_AddNumberToObject(small_blind_info, "round", jint(argjson, "round"));
 
 // Nanomsg removed - no longer used
-			 OK :
-			 OK;
 	player_lws_write(small_blind_info);
 
 	return retval;
@@ -634,8 +622,6 @@ int32_t bet_player_big_blind(cJSON *argjson, struct privatebet_info *bet, struct
 	cJSON_AddNumberToObject(big_blind_info, "round", jint(argjson, "round"));
 
 // Nanomsg removed - no longer used
-			 OK :
-			 OK;
 	player_lws_write(big_blind_info);
 
 	return retval;
