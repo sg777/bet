@@ -43,7 +43,10 @@ jobs:
     
     - name: Build crypto library
       run: make --directory libs/crypto
-        
+    
+    - name: Build iniparser library
+      run: make --directory external/iniparser
+      
     - name: Build poker application
       run: make --directory poker
       
@@ -87,6 +90,9 @@ jobs:
        
      - name: Build crypto library
        run: make --directory libs/crypto
+     
+     - name: Build iniparser library
+       run: make --directory external/iniparser
        
      - name: Build poker application
        run: make --directory poker
@@ -158,6 +164,9 @@ jobs:
 
     - name: Build crypto library
       run: make --directory libs/crypto
+    
+    - name: Build iniparser library
+      run: make --directory external/iniparser
       
     - name: Build poker application
       run: |
