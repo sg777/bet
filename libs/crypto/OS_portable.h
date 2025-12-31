@@ -15,6 +15,13 @@
 #ifndef OS_PORTABLEH
 #define OS_PORTABLEH
 
+// CRITICAL: Prevent narrow math functions (like fmul) from being declared
+// This MUST be defined before ANY system includes, even before stdio.h
+// Narrow functions are enabled by _GNU_SOURCE (which config.c defines),
+// but we need to prevent them to avoid conflict with curve25519.h's fmul function
+// Define this before any feature test macros are processed
+#define __NO_MATH_NARROW_FUNCTIONS
+
 // iguana_OS has functions that invoke system calls. Whenever possible stdio and similar functions are use and most functions are fully portable and in this file. For things that require OS specific, the call is routed to iguana_OS_portable_*  Usually, all but one OS can be handled with the same code, so iguana_OS_portable.c has most of this shared logic and an #ifdef iguana_OS_nonportable.c
 
 #ifdef __APPLE__
