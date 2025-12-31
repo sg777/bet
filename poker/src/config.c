@@ -449,7 +449,7 @@ int32_t bet_parse_verus_player()
 			sizeof(player_config.verus_pid));
 	}
 	//Check if all IDs are valid
-	if ((!player_config.dealer_id) || (!player_config.table_id) || (!player_config.verus_pid) ||
+	if ((player_config.dealer_id[0] == '\0') || (player_config.table_id[0] == '\0') || (player_config.verus_pid[0] == '\0') ||
 	    !is_id_exists(player_config.dealer_id, 0) || !is_id_exists(player_config.table_id, 0)) {
 		return ERR_CONFIG_PLAYER_ARGS;
 	}
