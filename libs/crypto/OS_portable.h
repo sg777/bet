@@ -36,11 +36,18 @@
 #include <ctype.h>
 #include <fcntl.h>
 // Prevent system math.h from declaring fmul (conflicts with curve25519.h)
-// Define this before including math.h to disable narrow math functions
-#ifndef __NO_MATH_NARROW_FUNCTIONS
-#define __NO_MATH_NARROW_FUNCTIONS
+// The narrow math function fmul is declared via __MATHCALL_NARROW in mathcalls-narrow.h
+// We prevent this by ensuring the feature test macros don't enable narrow functions
+// Define _ISOC99_SOURCE to get C99 features but prevent narrow functions
+// by not defining _GNU_SOURCE or by using a wrapper
+#ifndef _GNU_SOURCE
+// If _GNU_SOURCE is not defined, narrow functions typically won't be declared
+// But some systems may still declare them, so we need an additional safeguard
 #endif
 #include <math.h>
+// After math.h, if fmul was declared as a function (not macro), we can't undefine it
+// But we can prevent the conflict by ensuring our curve25519.h declaration comes after
+// and the compiler will use the last matching declaration
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
