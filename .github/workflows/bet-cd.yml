@@ -1,5 +1,7 @@
 name: bet CD
 
+# Workflow to build and release bet application for Linux and macOS
+
 on:
   push:
     branches: 
