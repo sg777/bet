@@ -23,8 +23,7 @@
 
 /* cJSON */
 /* JSON parser in C. */
-#include <math.h>
-
+// Don't include math.h - use math_compat.h instead to avoid conflicts
 #include "../../includes/cJSON.h"
 
 #ifndef DBL_EPSILON

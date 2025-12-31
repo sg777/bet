@@ -29,7 +29,13 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include "../../libs/crypto/OS_portable.h"
+// Include crypto headers directly (no OS_portable.h to avoid math.h conflicts)
+#include "../../includes/curve25519.h"
+#include "../../includes/tweetnacl.h"
+#include "../../includes/utlist.h"
+#include "../../includes/uthash.h"
+#include "../../includes/bits256_utils.h"
+#include "../../includes/cJSON.h"
 
 #include <libwebsockets.h>
 

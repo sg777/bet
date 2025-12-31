@@ -40,7 +40,7 @@ struct crypto_account_sig { bits256 sigbits,pubkey; uint64_t signer64bits; uint3
 //#define force_inline __attribute__((always_inline))
 
 
-bits320 fmul(const bits320 in2,const bits320 in);
+bits320 field_mul(const bits320 in2,const bits320 in);
 bits320 fexpand(bits256 basepoint);
 bits256 fcontract(const bits320 input);
 void cmult(bits320 *resultx,bits320 *resultz,bits256 secret,const bits320 q);

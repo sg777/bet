@@ -1,0 +1,263 @@
+# Pangea-Bet Project Context
+
+## Project Overview
+Pangea-Bet is a decentralized poker platform built on the CHIPS blockchain. The core application is written in C and implements mental poker using cryptographic techniques for secure, trustless gameplay.
+
+**Key Technologies:**
+- C99 (primary language)
+- CHIPS blockchain integration
+- Lightning Network (optional, can run without LN)
+- WebSockets (libwebsockets) for GUI communication
+- SQLite3 for local storage
+- cJSON for JSON parsing
+- Curve25519/SHA256 for cryptography
+
+## Project Structure
+
+### Core Directories
+- `poker/` - Main application code
+  - `src/` - Source files (bet.c is main entry point)
+  - `include/` - Header files
+  - `config/` - Configuration files (player, dealer, cashier)
+  - `bin/` - Compiled binaries
+- `libs/` - Internal libraries
+  - `crypto/` - Cryptographic functions (Curve25519, SHA256)
+  - `iguana/` - Iguana protocol utilities
+- `includes/` - Shared header files (crypto, iguana)
+- `external/` - External dependencies (iniparser, libwebsockets, etc.)
+- `docs/` - Extensive documentation
+  - `protocol/` - Protocol specifications
+  - `verus_migration/` - Verus migration docs
+
+## Key Entry Points
+
+### Main Application
+- **Entry Point**: `poker/src/bet.c` - Main application entry, handles command-line arguments
+- **Player Mode**: `poker/src/player.c` - Player node implementation
+- **Dealer Mode**: `poker/src/dealer.c` - Dealer node implementation
+- **Cashier Mode**: `poker/src/cashier.c` - Cashier node implementation
+
+### Core Modules
+- **Game Logic**: `poker/src/game.c`, `poker/src/poker.c`, `poker/src/cards.c`
+- **Networking**: `poker/src/network.c`, `poker/src/client.c`, `poker/src/host.c`
+- **Cryptography**: `libs/crypto/curve25519.c`, `includes/curve25519.h`
+- **Storage**: `poker/src/storage.c` - SQLite3 database operations
+- **VDXF/Verus**: `poker/src/vdxf.c` - Verus ID and VDXF protocol handling
+- **Payment**: `poker/src/payment.c` - CHIPS/LN payment processing
+
+## Naming Conventions
+
+### Crypto Functions
+- **Standardized naming**: `crypto_account_*` (renamed from `acct777_*`)
+- Examples: `crypto_account_pubkey()`, `crypto_account_sign()`, `crypto_account_validate()`
+- **Struct**: `struct crypto_account_sig` (was `acct777_sig`)
+
+### Poker Constants
+- **Standardized naming**: `CARDS_*` (renamed from `CARDS777_*`)
+- Examples: `CARDS_MAXCARDS`, `CARDS_MAXPLAYERS`, `CARDS_MAXROUNDS`, `CARDS_MAXCHIPS`
+
+### Poker Functions
+- **Deck generation**: `deckgen_vendor()` (was `sg777_deckgen_vendor()`)
+- **GFShare**: `gfshare_initdec_threshold()` (was `gfshare_sg777_initdec()`)
+
+### File Names
+- **Cards**: `cards.c` / `cards.h` (was `cards777.c` / `cards777.h`)
+
+## Error Handling
+
+### Error Codes
+Defined in `poker/include/err.h`:
+- **0-32**: Bet gameplay errors
+- **33-64**: CHIPS and LN errors
+- **65+**: Other errors (parsing, memory, network, etc.)
+
+### Common Error Codes
+- `OK = 0` - Success
+- `ERR_MEMORY_ALLOC = 72` - Memory allocation failure
+- `ERR_JSON_PARSING = 66` - JSON parsing error
+- `ERR_CHIPS_*` - CHIPS blockchain errors (33-46)
+- `ERR_LN_*` - Lightning Network errors (49-64)
+
+### Error Handling Pattern
+```c
+int32_t retval = OK;
+char *buffer = calloc(size, sizeof(char));
+if (buffer == NULL) {
+    dlg_error("Memory allocation failed");
+    return ERR_MEMORY_ALLOC;
+}
+// ... use buffer ...
+free(buffer);
+return retval;
+```
+
+## Memory Management
+
+### Allocation Patterns
+- Use `calloc()` for zero-initialized allocations
+- Always check for NULL after allocation
+- Free all allocated memory in error paths
+- Use `cJSON_Delete()` for cJSON objects (not `free()`)
+
+### Buffer Safety
+- **NEVER use**: `strcpy()`, `sprintf()` (use `strncpy()`, `snprintf()`)
+- Always ensure null-termination: `buffer[size - 1] = '\0';`
+- Calculate required buffer sizes before allocation
+
+### Example Safe Pattern
+```c
+const char *src = get_string();
+size_t len = strlen(src);
+char *dest = calloc(len + 1, sizeof(char));
+if (dest == NULL) return ERR_MEMORY_ALLOC;
+strncpy(dest, src, len);
+dest[len] = '\0';  // Ensure null termination
+```
+
+## Build System
+
+### Makefile Location
+- `poker/Makefile` - Main build configuration
+- Root `Makefile` - Top-level build
+
+### Build Commands
+```bash
+cd poker && make          # Build poker application
+cd poker && make clean    # Clean build artifacts
+```
+
+### Key Build Variables
+- `BIN_DIR := bin` - Binary output directory
+- `SRC_DIR := src` - Source directory
+- `INCLUDE_DIR := include` - Header directory
+- `BUILD_DIR := build` - Object files directory
+
+## Configuration
+
+### Configuration Files
+Located in `poker/config/`:
+- Player configuration
+- Dealer configuration
+- Cashier configuration
+- Blockchain settings
+
+### Ports
+- `7797` - Dealer pub-sub
+- `7798` - Dealer push-pull
+- `7901` - Cashier pub-sub
+- `7902` - Cashier push-pull
+- `9000` - WebSocket (GUI)
+- `1234` - Web server (GUI hosting)
+
+## Key Constants
+
+### Game Constants (`poker/include/common.h`)
+- `CARDS_MAXCARDS = 10` - Maximum cards
+- `CARDS_MAXPLAYERS = 9` - Maximum players
+- `CARDS_MAXROUNDS = 4` - Maximum betting rounds
+- `hand_size = 7` - Cards in a hand
+- `BET_PLAYERTIMEOUT = 15` - Player timeout (seconds)
+
+### Blockchain Constants
+- `satoshis = 100000000` - Satoshis per COIN
+- `default_chips_tx_fee = 0.0001` - Default transaction fee
+
+## Code Quality Standards
+
+### Compiler Warnings
+- `-Werror` - Treat warnings as errors
+- `-Wunused-variable` - Warn on unused variables
+- `-Wunused-but-set-variable` - Warn on set but unused variables
+
+### Code Safety Requirements
+1. **No buffer overflows**: Use `strncpy`/`snprintf` with bounds checking
+2. **No memory leaks**: Free all allocations in all code paths
+3. **No double-free**: Check for NULL before freeing
+4. **Error handling**: Check return values, handle errors appropriately
+5. **NULL checks**: Validate pointers before use
+
+## Common Patterns
+
+### JSON Parsing
+```c
+cJSON *json = cJSON_Parse(data);
+if (json == NULL) {
+    dlg_error("JSON parsing failed");
+    return ERR_JSON_PARSING;
+}
+// ... use json ...
+cJSON_Delete(json);
+```
+
+### String Extraction from JSON
+```c
+const char *value = jstr(json, "key");  // Helper function
+if (value == NULL) {
+    return ERR_INVALID_DATA;
+}
+```
+
+### CHIPS RPC Calls
+- Use helper functions in `payment.c` and `cashier.c`
+- Check return values for errors
+- Handle `ERR_CHIPS_*` error codes appropriately
+
+## Where to Find Things
+
+### Adding New Features
+- **Game logic**: `poker/src/game.c`, `poker/src/poker.c`
+- **Network communication**: `poker/src/network.c`, `poker/src/client.c`
+- **Database operations**: `poker/src/storage.c`
+- **Configuration**: `poker/src/config.c`
+
+### Debugging
+- **Logging**: Uses `macrologger.h` (dlg_error, dlg_info, dlg_warn)
+- **Error messages**: `poker/src/err.c` - `bet_err_str()` function
+- **Test utilities**: `poker/src/test.c`
+
+### Understanding Flow
+- **Player flow**: `poker/src/player.c` → `poker/src/game.c`
+- **Dealer flow**: `poker/src/dealer.c` → `poker/src/host.c`
+- **Cashier flow**: `poker/src/cashier.c` → `poker/src/payment.c`
+
+## Important Notes
+
+### Websocket Variables
+- Variables used by UI via websockets should NOT be removed even if they appear unused
+- Check `poker/src/client.c` and `poker/src/host.c` for websocket message handling
+
+### Legacy Code
+- `poker/legacy/` - Contains removed/legacy code documentation
+- `poker/src/legacy/` - Legacy pub-sub and LN code (being phased out)
+- Some functions may reference old naming (check recent refactoring commits)
+
+### Architecture Migration
+- **Current Direction**: Moving to Verus-only architecture
+- **Removing**: Pub-sub sockets, Lightning Network payments
+- **Using**: Verus IDs for all inter-node communication, CHIPS on Verus for payments
+- See `.cursor/VERUS_MIGRATION_PLAN.md` for detailed migration plan
+
+### External Dependencies
+- **cJSON**: JSON parsing (`external/` or system)
+- **iniparser**: INI file parsing (`external/iniparser/`)
+- **libwebsockets**: WebSocket server (`external/libwebsockets/`)
+- **SQLite3**: Database (`-lsqlite3`)
+
+## Development Workflow
+
+### Before Making Changes
+1. Check existing code patterns in similar files
+2. Review error handling in related functions
+3. Ensure memory safety (no leaks, no overflows)
+4. Test with compiler warnings enabled (`-Werror`)
+
+### Testing
+- Use `poker/src/test.c` for unit tests
+- Check logs for `dlg_error`/`dlg_info` messages
+- Verify error codes are handled correctly
+
+### Committing
+- Follow existing commit message patterns
+- Include relevant file paths in commit messages
+- Test compilation before committing
+

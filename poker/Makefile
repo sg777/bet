@@ -39,6 +39,7 @@ endif
 CFLAGS := -g -fPIC -std=c11 $(WARNINGS) -pthread \
           -I$(INCLUDE_DIR) \
           -I../libs/crypto \
+          -I../includes \
           -I../includes/curl \
           -I$(EXTERNAL_DIR)/dlg/include \
           -I$(EXTERNAL_DIR)/iniparser/src \

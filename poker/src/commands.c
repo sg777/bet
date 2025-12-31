@@ -27,7 +27,7 @@
 
 #include <stdarg.h>
 #include <inttypes.h>
-#include <math.h>
+#include "../../includes/math_compat.h"
 
 double epsilon = 0.000000001;
 

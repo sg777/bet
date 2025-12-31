@@ -26,12 +26,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <math.h>
+// Include curve25519.h FIRST to get bits256 type
+#include "../includes/curve25519.h"
+#include "../includes/math_compat.h"
 #include <ctype.h>
 #include <float.h>
 #include <memory.h>
-
-#include "../libs/crypto/OS_portable.h"
 
 #define SATOSHIDEN ((uint64_t)100000000L)
 #define dstr(x) ((double)(x) / SATOSHIDEN)
