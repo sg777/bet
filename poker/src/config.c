@@ -1,4 +1,7 @@
 #define _GNU_SOURCE
+// Prevent narrow math functions from being declared (conflicts with curve25519.h's fmul)
+// This must be defined before any system headers that might include math.h
+#define __NO_MATH_NARROW_FUNCTIONS
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>

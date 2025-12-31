@@ -37,15 +37,21 @@
 #include <fcntl.h>
 // CRITICAL: Prevent narrow math functions (like fmul) from being declared
 // _GNU_SOURCE enables narrow math functions which conflict with curve25519.h's fmul
-// We temporarily undefine _GNU_SOURCE before including math.h, then restore it
+// We need to prevent narrow functions even when _GNU_SOURCE is defined
+// The only reliable way is to use a feature test macro that excludes narrow functions
+// or to prevent the declaration by controlling what gets included
 #ifdef _GNU_SOURCE
-#define _GNU_SOURCE_SAVED
+// Save _GNU_SOURCE state
+#define _GNU_SOURCE_WAS_DEFINED
 #undef _GNU_SOURCE
+// Define _POSIX_C_SOURCE to get POSIX features without narrow math functions
+#define _POSIX_C_SOURCE 200809L
 #endif
 #include <math.h>
-#ifdef _GNU_SOURCE_SAVED
+#ifdef _GNU_SOURCE_WAS_DEFINED
+#undef _POSIX_C_SOURCE
 #define _GNU_SOURCE
-#undef _GNU_SOURCE_SAVED
+#undef _GNU_SOURCE_WAS_DEFINED
 #endif
 #include <errno.h>
 #include <sys/stat.h>
