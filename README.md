@@ -1,4 +1,4 @@
-[![bet CD](https://github.com/chips-blockchain/bet/actions/workflows/bet-cd.yml/badge.svg?branch=master)](https://github.com/chips-blockchain/bet/actions/workflows/bet-cd.yml)
+[![bet CD](https://github.com/sg777/bet/actions/workflows/bet-cd.yml/badge.svg?branch=master)](https://github.com/sg777/bet/actions/workflows/bet-cd.yml)
 # Pangea-Bet
 
 The details about Verus migration using VDXF IDs are mentioned here in [verus_migration.md](./docs/verus_migration/verus_migration.md)
