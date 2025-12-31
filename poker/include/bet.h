@@ -30,7 +30,7 @@
 
 #include "../../libs/crypto/OS_portable.h"
 
-#include <libwebsockets.h>
+#include <libwebsockets/libwebsockets.h>
 
 #include "dlg/dlg.h"
 #include "iniparser.h"
