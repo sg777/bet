@@ -149,7 +149,7 @@ jobs:
           brew install gnu-sed
           brew install pyenv
           brew install libwebsockets
-          pip3 install mako
+          pip3 install --user mako
 
     - name: Build crypto library
       run: make --directory libs/crypto

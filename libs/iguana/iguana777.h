@@ -77,9 +77,9 @@
 #include "../../external/nng/include/nng/compat/nanomsg/nn.h"
 #include "../../external/nng/include/nng/compat/nanomsg/bus.h"
 #include "../../external/nng/include/nng/compat/nanomsg/pubsub.h"
-#include "../external/nng/include/nng/compat/nanomsg/pipeline.h"
-#include "../external/nng/include/nng/compat/nanomsg/reqrep.h"
-#include "../external/nng/include/nng/compat/nanomsg/tcp.h"
+#include "../../external/nng/include/nng/compat/nanomsg/pipeline.h"
+#include "../../external/nng/include/nng/compat/nanomsg/reqrep.h"
+#include "../../external/nng/include/nng/compat/nanomsg/tcp.h"
 // #else
 // #include "/usr/local/include/nng/compat/nanomsg/nn.h"
 // #include "/usr/local/include/nng/compat/nanomsg/bus.h"
