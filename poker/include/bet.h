@@ -33,7 +33,7 @@
 #include <libwebsockets.h>
 
 #include "dlg/dlg.h"
-#include "../../external/iniparser/src/iniparser.h"
+#include "iniparser.h"
 
 // Nanomsg/nano sockets support completely removed - no longer used
 
