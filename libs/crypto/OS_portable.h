@@ -35,6 +35,11 @@
 #define HAVE_STRUCT_TIMESPEC
 #include <ctype.h>
 #include <fcntl.h>
+// Prevent system math.h from declaring fmul (conflicts with curve25519.h)
+// Define this before including math.h to disable narrow math functions
+#ifndef __NO_MATH_NARROW_FUNCTIONS
+#define __NO_MATH_NARROW_FUNCTIONS
+#endif
 #include <math.h>
 #include <errno.h>
 #include <sys/stat.h>
