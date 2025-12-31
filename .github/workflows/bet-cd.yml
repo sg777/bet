@@ -68,57 +68,6 @@ jobs:
         path: bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
 
 
-  # Build Linux ARM 64bit build
-  linux-build-arm64:
-     runs-on: [self-hosted, linux, ARM64, Raspberry-Pi]
-  
-     steps:
-     - name: Extract branch name
-       shell: bash
-       run: echo "branch=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_OUTPUT
-       id: extract_branch
-
-     - name: show extracted branch name
-       run: echo ${{ steps.extract_branch.outputs.branch }}
-
-     - name: Checkout code
-       uses: actions/checkout@v4
-       with:
-        ref: ${{ steps.extract_branch.outputs.branch }}
-        submodules: recursive
-     - run: git fetch --prune --unshallow
-       
-     - name: Build crypto library
-       run: make --directory libs/crypto
-     
-     - name: Build iniparser library
-       run: make --directory external/iniparser
-       
-     - name: Build poker application
-       run: make --directory poker
-       
-     - name: Extract git tag
-       shell: bash
-       run: echo "gittag=$(IFS='-' read -r -a array <<< $(git describe --always) && echo "${array[0]}-${array[1]}")" >> $GITHUB_OUTPUT
-       id: extract_git_tag
-  
-     - name: Create release archive
-       run: |
-         pwd && \
-         tar -czvf bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz poker/bin/bet poker/bin/cashierd poker/config && \
-         ls -lh bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-  
-     - name: Cleanup after build
-       run: sed -i 's/clean=.*/clean=1/' /home/pi/trigger
-       
-     - name: Upload bet-linux release files
-       uses: actions/upload-artifact@v4
-       with:
-         name: bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-         path: bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-
-
-
   # Build MacOS 64bit build
   macos-build-x86_64:
     runs-on: macos-latest
@@ -187,24 +136,29 @@ jobs:
       run: echo "gittag=$(array=($(echo $(git describe --always) | tr '-' "\n")) && echo "${array[0]}-${array[1]}")" >> $GITHUB_OUTPUT
       id: extract_git_tag
 
+    - name: Detect architecture
+      shell: bash
+      run: echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+      id: detect_arch
+
     - name: Create release archive
       run: |
         pwd && \
-        tar -czvf bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz poker/bin/bet poker/bin/cashierd poker/config && \
-        ls -lh bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+        tar -czvf bet-macos-${{ steps.detect_arch.outputs.arch }}-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz poker/bin/bet poker/bin/cashierd poker/config && \
+        ls -lh bet-macos-${{ steps.detect_arch.outputs.arch }}-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
 
-    - name: Upload bet-macos-x86_64 release files
+    - name: Upload bet-macos release files
       uses: actions/upload-artifact@v4
       with:
-        name: bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-        path: bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+        name: bet-macos-${{ steps.detect_arch.outputs.arch }}-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+        path: bet-macos-${{ steps.detect_arch.outputs.arch }}-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
 
 
 
   publish-release:
       name: Publishing CD releases
       runs-on: ubuntu-latest
-      needs: [linux-build-x86_64, macos-build-x86_64, linux-build-arm64]
+      needs: [linux-build-x86_64, macos-build-x86_64]
       
       steps:
         - name: Extract branch name
@@ -246,8 +200,7 @@ jobs:
           run: |
             pwd && \
             ls -lh artifacts/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz && \
-            ls -lh artifacts/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz && \
-            ls -lh artifacts/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+            ls -lh artifacts/bet-macos-*/bet-macos-*.tar.gz
 
         - name: Create Release
           id: create_release
@@ -264,5 +217,4 @@ jobs:
             prerelease: false
             files: |
               artifacts/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-              artifacts/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-linux-aarch64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
-              artifacts/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz/bet-macos-x86_64-${{ steps.extract_git_tag.outputs.gittag }}.tar.gz
+              artifacts/bet-macos-*/bet-macos-*.tar.gz
