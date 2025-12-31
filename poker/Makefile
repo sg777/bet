@@ -36,7 +36,7 @@ else
 #WARNINGS := -Werror -Wunused-variable
 endif
 
-CFLAGS := -g -fPIC -std=c99 $(WARNINGS) \
+CFLAGS := -g -fPIC -std=c99 $(WARNINGS) -pthread \
           -I$(INCLUDE_DIR) \
           -I../libs/crypto \
           -I../includes/curl \
