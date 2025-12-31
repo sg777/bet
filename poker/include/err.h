@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#include "../../external/dlg/include/dlg/dlg.h"
+#include "dlg/dlg.h"
 
 /******************************************************************************
 All the errors that come across in bet are defined here. The error numbers are assigned with the following criteria

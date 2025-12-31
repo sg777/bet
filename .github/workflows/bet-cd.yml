@@ -156,10 +156,16 @@ jobs:
       
     - name: Build poker application
       run: |
-          export LDFLAGS="-L/usr/local/opt/openssl/lib -L/usr/local/opt/libwebsockets/lib"
-          export CPPFLAGS="-I/usr/local/opt/openssl/include -I/usr/local/opt/libwebsockets/include"
-          export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:/usr/local/opt/libwebsockets/lib/pkgconfig"
-          export OPENSSL_ROOT_DIR=/usr/local/opt/openssl
+          # Detect architecture and set paths accordingly
+          if [ "$(uname -m)" = "arm64" ]; then
+            BREW_PREFIX="/opt/homebrew"
+          else
+            BREW_PREFIX="/usr/local"
+          fi
+          export LDFLAGS="-L${BREW_PREFIX}/opt/openssl/lib -L${BREW_PREFIX}/opt/libwebsockets/lib -L${BREW_PREFIX}/opt/gmp/lib -L${BREW_PREFIX}/opt/sqlite/lib -L${BREW_PREFIX}/opt/libevent/lib"
+          export CPPFLAGS="-I${BREW_PREFIX}/opt/openssl/include -I${BREW_PREFIX}/opt/libwebsockets/include -I${BREW_PREFIX}/opt/gmp/include -I${BREW_PREFIX}/opt/sqlite/include -I${BREW_PREFIX}/opt/libevent/include"
+          export PKG_CONFIG_PATH="${BREW_PREFIX}/opt/openssl/lib/pkgconfig:${BREW_PREFIX}/opt/libwebsockets/lib/pkgconfig:${BREW_PREFIX}/opt/gmp/lib/pkgconfig:${BREW_PREFIX}/opt/sqlite/lib/pkgconfig:${BREW_PREFIX}/opt/libevent/lib/pkgconfig"
+          export OPENSSL_ROOT_DIR=${BREW_PREFIX}/opt/openssl
           make --directory poker
       
     - name: Extract git tag

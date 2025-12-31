@@ -43,7 +43,8 @@ CFLAGS := -g -fPIC -std=c99 $(WARNINGS) -pthread \
           -I$(EXTERNAL_DIR)/dlg/include \
           -I$(EXTERNAL_DIR)/iniparser/src \
           -I$(EXTERNAL_DIR)/jsmn \
-          -I$(EXTERNAL_DIR)/libwebsockets/include
+          -I$(EXTERNAL_DIR)/libwebsockets/include \
+          $(CPPFLAGS)
 
 .PHONY: all clean test
 
