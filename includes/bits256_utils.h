@@ -29,9 +29,13 @@ int32_t bits256_cmp(bits256 a, bits256 b);
 // Hex encoding/decoding functions (from OS_portable.h)
 int32_t decode_hex(uint8_t *bytes, int32_t n, char *hex);
 int32_t init_hexbytes_noT(char *hexbytes, uint8_t *message, long len);
+int32_t is_hexstr(char *str, int32_t n);
+uint8_t _decode_hex(char *hex);
 
 // String utility functions (from OS_portable.h)
 int32_t safecopy(char *dest, char *src, long len);
+char *clonestr(char *str);
+long _stripwhite(char *buf, int accept);
 
 // OS_init function (from OS_portable.h)
 void OS_init(void);

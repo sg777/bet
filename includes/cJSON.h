@@ -29,6 +29,7 @@
 // Include curve25519.h FIRST to get bits256 type
 #include "../includes/curve25519.h"
 #include "../includes/math_compat.h"
+#include "../includes/bits256_utils.h"
 #include <ctype.h>
 #include <float.h>
 #include <memory.h>
