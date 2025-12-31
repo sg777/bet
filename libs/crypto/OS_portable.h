@@ -69,6 +69,11 @@
 #define MIN(x, y) ( ((x)<(y))?(x):(y) )
 #endif
 
+// Undefine system fmul macro if defined (conflicts with curve25519.h)
+#ifdef fmul
+#undef fmul
+#endif
+
 #include "../../includes/libgfshare.h"
 #include "../../includes/utlist.h"
 #include "../../includes/uthash.h"
