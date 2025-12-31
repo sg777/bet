@@ -15,13 +15,6 @@
 #ifndef OS_PORTABLEH
 #define OS_PORTABLEH
 
-// CRITICAL: Prevent narrow math functions (like fmul) from being declared
-// This MUST be defined before ANY system includes, even before stdio.h
-// Narrow functions are enabled by _GNU_SOURCE (which config.c defines),
-// but we need to prevent them to avoid conflict with curve25519.h's fmul function
-// Define this before any feature test macros are processed
-#define __NO_MATH_NARROW_FUNCTIONS
-
 // iguana_OS has functions that invoke system calls. Whenever possible stdio and similar functions are use and most functions are fully portable and in this file. For things that require OS specific, the call is routed to iguana_OS_portable_*  Usually, all but one OS can be handled with the same code, so iguana_OS_portable.c has most of this shared logic and an #ifdef iguana_OS_nonportable.c
 
 #ifdef __APPLE__
@@ -42,19 +35,18 @@
 #define HAVE_STRUCT_TIMESPEC
 #include <ctype.h>
 #include <fcntl.h>
-// Prevent system math.h from declaring fmul (conflicts with curve25519.h)
-// The narrow math function fmul is declared via __MATHCALL_NARROW in mathcalls-narrow.h
-// We prevent this by ensuring the feature test macros don't enable narrow functions
-// Define _ISOC99_SOURCE to get C99 features but prevent narrow functions
-// by not defining _GNU_SOURCE or by using a wrapper
-#ifndef _GNU_SOURCE
-// If _GNU_SOURCE is not defined, narrow functions typically won't be declared
-// But some systems may still declare them, so we need an additional safeguard
+// CRITICAL: Prevent narrow math functions (like fmul) from being declared
+// _GNU_SOURCE enables narrow math functions which conflict with curve25519.h's fmul
+// We temporarily undefine _GNU_SOURCE before including math.h, then restore it
+#ifdef _GNU_SOURCE
+#define _GNU_SOURCE_SAVED
+#undef _GNU_SOURCE
 #endif
 #include <math.h>
-// After math.h, if fmul was declared as a function (not macro), we can't undefine it
-// But we can prevent the conflict by ensuring our curve25519.h declaration comes after
-// and the compiler will use the last matching declaration
+#ifdef _GNU_SOURCE_SAVED
+#define _GNU_SOURCE
+#undef _GNU_SOURCE_SAVED
+#endif
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
