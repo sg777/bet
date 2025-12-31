@@ -1,7 +1,7 @@
 # Crypto library Makefile
 CC ?= gcc
 AR ?= ar
-CFLAGS = -w -O2 -fPIC -I ../../includes
+CFLAGS = -w -O2 -fPIC -I ../../includes -I ../../external/nng/include
 
 # All source files
 SRCFILES = curve25519.c curve25519-donna.c tweetnacl.c scrypt.c \
