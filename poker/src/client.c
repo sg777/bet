@@ -1432,6 +1432,7 @@ static int32_t bet_player_initialize_table_params(cJSON *argjson, struct private
 
 	bet->maxplayers = max_players;
 	bet->numplayers = max_players;
+	return OK;
 }
 
 static struct cJSON *bet_player_make_payin_tx_data(cJSON *argjson, struct privatebet_info *bet)

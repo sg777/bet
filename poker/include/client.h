@@ -28,10 +28,10 @@ int32_t bet_player_ready(cJSON *argjson, struct privatebet_info *bet, struct pri
 void display_cards();
 int32_t bet_player_reset(struct privatebet_info *bet, struct privatebet_vars *vars);
 
-void bet_player_frontend_read_loop();
-void bet_player_frontend_write_loop();
+void bet_player_frontend_read_loop(void *_ptr);
+void bet_player_frontend_write_loop(void *_ptr);
 
-void bet_player_frontend_loop();
+void bet_player_frontend_loop(void *_ptr);
 int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars);
 int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson);
 void bet_bvv_backend_loop(void *_ptr);
