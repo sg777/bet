@@ -19,9 +19,9 @@
 #include <string.h>
 #include <curl/curl.h>
 
-// For cJSON (assuming it's available, or use simple JSON parsing)
-// If cJSON not available, we'll use basic string building
-#include "cjson/cJSON.h"
+// For cJSON - standard include (adjust path if needed)
+#include <cjson/cJSON.h>
+// Alternative if above doesn't work: #include "cJSON.h"
 
 // Structure to hold HTTP response data
 struct MemoryStruct {
