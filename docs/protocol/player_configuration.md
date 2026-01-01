@@ -1,6 +1,6 @@
-## Configuring the player node
+# Player Configuration
 
-All the configurable options for the player can be set in `player_setup.ini` file, which is located at the path `~/bet/poker/config`. The default configuration settings are as follows: 
+All configurable options for the player node are set in `player_config.ini`, located at `poker/config/player_config.ini`. The default configuration settings are as follows: 
 ```
 [player]
 max_allowed_dcv_commission = 5      #This is the max percentage of the dealer commision that the player is willing to pay, if the dealer sets the commission higher than this then the backend node will exit.

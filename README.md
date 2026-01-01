@@ -90,9 +90,13 @@ cd poker && ./bin/bet withdraw <amount> <destination_address>
 
 ## Documentation
 
-- [Verus Migration Guide](./docs/verus_migration/verus_migration.md)
-- [Configuration Documentation](./docs/protocol/)
-- [Protocol Specifications](./docs/protocol/)
+Comprehensive documentation is available in the [`docs/`](./docs/) directory:
+
+- **[Documentation Index](./docs/README.md)** - Complete documentation guide and navigation
+- **[Getting Started](./docs/protocol/compile.md)** - Installation and setup instructions
+- **[Configuration Guides](./docs/README.md#configuration-guides)** - Node configuration (dealer, player, cashier)
+- **[Architecture & Protocol](./docs/verus_migration/verus_migration.md)** - Verus ID architecture and protocol details
+- **[API Reference](./docs/protocol/GUI_MESSAGE_FORMATS.md)** - GUI WebSocket API documentation
 
 ## License
 
