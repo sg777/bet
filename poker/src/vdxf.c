@@ -94,9 +94,23 @@ static cJSON *update_with_retry(const char *method, cJSON *params)
 	do {
 		retval = chips_rpc(method, params, &result);
 		if (retval == OK && result && jint(result, "error") == 0) {
-			wait_for_a_blocktime();
-			if (check_if_tx_exists(jstr(result, "tx")))
+			// updateidentity returns txid directly as a string, not as {"tx": "txid"}
+			// Check if result is a string (direct txid) or object with "tx" field
+			const char *txid = NULL;
+			if (result->type == cJSON_String) {
+				txid = result->valuestring;
+			} else {
+				txid = jstr(result, "tx");
+			}
+			
+			if (txid) {
+				wait_for_a_blocktime();
+				if (check_if_tx_exists(txid))
+					break;
+			} else {
+				// No txid to check, assume success
 				break;
+			}
 		}
 		dlg_warn("Retrying %s", method);
 		if (result) cJSON_Delete(result);
@@ -765,12 +779,35 @@ static char *get_str_from_id_key_vdxfid(char *id, char *key_vdxfid)
 cJSON *get_cJSON_from_id_key(const char *id, const char *key, int32_t is_full_id)
 {
 	cJSON *cmm = NULL;
+	cJSON *first_item = NULL;
+	const char *hex_str = NULL;
 
 	cmm = get_cmm_key_data(id, is_full_id, get_vdxf_id(key));
-	if (cmm) {
-		return hex_cJSON(jstr(cJSON_GetArrayItem(cmm, 0), get_vdxf_id(get_key_data_type(key))));
+	if (!cmm) {
+		return NULL;
 	}
-	return NULL;
+
+	first_item = cJSON_GetArrayItem(cmm, 0);
+	if (!first_item) {
+		return NULL;
+	}
+
+	// VDXF data can be stored in two formats:
+	// 1. Simple array of hex strings: ["hexdata"]
+	// 2. Nested object format: [{"bytevector_vdxfid": "hexdata"}]
+	if (first_item->type == cJSON_String) {
+		// Simple format: array contains hex string directly
+		hex_str = first_item->valuestring;
+	} else if (first_item->type == cJSON_Object) {
+		// Nested format: array contains object with bytevector key
+		hex_str = jstr(first_item, get_vdxf_id(get_key_data_type(key)));
+	}
+
+	if (!hex_str) {
+		return NULL;
+	}
+
+	return hex_cJSON(hex_str);
 }
 
 cJSON *get_cJSON_from_table_id_key(char *table_id, char *key)
