@@ -960,10 +960,10 @@ cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool
 	char *data_type = NULL, *data_key = NULL;
 	cJSON *data_obj = NULL, *cmm_obj = NULL;
 
+	// DON'T read entire CMM - just create a new object with the key to update
+	// Verus updateidentity will merge this with existing contentmultimap
 	cmm_obj = cJSON_CreateObject();
-	cmm_obj = get_cmm(id, 0);
 
-	//dlg_info("cmm_old::%s", cJSON_Print(cmm_obj));
 	if (is_key_vdxf_id) {
 		data_type = get_vdxf_id(BYTEVECTOR_VDXF_ID);
 		data_key = key;
@@ -974,11 +974,8 @@ cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool
 
 	data_obj = cJSON_CreateObject();
 	jaddstr(data_obj, data_type, hex_data);
-	//dlg_info("data::%s", cJSON_Print(data_obj));
 
-	cJSON_DeleteItemFromObject(cmm_obj, data_key);
 	cJSON_AddItemToObject(cmm_obj, data_key, data_obj);
-	//dlg_info("cmm_new::%s", cJSON_Print(cmm_obj));
 
 	return update_cmm(id, cmm_obj);
 }

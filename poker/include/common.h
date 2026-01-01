@@ -38,7 +38,7 @@ enum bet_dcv_state {
 #define satoshis_per_unit       1000
 #define normalization_factor    100
 
-#define CARDS_MAXCARDS       14 // 52 for full deck. 14 = 4 hole (2 players) + 5 board + 3-4 burn cards
+#define CARDS_MAXCARDS       8 // 52 for full deck. 8 = 4 hole (2 players) + 3 board + 1 burn (minimal test)
 #define CARDS_MAXPLAYERS     9 // 9   //
 #define CARDS_MAXROUNDS      4 // 9   //
 #define CARDS_MAXCHIPS       1000
