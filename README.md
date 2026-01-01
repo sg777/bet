@@ -1,204 +1,305 @@
 [![bet CD](https://github.com/sg777/bet/actions/workflows/bet-cd.yml/badge.svg?branch=master)](https://github.com/sg777/bet/actions/workflows/bet-cd.yml)
+
 # Pangea-Bet
 
-The details about Verus migration using VDXF IDs are mentioned here in [verus_migration.md](./docs/verus_migration/verus_migration.md)
+**Pangea-Bet** is a decentralized poker platform built on the CHIPS blockchain. It implements secure, trustless mental poker using cryptographic techniques, with all game state and transactions recorded on-chain.
 
-## Abstract
-Bet is a decentralized adaptable gaming platform that meets the needs of any card game and predictable betting scenarios. The initial draft is written by jl777 is [here](./docs/BET_Initial_Draft.md). The detailed technical whitepaper is [here.](https://cdn.discordapp.com/attachments/455737840668770315/456036359870611457/Unsolicited_PANGEA_WP.pdf)
+## Overview
 
-## Underlying Blockchain
-The underlying blockchain and cryptocurrency that bet uses is [CHIPS](https://github.com/chips-blockchain/chips). CHIPS is initially a bitcoin fork and jl777 made improvements to it to have the reduced blocktime to 10 seconds and for security chips chain is notarized on komodo and which is further notarized on bitcoin blockchain. 
+Pangea-Bet enables decentralized poker games where players can join tables, play hands, and settle funds without trusting a central authority. The platform uses:
 
-CHIPS is now available as a PBaaS (Public Blockchain as a Service) chain on Verus, which improves usability and enables identity-based communication using Verus IDs. The platform primarily operates without Lightning Network, recording all game actions directly on the CHIPS blockchain. Lightning Network support is available as legacy/optional functionality for backward compatibility. 
+- **Verus IDs (VDXF)** for node communication and game state storage
+- **CHIPS blockchain** for all transactions and payments
+- **WebSockets** for real-time GUI communication
+- **Cryptographic protocols** for secure card shuffling and dealing
 
-## Configuration
-Bet primarily operates without Lightning Network, recording all game actions directly on the CHIPS blockchain. Please go through the [existing tradeoffs](./docs/protocol/architecture_doc.md) to understand the ecosystem, and the [bet without ln](./docs/protocol/bet_without_ln.md) documentation for details on how poker works without LN, including information about [various transactions](./docs/protocol/tx_flow.md) involved during gameplay.
+## Architecture
 
-The platform uses Verus IDs (VDXF) for node communication and data storage, eliminating the need for static IP addresses and improving reliability. See [verus migration documentation](./docs/verus_migration/verus_migration.md) for details.
+### Communication Model
 
-## To Play
+The platform uses **Verus IDs (VDXF)** for all inter-node communication, eliminating the need for static IP addresses or traditional socket-based communication:
 
-It's simple, just follow these steps to play poker on the bet platform using CHIPS.
-* **Setup:** Setup the nodes by following any of the approaches mentioned in the [setup documentation](./README.md#setup).
-* **Load the funds:** Load the chips wallet with whatever the amount of the CHIPS that you are willing to play. Let's say if you are joining a table of stake_size 10 CHIPS, it's always advisable to load the CHIPS wallet with >10 CHIPS because the actions that occur during the game are recorded in the CHIPS blockchain and every action costs 0.0001 CHIPS tx_fee to the user. 
-```
-To get the chips address on the setup node run
-$chips-cli getnewaddress
-You will get an address and to this address deposit CHIPS to play.
+- **Node Discovery**: Nodes discover each other through Verus IDs on the blockchain
+- **State Storage**: Game state is stored in Verus ID contentmultimaps (CMM) using key-value pairs
+- **Data Synchronization**: All nodes poll Verus IDs to retrieve game state updates
+- **Reliability**: Player disconnections are handled gracefully by reading state from the blockchain
 
-```
-*  **Withdraw funds:** Needless to say, once the game is done, its always advisable to move funds back to your secure wallet. Before withdrawing the funds, if there is any issues like player disconnection, loss of funds like that happens then raise the dispute with the cashier node as mentioned below and then withdraw the funds. 
-```
-cd
-cd bet/poker
-./bin/bet game solve
+See the [Verus Migration Documentation](./docs/verus_migration/verus_migration.md) for detailed information.
 
-Withdraw using the following command
-./bin/bet withdraw <amount> <to_your_chips_address>
-```
-## Setup
-There are many different ways in which you can setup the nodes to play the poker using bet. Here are some of the ways in which you can setup the nodes:
-* The easy approach - Using Docker
-* The hard way - By compiling the chips and bet repos from scratch 
-* Using the precompiled binaries
-* Using the compilation script
+### Payment Model
 
-Irrespective of whichever approach you follow, the prerequisites and configuration of nodes remain same
+- **CHIPS-Only**: All payments are recorded as CHIPS blockchain transactions
+- **On-Chain Settlement**: Game actions (bets, wins, payouts) are recorded on-chain
+- **Multi-Signature Addresses**: Player funds are held in multi-sig addresses for security
+- **Dispute Resolution**: Transaction history on-chain enables dispute resolution
+
+### Node Types
+
+The platform consists of three node types:
+
+1. **Dealer Node**: Manages game tables, coordinates gameplay, collects commission
+2. **Cashier Node**: Validates transactions, processes payouts, provides dispute resolution
+3. **Player Node**: Connects to tables, participates in games, manages player funds
+
+### Network Ports
+
+Each node type uses configurable WebSocket ports for GUI communication:
+
+- **Dealer**: Default port `9000` (configurable via `dealer_config.ini`)
+- **Cashier**: Default port `9002` (configurable via `cashier_config.ini`)
+- **Player**: Default port `9001` (configurable via `player_config.ini`)
+
+All ports are configurable in their respective configuration files. The GUI is served via HTTP on the same port as the WebSocket server.
+
 ## Prerequisites
-##### For Player and Dealer nodes
-* Ports used by the respective entities must be open. Below are the ports used and should remain open if you have any firewall configurations:
-```
-* 9000 - This port is used for WebSocket communication between GUI and {player,dealer} nodes.
-* 1234 - This is the port on which the webserver runs, this port should be opened if the player is hosting its own GUI.
-```
 
-**Note:** Legacy pub-sub/pull-push ports (7797, 7798, 7901, 7902) are no longer used. The platform now uses Verus IDs for node communication, eliminating the need for static IP addresses and legacy socket-based communication.
+### System Requirements
 
-#### For Dealer and Cashier nodes
-* Dealer and cashier nodes require Verus IDs for operation. Static public IP addresses are no longer required due to Verus ID-based communication.
+- **Operating System**: Linux or macOS
+- **CHIPS Node**: Running CHIPS daemon (`chipsd`) with blockchain synced
+- **Verus IDs**: Valid Verus IDs registered on the CHIPS blockchain (for dealer/cashier)
+- **Network**: WebSocket ports open for GUI access (default: 9000-9002)
 
-## Configuring the nodes
-The behaviour of the node is based on how you configure it. We can enable/disable few functionalities of the players and dealers by making corresponding settings in the configuration files. All the configuration files are located in the path`./bet/poker/config`.
+### Verus ID Requirements
 
-Lets take a look into the details of what these configuration settings mean:
-1. For Player configuration follow this [link](./docs/protocol/player_configuration.md)
-2. For Dealer configuration follow this [link](./docs/protocol/dealer_configuration.md)
-3. For Cashier configuration follow this [link](./docs/protocol/cashier_configuration.md)
+Dealer and cashier nodes require Verus IDs registered on the CHIPS blockchain. Players can join using their Verus IDs or by connecting to public tables.
 
-## Setting up the nodes
-Now lets take a look into one by one approach and you can follow either of these approaches to setup the chips and bet nodes.
-### Approach1 :- Playing using Docker - It all takes few commands with the setup time <5 mins 
-The docker image is built on top of the ubuntu 20.04 base image for bet. The simplest way to play poker is using the docker images. All the docker images for the bet are maintained here
+The default identity structure:
 ```
-https://hub.docker.com/r/sg777/bet/tags
-```
-Pull the latest tag (at the time of writing this **v1.5** is the latest tag) and do the following to setup the nodes and play
-#### step1 :- Pulling the docker image 
-```
-docker pull sg777/bet:v1.5
-```
-#### step2 :- Running the docker image 
-**Note:** At the moment the docker setup only works if the host network is shared with the docker image. Since you sharing the host network with the docker please be make sure to stop chipsd and bet if any running in the host machine.
-
-The docker image can be run with various options, here we see few such ways which are important to know. 
-##### To share host n/w
-```
-docker run -it --net=host sg777/bet:v1.5
-
---OR with chosen name to a container
-
-docker run -it --name poker --net=host sg777/bet:v1.5
-```
-##### To share host n/w and to run bet using gdb
-```
-docker run -it --net=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --name poker sg777/bet:v1.5
-```
-##### To share host n/w, to run bet using gdb and to use locally available preloaded chips blocks
-
-Lets say your machine already has chips installed in you can mount the path of **.chips** directory path on to the docker image, else follow these steps to download the chips bootstrap node.
-```
-cd && mkdir chips_bootstrap
-cd chips_bootstrap
-wget https://eu.bootstrap.dexstats.info/CHIPS-bootstrap.tar.gz
-tar --overwrite -xvf "$bootstrap_node"
-wget https://raw.githubusercontent.com/chips-blockchain/bet/master/poker/config/chips.conf
-```
-Then run the docker as follows:
-```
-docker run -it --net=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /root/chips_bootstrap:/root/.chips:rw --name poker sg777/bet:v1.5
-
---OR without debug option
-
-docker run -it --net=host -v /root/chips_bootstrap:/root/.chips:rw --name poker sg777/bet:v1.5
-
-cd && ./chips/src/chipsd &
-```
-**Note:** Here _**/root/chips_bootstrap**_ is the path on my local machine where(Here you have to provide the path on your machine) in which i downloaded chips bootstrap as mentioned above and i'm mounting this to the path _**/root/.chips**_ on the docker image. If you start the docker image with this approach you can simply skip **step3**.
-
-#### step3 :- Running chips node
-Once you have access to the docker shell, you can load the chips from the [chips bootstrap node](./docs/protocol/release.md#downloading-chips-bootstrap-node). Running the below script pulls the bootstrap node and configures the chips node.
-```
-cd && ./load_bootstrap_node.sh
-```
-Then run the chips daemon
-```
-./chips/src/chipsd &
-```
-#### step4 :- If you are a player run the player as follows
-```
-cd
-./bet/poker/bin/bet player
-```
-#### step4 :-  If you are the dealer run the dealer as follows
-```
-cd
-./bet/poker/bin/bet dealer
-
-# Or using the legacy command:
-./bet/poker/bin/bet dcv
-```
-#### step5 :-  Hosting the GUI
-##### Using the GUI hosted by the cashier and dealer nodes
-GUI can be hosted by anyone, by default the GUI is hosted by all the cashier nodes and dealer nodes can also host the GUI as a service they provide to its players. After starting the player node with `./bin/bet player` in the above step, in the logs you see the list of the servers where the GUI hosted something like below:
-```
-[client.c:bet_player_handle_stack_info_resp:1345] Player can use any of the GUI's hosted by cashiers to connect to backend
-[config.c:bet_display_cashier_hosted_gui:236] http://141.94.227.65:1234/
-[config.c:bet_display_cashier_hosted_gui:236] http://141.94.227.66:1234/
-[config.c:bet_display_cashier_hosted_gui:236] http://141.94.227.67:1234/
-[config.c:bet_display_cashier_hosted_gui:236] http://141.94.227.68:1234/
-[config.c:bet_display_cashier_hosted_gui:236] http://159.69.23.30:1234/
-```
-You can access any of these links in your browser and from which you can connect to the players backend which you setup in the step 4.
-
-##### Hosting own GUI
-
-In case if you like to host the GUI, please note that the GUI server is running on the port `1234`, so for this you need to start the docker image as mentioned below: 
-```
-docker run -it -p 1234:1234 sg777/bet:v1.5
-
-Note: v1.5 is latest tag at the time of this writing, always pull the docker image with the latest tag to avoid the manual process of updating and compiling the git repos manually.
-
-cd
-cd pangea-poker
-npm start &
+sg777z.chips.vrsc@ (root identity)
+├── dealer.sg777z.chips.vrsc@
+│   └── <dealer_name>.sg777z.chips.vrsc@
+├── cashier.sg777z.chips.vrsc@
+└── <player_name>.sg777z.chips.vrsc@
 ```
 
-Once you hosted your own GUI, from your local browser you can access the GUI using `http://localhost:1234/`.
+See [ID Creation Process](./docs/verus_migration/id_creation_process.md) for details.
 
-#### step6 :-  Playing
-Now we have everything ready to play. All you need to just connect to player backend from GUI and play. [Lets play](./docs/protocol/player_gui.md)
+## Installation
 
-***NOTE: Irrespective of whichever approach you follow in setting up the nodes, the steps3-6 remains same.***
+### Quick Start with Docker (Recommended)
 
-### Approach2 :- Compiling the repos from scratch
-
-#### Compilation Guidelines
-1. [Compiling only bet repo](./docs/protocol/ubuntu_compile.md#building-bet)
-2. [Compiling all the repos needed on Ubuntu](./docs/protocol/ubuntu_compile.md)
-3. [Detailed compilation of all the repos needed on various platforms](./docs/protocol/compile.md)
-
-### Approach3 :- Using the precompiled binaries
-We making automated [ binary releases](https://github.com/chips-blockchain/bet/releases) for various platforms. The latest binaries from here can be taken to setup the nodes.
-#### Downloading precompiled binaries & CHIPS bootstrap node
-1. [Precompiled binaries](./docs/protocol/release.md#downloading-precombiled-binaries-for-linux)
-2. [CHIPS bootstrap node](./docs/protocol/release.md#downloading-chips-bootstrap-node)
-
-### Approach4 :- Using the installation script
-
-If you wish to install everything required for setting up Pangea Poker, you can use the following command to auto-install Pangea Poker:
+The easiest way to get started is using Docker:
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/chips-blockchain/bet/master/tools/install-pangea.sh)"
+# Pull the latest Docker image
+docker pull sg777/bet:latest
+
+# Run with host network (required for CHIPS connectivity)
+docker run -it --net=host sg777/bet:latest
+
+# Inside the container, start CHIPS daemon
+cd && ./chips/src/chipsd &
+
+# Start a player node
+cd && ./bet/poker/bin/bet player
+
+# Start a dealer node (requires Verus ID configuration)
+cd && ./bet/poker/bin/bet dealer
 ```
 
+### Building from Source
 
-## Communication between Bet Nodes
-The communication between nodes is described [here](./docs/protocol/node_communication.md). The platform uses Verus IDs (VDXF) for node discovery and communication, eliminating the need for static IP addresses. See [verus migration documentation](./docs/verus_migration/verus_migration.md) for details on how Verus IDs are used for storing game state and enabling reliable node communication. 
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/sg777/bet.git
+   cd bet
+   git submodule update --init --recursive
+   ```
 
-## CHIPS & LN Upgrade
-[Here](./docs/protocol/upgrade.md) contains the list of APIs that bet uses from chips and ln. So whenever any upstream changes are made to either chips or ln repos, one must be careful to check if there is any change in these API functionalities, inputs and outputs.
+2. **Build the project**:
+   ```bash
+   cd poker
+   make
+   ```
 
-**Note:** Lightning Network support is now legacy/optional. The platform primarily operates using direct CHIPS blockchain transactions and Verus IDs for communication.
+3. **Build dependencies** (if needed):
+   ```bash
+   make --directory ../external/iniparser
+   ```
 
-## Glossary
-Many of the times we use short hand abbreviations, so glossary for it is [here](./docs/protocol/glossary.md). 
+See [Compilation Documentation](./docs/protocol/compile.md) for detailed build instructions.
+
+### Pre-compiled Binaries
+
+Pre-compiled binaries are available in the [Releases](https://github.com/sg777/bet/releases) section.
+
+## Configuration
+
+All configuration files are located in `poker/config/`:
+
+### Dealer Configuration (`dealer_config.ini`)
+
+Key settings:
+- `gui_ws_port`: WebSocket port for GUI (default: 9000)
+- `chips_tx_fee`: Transaction fee for CHIPS operations (default: 0.0001)
+- `dcv_commission`: Dealer commission percentage (default: 0.5%)
+- `min_cashiers`: Minimum cashiers required (default: 2)
+- `max_players`: Maximum players per table (default: 2)
+- `big_blind`: Big blind amount in CHIPS
+- `min_stake` / `max_stake`: Table stake limits in big blinds
+
+### Player Configuration (`player_config.ini`)
+
+Key settings:
+- `gui_ws_port`: WebSocket port for GUI (default: 9001)
+- `name`: Player display name
+- `table_stake_size`: Stake size in big blinds (20-100 range)
+- `max_allowed_dcv_commission`: Maximum acceptable dealer commission
+
+### Cashier Configuration (`cashier_config.ini`)
+
+Key settings:
+- `gui_ws_port`: WebSocket port for GUI (default: 9002)
+- Cashier node definitions with public keys and IPs
+
+### Verus IDs and Keys Configuration (`verus_ids_keys.ini`)
+
+Configure Verus identity names and VDXF keys used by the platform. Default values are defined in the code, but can be customized here.
+
+See [Configuration Documentation](./docs/protocol/) for detailed configuration options.
+
+## Usage
+
+### Starting a Dealer Node
+
+```bash
+cd poker
+./bin/bet dealer
+```
+
+The dealer will:
+1. Connect to the CHIPS blockchain
+2. Register/update its Verus ID with table information
+3. Wait for players to join
+4. Coordinate gameplay
+5. Record all game actions on-chain
+
+### Starting a Cashier Node
+
+```bash
+cd poker
+./bin/cashierd
+```
+
+The cashier will:
+1. Connect to the CHIPS blockchain
+2. Monitor dealer Verus IDs for table information
+3. Validate player transactions
+4. Process payouts
+5. Handle dispute resolution
+
+### Starting a Player Node
+
+```bash
+cd poker
+./bin/bet player
+```
+
+The player will:
+1. Connect to the CHIPS blockchain
+2. Discover available tables via dealer Verus IDs
+3. Join a table using the configured stake size
+4. Participate in games
+5. Connect to GUI for gameplay
+
+### Accessing the GUI
+
+The GUI is served via HTTP on the WebSocket port of each node:
+
+- **Dealer GUI**: `http://localhost:9000` (or configured port)
+- **Cashier GUI**: `http://localhost:9002` (or configured port)
+- **Player GUI**: `http://localhost:9001` (or configured port)
+
+Players can also use cashier-hosted GUIs. After starting a player node, check the logs for available GUI URLs:
+
+```
+[config.c:bet_display_cashier_hosted_gui:236] http://<cashier-ip>:9002/
+```
+
+### Funding and Withdrawals
+
+**Funding a player wallet**:
+```bash
+# Get a CHIPS address
+chips-cli getnewaddress
+
+# Send CHIPS to this address (requires funds in your CHIPS wallet)
+```
+
+**Withdrawing funds**:
+```bash
+cd poker
+./bin/bet withdraw <amount> <destination_address>
+```
+
+**Important**: Always ensure you have sufficient CHIPS to cover:
+- Table stake size
+- Transaction fees (approximately 0.0001 CHIPS per game action)
+- Reserve for multiple game actions (recommended: stake_size + 0.01 CHIPS)
+
+### Game Flow
+
+1. **Dealer Setup**: Dealer creates/updates table information on Verus ID
+2. **Player Discovery**: Players discover tables by reading dealer Verus IDs
+3. **Table Join**: Players join tables by creating pay-in transactions
+4. **Gameplay**: Game state is stored in Verus IDs, all nodes poll for updates
+5. **Settlement**: Winners receive payouts, dealer collects commission
+6. **Dispute Resolution**: Transaction history enables dispute resolution
+
+## Documentation
+
+- [Verus Migration Guide](./docs/verus_migration/verus_migration.md) - Comprehensive guide to Verus ID architecture
+- [ID Creation Process](./docs/verus_migration/id_creation_process.md) - How to create and manage Verus IDs
+- [Keys and Data Management](./docs/verus_migration/ids_keys_data.md) - VDXF key structure and data storage
+- [GUI Message Formats](./docs/protocol/GUI_MESSAGE_FORMATS.md) - WebSocket API documentation
+- [Protocol Documentation](./docs/protocol/) - Detailed protocol specifications
+- [Glossary](./docs/protocol/glossary.md) - Terminology and abbreviations
+
+## Technical Details
+
+### Underlying Blockchain
+
+Pangea-Bet runs on [CHIPS](https://github.com/chips-blockchain/chips), a Public Blockchain as a Service (PBaaS) chain on the Verus network. CHIPS features:
+
+- **10-second block time** for fast transaction confirmations
+- **Notarization** to Bitcoin blockchain for security
+- **Verus ID integration** for identity-based operations
+- **Low transaction fees** (~0.0001 CHIPS per transaction)
+
+### Security Model
+
+- **Mental Poker**: Cryptographic protocols ensure card shuffling is verifiable and secure
+- **Multi-Signature Wallets**: Player funds are held in multi-sig addresses
+- **On-Chain Verification**: All game actions are recorded on-chain for auditability
+- **Dispute Resolution**: Transaction history enables transparent dispute resolution
+
+### Performance Considerations
+
+- **Block Latency**: Game actions are recorded on-chain, introducing ~10-20 second latency per action
+- **Transaction Costs**: Each game action costs ~0.0001 CHIPS in transaction fees
+- **State Polling**: Nodes poll Verus IDs to retrieve game state updates
+- **Scalability**: Multiple tables can run simultaneously, each using separate Verus IDs
+
+## Contributing
+
+Contributions are welcome! Please ensure:
+
+1. Code follows existing style and patterns
+2. All compiler warnings are addressed (`-Werror` is enabled)
+3. Memory safety is maintained (no leaks, no buffer overflows)
+4. Documentation is updated for significant changes
+
+## License
+
+See LICENSE file for details.
+
+## Support
+
+For issues, questions, or contributions:
+- **GitHub Issues**: [Report issues](https://github.com/sg777/bet/issues)
+- **Documentation**: See `docs/` directory for detailed documentation
+
+---
+
+**Note**: This is active development software. Always test thoroughly before using with real funds.
