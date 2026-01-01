@@ -77,27 +77,6 @@ See [ID Creation Process](./docs/verus_migration/id_creation_process.md) for det
 
 ## Installation
 
-### Quick Start with Docker (Recommended)
-
-The easiest way to get started is using Docker:
-
-```bash
-# Pull the latest Docker image
-docker pull sg777/bet:latest
-
-# Run with host network (required for CHIPS connectivity)
-docker run -it --net=host sg777/bet:latest
-
-# Inside the container, start CHIPS daemon
-cd && ./chips/src/chipsd &
-
-# Start a player node
-cd && ./bet/poker/bin/bet player
-
-# Start a dealer node (requires Verus ID configuration)
-cd && ./bet/poker/bin/bet dealer
-```
-
 ### Building from Source
 
 1. **Clone the repository**:
