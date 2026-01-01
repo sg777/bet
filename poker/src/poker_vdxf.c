@@ -175,31 +175,149 @@ int32_t poker_verify_setup()
  * ============================================================================ */
 
 /**
- * Poll cashier for pending join requests for a specific table
+ * Check if a player is already in t_player_info
+ */
+static bool is_player_already_joined(const char *table_id, const char *player_id)
+{
+	char *game_id_str = get_str_from_id_key((char *)table_id, T_GAME_ID_KEY);
+	if (!game_id_str) return false;
+	
+	cJSON *t_player_info = get_cJSON_from_id_key_vdxfid((char *)table_id, 
+		get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+	if (!t_player_info) return false;
+	
+	cJSON *player_info = cJSON_GetObjectItem(t_player_info, "player_info");
+	if (!player_info) return false;
+	
+	for (int i = 0; i < cJSON_GetArraySize(player_info); i++) {
+		const char *entry = jstri(player_info, i);
+		if (entry && strstr(entry, player_id)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Process a player's join request
+ * Add them to t_player_info on the table
+ */
+static int32_t process_player_join(const char *table_id, const char *player_id, 
+                                    const char *payin_tx, const char *dealer_id)
+{
+	cJSON *payin_tx_data = cJSON_CreateObject();
+	cJSON_AddStringToObject(payin_tx_data, "verus_pid", player_id);
+	cJSON_AddStringToObject(payin_tx_data, "table_id", table_id);
+	cJSON_AddStringToObject(payin_tx_data, "dealer_id", dealer_id);
+	
+	int32_t retval = process_payin_tx_data((char *)payin_tx, payin_tx_data);
+	cJSON_Delete(payin_tx_data);
+	
+	return retval;
+}
+
+/**
+ * Check if a txid exists in the cashier's transaction list
+ */
+static bool is_txid_at_cashier(cJSON *cashier_txids, const char *txid)
+{
+	if (!cashier_txids || !txid) return false;
+	
+	for (int i = 0; i < cJSON_GetArraySize(cashier_txids); i++) {
+		const char *t = jstri(cashier_txids, i);
+		if (t && strcmp(t, txid) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Check a specific player for pending join request
+ * Returns 1 if processed, 0 if not applicable, negative on error
+ */
+static int32_t check_player_join_request(const char *player_id, const char *table_id, 
+                                          const char *dealer_id, cJSON *cashier_txids)
+{
+	cJSON *join_request = NULL;
+	
+	// Get player's p_join_request from their identity
+	join_request = get_cJSON_from_id_key(player_id, P_JOIN_REQUEST_KEY, 0);
+	if (!join_request) {
+		return 0;  // No join request from this player
+	}
+	
+	// Check if this join request is for our table
+	const char *req_dealer = jstr(join_request, "dealer_id");
+	const char *req_table = jstr(join_request, "table_id");
+	const char *req_payin = jstr(join_request, "payin_tx");
+	
+	if (!req_dealer || !req_table || !req_payin) {
+		cJSON_Delete(join_request);
+		return 0;
+	}
+	
+	if (strcmp(req_dealer, dealer_id) != 0 || strcmp(req_table, table_id) != 0) {
+		cJSON_Delete(join_request);
+		return 0;  // Not for our table
+	}
+	
+	// Verify the payin_tx exists at cashier
+	if (!is_txid_at_cashier(cashier_txids, req_payin)) {
+		dlg_warn("Player %s payin_tx %s not found at cashier", player_id, req_payin);
+		cJSON_Delete(join_request);
+		return 0;
+	}
+	
+	// Check if player is already joined
+	if (is_player_already_joined(table_id, player_id)) {
+		cJSON_Delete(join_request);
+		return 0;  // Already joined
+	}
+	
+	// Process the join!
+	dlg_info("Processing join request from player %s (payin_tx: %s)", player_id, req_payin);
+	
+	int32_t retval = process_player_join(table_id, player_id, req_payin, dealer_id);
+	cJSON_Delete(join_request);
+	
+	if (retval == OK) {
+		dlg_info("Player %s successfully added to table %s", player_id, table_id);
+		return 1;
+	} else {
+		dlg_error("Failed to add player %s: %s", player_id, bet_err_str(retval));
+		return retval;
+	}
+}
+
+/**
+ * Poll for pending join requests for a specific table
  * 
- * Flow:
- * 1. Get cashier's identity address
- * 2. Query incoming transactions to that address
- * 3. Filter for transactions with data targeting this table
- * 4. Process each valid join request
+ * Strategy: 
+ * 1. Get all txids at cashier since start_block
+ * 2. Check known player identities for p_join_request targeting this table
+ * 3. Verify their payin_tx is in the cashier tx list
+ * 4. Add player to t_player_info
  * 
- * @param cashier_id The cashier's Verus ID
+ * @param cashier_id The cashier's short Verus ID (e.g., "cashier")
  * @param table_id The table ID to filter for
  * @param dealer_id The dealer ID to filter for
+ * @param start_block Only check transactions from this block onwards
  * @return Number of join requests processed, or negative error code
  */
-int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_id, const char *dealer_id)
+int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_id, 
+                                      const char *dealer_id, int32_t start_block)
 {
 	char *cashier_address = NULL;
 	cJSON *txids = NULL;
 	int32_t processed = 0;
+	int32_t result = 0;
 
 	if (!cashier_id || !table_id || !dealer_id) {
 		return ERR_ARGS_NULL;
 	}
 
 	// Get cashier's identity address
-	// Build full cashier ID: e.g., "cashier.sg777z.chips@"
 	char full_cashier_id[128] = { 0 };
 	snprintf(full_cashier_id, sizeof(full_cashier_id), "%s.%s", cashier_id, bet_get_poker_id_fqn());
 	
@@ -209,41 +327,36 @@ int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_i
 		return ERR_ID_NOT_FOUND;
 	}
 
-	dlg_info("Polling cashier %s (address: %s) for join requests", full_cashier_id, cashier_address);
-
-	// Get all transaction IDs for this address
-	txids = get_address_txids(cashier_address);
+	// Get all transactions at cashier from start_block onwards
+	txids = get_address_txids_range(cashier_address, start_block, 0);
 	free(cashier_address);
 
-	if (!txids) {
-		dlg_info("No transactions found for cashier address");
+	if (!txids || cJSON_GetArraySize(txids) == 0) {
+		if (txids) cJSON_Delete(txids);
 		return 0;
 	}
 
-	// Process each transaction
-	for (int i = 0; i < cJSON_GetArraySize(txids); i++) {
-		cJSON *txid_item = cJSON_GetArrayItem(txids, i);
-		if (!txid_item || txid_item->type != cJSON_String) {
-			continue;
-		}
+	dlg_info("Checking %d cashier transactions since block %d", 
+		cJSON_GetArraySize(txids), start_block);
 
-		const char *txid = txid_item->valuestring;
-		
-		// Decode transaction to get data
-		cJSON *tx_data = decode_tx_data(txid);
-		if (!tx_data) {
-			continue;
+	// Check known player identities for join requests
+	// For now, check a hardcoded list - in production this would be
+	// a dynamic player registry or discovery mechanism
+	const char *known_players[] = {"p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", NULL};
+	
+	for (int i = 0; known_players[i] != NULL; i++) {
+		result = check_player_join_request(known_players[i], table_id, dealer_id, txids);
+		if (result > 0) {
+			processed += result;
 		}
-
-		// Check if this is a join request for our table
-		// The data should contain: {dealer_id, table_id, verus_pid}
-		// TODO: Parse the actual data format from the transaction
-		// For now, we log and continue
-		
-		cJSON_Delete(tx_data);
 	}
 
 	cJSON_Delete(txids);
+	
+	if (processed > 0) {
+		dlg_info("Processed %d join request(s)", processed);
+	}
+	
 	return processed;
 }
 

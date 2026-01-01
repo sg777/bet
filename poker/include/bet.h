@@ -264,6 +264,7 @@ struct table {
 	char table_id[64];
 	char dealer_id[64];
 	char cashier_id[64];  // Trusted cashier handling player funds
+	int32_t start_block;  // Block height when table was started (for polling)
 };
 extern struct table player_t;
 

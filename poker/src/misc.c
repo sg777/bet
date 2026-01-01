@@ -185,6 +185,7 @@ cJSON *struct_table_to_cJSON(struct table *t)
 		cJSON_AddStringToObject(table_info, "table_id", t->table_id);
 		cJSON_AddStringToObject(table_info, "dealer_id", t->dealer_id);
 		cJSON_AddStringToObject(table_info, "cashier_id", t->cashier_id);
+		cJSON_AddNumberToObject(table_info, "start_block", t->start_block);
 	}
 	return table_info;
 }

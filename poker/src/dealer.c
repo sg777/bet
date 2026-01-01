@@ -102,17 +102,17 @@ void dealer_init_deck()
 	gen_deck(d_deck_info.dealer_r, CARDS_MAXCARDS);
 }
 
-int32_t dealer_table_init(struct table t)
+int32_t dealer_table_init(struct table *t)
 {
 	int32_t game_state = G_ZEROIZED_STATE, retval = OK;
 	char hexstr[65];
 	cJSON *out = NULL, *t_game_info = NULL;
 	char *game_id_vdxfid = NULL;
 
-	if (!is_id_exists(t.table_id, 0))
+	if (!is_id_exists(t->table_id, 0))
 		return ERR_ID_NOT_FOUND;
 
-	game_state = get_game_state(t.table_id);
+	game_state = get_game_state(t->table_id);
 
 	switch (game_state) {
 	case G_ZEROIZED_STATE:
@@ -123,7 +123,7 @@ int32_t dealer_table_init(struct table t)
 		
 		// Store game_id
 		dlg_info("Updating %s key...", T_GAME_ID_KEY);
-		out = poker_append_key_hex(t.table_id, T_GAME_ID_KEY, hexstr, false);
+		out = poker_append_key_hex(t->table_id, T_GAME_ID_KEY, hexstr, false);
 		if (!out)
 			return ERR_TABLE_LAUNCH;
 		dlg_info("%s", cJSON_Print(out));
@@ -139,7 +139,7 @@ int32_t dealer_table_init(struct table t)
 		dlg_info("Updating Game state to %s with key %s...", game_state_str(G_TABLE_ACTIVE), game_id_vdxfid);
 		t_game_info = cJSON_CreateObject();
 		cJSON_AddNumberToObject(t_game_info, "game_state", G_TABLE_ACTIVE);
-		out = poker_append_key_json(t.table_id, game_id_vdxfid, t_game_info, true);
+		out = poker_append_key_json(t->table_id, game_id_vdxfid, t_game_info, true);
 		if (!out)
 			return ERR_GAME_STATE_UPDATE;
 		dlg_info("%s", cJSON_Print(out));
@@ -147,7 +147,7 @@ int32_t dealer_table_init(struct table t)
 	case G_TABLE_ACTIVE:
 		// Get game_id from chain if we're resuming
 		if (game_state == G_TABLE_ACTIVE) {
-			char *game_id_str = poker_get_key_str(t.table_id, T_GAME_ID_KEY);
+			char *game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
 			if (!game_id_str) {
 				dlg_error("Failed to get game_id from chain");
 				return ERR_GAME_ID_NOT_FOUND;
@@ -156,10 +156,14 @@ int32_t dealer_table_init(struct table t)
 			game_id_vdxfid = get_key_data_vdxf_id(T_GAME_INFO_KEY, hexstr);
 		}
 		
+		// Set start_block to current block height for join request polling
+		t->start_block = chips_get_block_count();
+		dlg_info("Table start_block set to: %d", t->start_block);
+		
 		dlg_info("Updating %s key...", T_TABLE_INFO_KEY);
 		out = poker_append_key_json(
-			t.table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, hexstr),
-			struct_table_to_cJSON(&t), true);
+			t->table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, hexstr),
+			struct_table_to_cJSON(t), true);
 		if (!out)
 			return ERR_TABLE_LAUNCH;
 		dlg_info("%s", cJSON_Print(out));
@@ -168,12 +172,24 @@ int32_t dealer_table_init(struct table t)
 		dlg_info("Updating Game state to %s...", game_state_str(G_TABLE_STARTED));
 		t_game_info = cJSON_CreateObject();
 		cJSON_AddNumberToObject(t_game_info, "game_state", G_TABLE_STARTED);
-		out = poker_append_key_json(t.table_id, game_id_vdxfid, t_game_info, true);
+		out = poker_append_key_json(t->table_id, game_id_vdxfid, t_game_info, true);
 		if (!out)
 			return ERR_GAME_STATE_UPDATE;
 		dlg_info("%s", cJSON_Print(out));
 		break;
 	default:
+		// Table is already started - load start_block from t_table_info
+		{
+			char *game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
+			if (game_id_str) {
+				cJSON *t_table_info = get_cJSON_from_id_key_vdxfid(t->table_id, 
+					get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+				if (t_table_info) {
+					t->start_block = jint(t_table_info, "start_block");
+					dlg_info("Loaded start_block from chain: %d", t->start_block);
+				}
+			}
+		}
 		dlg_info("Table is in game, at state ::%s", game_state_str(game_state));
 	}
 	return retval;
@@ -253,9 +269,12 @@ int32_t handle_game_state(struct table *t)
 	dlg_info("%s", game_state_str(game_state));
 	switch (game_state) {
 	case G_TABLE_STARTED:
-		// Poll cashier for pending join requests
+		// Poll cashier for pending join requests (from start_block onwards)
+		// If start_block is 0 (old data), poll from block 1
 		if (t->cashier_id[0] != '\0') {
-			int32_t joins = poker_poll_cashier_for_joins(t->cashier_id, t->table_id, t->dealer_id);
+			int32_t start = (t->start_block > 0) ? t->start_block : 1;
+			int32_t joins = poker_poll_cashier_for_joins(t->cashier_id, t->table_id, 
+			                                              t->dealer_id, start);
 			if (joins > 0) {
 				dlg_info("Processed %d join requests from cashier", joins);
 			}
@@ -333,7 +352,7 @@ int32_t dealer_init(struct table t)
 		}
 	}
 
-	retval = dealer_table_init(t);
+	retval = dealer_table_init(&t);
 	if (retval != OK) {
 		dlg_info("Table Init is failed");
 		return retval;

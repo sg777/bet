@@ -92,6 +92,8 @@ bool check_if_tx_exists(const char *tx_id);
 /* Identity helper functions */
 char *get_identity_address(const char *verus_id);
 cJSON *get_address_txids(const char *address);
+cJSON *get_address_txids_range(const char *address, int32_t start_block, int32_t end_block);
 cJSON *decode_tx_data(const char *txid);
+cJSON *get_tx_sender_addresses(const char *txid);
 
 #endif /* COMMANDS_H */

@@ -58,8 +58,8 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 *   table_id: table to join
 *   cashier_id: cashier where payin was sent
 *   payin_tx: transaction ID of payin
-*   status: "pending", "accepted", "rejected", "refunded"
 * }
+* Player checks t_player_info to know if accepted (no status field needed)
 */
 #define P_JOIN_REQUEST_KEY "chips.vrsc::poker.sg777z.p_join_request"
 
@@ -224,6 +224,7 @@ int32_t get_player_id(int *player_id);
 int32_t join_table();
 int32_t find_table();
 void process_block(char *block_hash);
+int32_t process_payin_tx_data(char *txid, cJSON *payin_tx_data);
 
 /* ============================================================================
  * Dealer/Table Registry (internal - use poker_vdxf.h for public API)

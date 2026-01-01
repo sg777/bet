@@ -2192,6 +2192,18 @@ char *get_identity_address(const char *verus_id)
  */
 cJSON *get_address_txids(const char *address)
 {
+	return get_address_txids_range(address, 0, 0);
+}
+
+/**
+ * Get transaction IDs for an address within a block range
+ * @param address Identity address to query
+ * @param start_block Starting block height (0 for no limit)
+ * @param end_block Ending block height (0 for current height)
+ * @return cJSON array of txids or NULL on failure
+ */
+cJSON *get_address_txids_range(const char *address, int32_t start_block, int32_t end_block)
+{
 	int32_t retval = OK;
 	cJSON *params = NULL, *result = NULL, *addresses = NULL, *addr_obj = NULL;
 
@@ -2199,12 +2211,19 @@ cJSON *get_address_txids(const char *address)
 		return NULL;
 	}
 
-	// Build params: [{"addresses": ["<address>"]}]
+	// Build params: [{"addresses": ["<address>"], "start": N, "end": M}]
 	addresses = cJSON_CreateArray();
 	cJSON_AddItemToArray(addresses, cJSON_CreateString(address));
 	
 	addr_obj = cJSON_CreateObject();
 	cJSON_AddItemToObject(addr_obj, "addresses", addresses);
+	
+	if (start_block > 0) {
+		cJSON_AddNumberToObject(addr_obj, "start", start_block);
+	}
+	if (end_block > 0) {
+		cJSON_AddNumberToObject(addr_obj, "end", end_block);
+	}
 	
 	params = cJSON_CreateArray();
 	cJSON_AddItemToArray(params, addr_obj);
@@ -2267,4 +2286,74 @@ cJSON *decode_tx_data(const char *txid)
 	}
 
 	return result;
+}
+
+/**
+ * Get sender addresses from a transaction's inputs
+ * @param txid Transaction ID
+ * @return cJSON array of sender addresses or NULL
+ */
+cJSON *get_tx_sender_addresses(const char *txid)
+{
+	int32_t retval = OK;
+	cJSON *params = NULL, *result = NULL, *addresses = NULL;
+
+	if (!txid) {
+		return NULL;
+	}
+
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(txid));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(1)); // verbose = true
+
+	retval = chips_rpc("getrawtransaction", params, &result);
+	cJSON_Delete(params);
+
+	if (retval != OK || !result) {
+		return NULL;
+	}
+
+	addresses = cJSON_CreateArray();
+
+	// Get addresses from vout of previous transactions (via vin)
+	cJSON *vin = cJSON_GetObjectItem(result, "vin");
+	if (vin) {
+		for (int i = 0; i < cJSON_GetArraySize(vin); i++) {
+			cJSON *input = cJSON_GetArrayItem(vin, i);
+			const char *prev_txid = jstr(input, "txid");
+			int prev_vout = jint(input, "vout");
+			
+			if (prev_txid) {
+				// Get the previous transaction to find the address
+				cJSON *prev_params = cJSON_CreateArray();
+				cJSON_AddItemToArray(prev_params, cJSON_CreateString(prev_txid));
+				cJSON_AddItemToArray(prev_params, cJSON_CreateNumber(1));
+				
+				cJSON *prev_result = NULL;
+				retval = chips_rpc("getrawtransaction", prev_params, &prev_result);
+				cJSON_Delete(prev_params);
+				
+				if (retval == OK && prev_result) {
+					cJSON *prev_vout_arr = cJSON_GetObjectItem(prev_result, "vout");
+					if (prev_vout_arr && prev_vout < cJSON_GetArraySize(prev_vout_arr)) {
+						cJSON *output = cJSON_GetArrayItem(prev_vout_arr, prev_vout);
+						cJSON *scriptPubKey = cJSON_GetObjectItem(output, "scriptPubKey");
+						if (scriptPubKey) {
+							cJSON *addr_arr = cJSON_GetObjectItem(scriptPubKey, "addresses");
+							if (addr_arr && cJSON_GetArraySize(addr_arr) > 0) {
+								const char *addr = jstri(addr_arr, 0);
+								if (addr) {
+									cJSON_AddItemToArray(addresses, cJSON_CreateString(addr));
+								}
+							}
+						}
+					}
+					cJSON_Delete(prev_result);
+				}
+			}
+		}
+	}
+
+	cJSON_Delete(result);
+	return addresses;
 }

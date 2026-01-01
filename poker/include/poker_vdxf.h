@@ -234,7 +234,8 @@ int32_t poker_verify_setup();
  * @param dealer_id The dealer ID to filter for
  * @return Number of join requests processed, or negative error code
  */
-int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_id, const char *dealer_id);
+int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_id, 
+                                      const char *dealer_id, int32_t start_block);
 
 #endif /* __POKER_VDXF_H__ */
 

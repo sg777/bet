@@ -353,13 +353,13 @@ int32_t join_table()
 	}
 
 	// Step 2: Update player identity with join request info
-	// This allows dealer to know which player wants to join which table
+	// This allows dealer to discover which player wants to join which table
+	// Player checks t_player_info to know if they're accepted (no status field needed)
 	join_request = cJSON_CreateObject();
 	cJSON_AddStringToObject(join_request, "dealer_id", player_config.dealer_id);
 	cJSON_AddStringToObject(join_request, "table_id", player_config.table_id);
 	cJSON_AddStringToObject(join_request, "cashier_id", bet_get_cashiers_id_fqn());
 	cJSON_AddStringToObject(join_request, "payin_tx", player_config.txid);
-	cJSON_AddStringToObject(join_request, "status", "pending");
 
 	dlg_info("Updating player identity with join request: %s", cJSON_Print(join_request));
 	update_result = append_cmm_from_id_key_data_cJSON(
