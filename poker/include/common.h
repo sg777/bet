@@ -57,9 +57,14 @@ enum bet_dcv_state {
 #define DEFAULT_CASHIER_WS_PORT    9002
 extern int gui_ws_port;
 
+// Betting amounts in CHIPS (simplified for testing)
 #define default_chips_tx_fee        0.0001
-#define default_bb_in_chips         0.01
-#define default_min_stake_in_bb     20
+#define default_bb_in_chips         0.02    // Big blind: 0.02 CHIPS
+#define default_sb_in_chips         0.01    // Small blind: 0.01 CHIPS
+#define default_min_stake           0.5     // Min payin: 0.5 CHIPS (25 BB)
+#define default_max_stake           2.0     // Max payin: 2 CHIPS (100 BB)
+// Legacy - kept for compatibility
+#define default_min_stake_in_bb     25
 #define default_max_stake_in_bb     100
 
 // BET_WITHOUT_LN and BET_WITH_LN removed - Lightning Network support removed, using CHIPS-only payments      

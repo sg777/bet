@@ -177,11 +177,12 @@ void bet_parse_dealer_config_ini_file()
 			BB_in_chips = iniparser_getdouble(ini, "table:big_blind", 0);
 			SB_in_chips = BB_in_chips / 2;
 		}
-		if (0 != iniparser_getint(ini, "table:min_stake", 0)) {
-			table_min_stake = iniparser_getint(ini, "table:min_stake", 0) * BB_in_chips;
+		// min_stake and max_stake are now in CHIPS directly (not in BB multiples)
+		if (0 != iniparser_getdouble(ini, "table:min_stake", 0)) {
+			table_min_stake = iniparser_getdouble(ini, "table:min_stake", 0);
 		}
-		if (0 != iniparser_getint(ini, "table:max_stake", 0)) {
-			table_max_stake = iniparser_getint(ini, "table:max_stake", 0) * BB_in_chips;
+		if (0 != iniparser_getdouble(ini, "table:max_stake", 0)) {
+			table_max_stake = iniparser_getdouble(ini, "table:max_stake", 0);
 		}
 
 		if (0 != iniparser_getdouble(ini, "dealer:chips_tx_fee", 0)) {
@@ -463,11 +464,12 @@ int32_t bet_parse_verus_dealer()
 	if (0 != iniparser_getdouble(ini, "table:big_blind", 0)) {
 		float_to_uint32_s(&t.big_blind, iniparser_getdouble(ini, "table:big_blind", 0));
 	}
-	if (0 != iniparser_getint(ini, "table:min_stake", 0)) {
-		float_to_uint32_s(&t.min_stake, (iniparser_getint(ini, "table:min_stake", 0) * BB_in_chips));
+	// min_stake and max_stake are now in CHIPS directly
+	if (0 != iniparser_getdouble(ini, "table:min_stake", 0)) {
+		float_to_uint32_s(&t.min_stake, iniparser_getdouble(ini, "table:min_stake", 0));
 	}
-	if (0 != iniparser_getint(ini, "table:max_stake", 0)) {
-		float_to_uint32_s(&t.max_stake, (iniparser_getint(ini, "table:max_stake", 0) * BB_in_chips));
+	if (0 != iniparser_getdouble(ini, "table:max_stake", 0)) {
+		float_to_uint32_s(&t.max_stake, iniparser_getdouble(ini, "table:max_stake", 0));
 	}
 	if (NULL != iniparser_getstring(ini, "table:table_id", NULL)) {
 		strncpy(t.table_id, iniparser_getstring(ini, "table:table_id", NULL), sizeof(t.table_id) - 1);

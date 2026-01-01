@@ -300,8 +300,10 @@ int32_t join_table()
 	char *txid = NULL;
 
 	// Step 1: Send funds to cashier address
-	dlg_info("Sending payin to cashier: %s", bet_get_cashiers_id_fqn());
-	op_id = verus_sendcurrency_data(bet_get_cashiers_id_fqn(), default_chips_tx_fee, NULL);
+	// Use the table's min_stake as the payin amount (default 0.5 CHIPS for testing)
+	double payin_amount = (table_min_stake > 0) ? table_min_stake : default_min_stake;
+	dlg_info("Sending payin to cashier: %s, amount: %.4f CHIPS", bet_get_cashiers_id_fqn(), payin_amount);
+	op_id = verus_sendcurrency_data(bet_get_cashiers_id_fqn(), payin_amount, NULL);
 	if (op_id == NULL)
 		return ERR_SENDCURRENCY;
 	
