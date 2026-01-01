@@ -43,13 +43,13 @@ The platform consists of three node types:
 
 ### Network Ports
 
-Each node type uses configurable WebSocket ports for GUI communication:
+Each node type uses configurable WebSocket ports for backend communication:
 
-- **Dealer**: Default port `9000` (configurable via `dealer_config.ini`)
-- **Player**: Default port `9001` (configurable via `player_config.ini`)
-- **Cashier**: Default port `9002` (configurable via `cashier_config.ini`)
+- **Dealer**: Default WebSocket port `9000` (configurable via `dealer_config.ini`)
+- **Player**: Default WebSocket port `9001` (configurable via `player_config.ini`)
+- **Cashier**: Default WebSocket port `9002` (configurable via `cashier_config.ini`)
 
-All ports are configurable in their respective configuration files. The GUI is served via HTTP on the same port as the WebSocket server.
+The GUI HTTP server runs on port `1234` for serving the web interface. WebSocket connections for game communication use the configurable ports above.
 
 ## Prerequisites
 
@@ -58,7 +58,7 @@ All ports are configurable in their respective configuration files. The GUI is s
 - **Operating System**: Linux or macOS
 - **CHIPS Node**: Running CHIPS daemon (`chipsd`) with blockchain synced
 - **Verus IDs**: Valid Verus IDs registered on the CHIPS blockchain (for dealer/cashier)
-- **Network**: WebSocket ports open for GUI access (default: 9000-9002)
+- **Network**: Port `1234` open for GUI HTTP access, and WebSocket ports open for backend communication (default: 9000-9002)
 
 ### Verus ID Requirements
 
@@ -110,7 +110,7 @@ All configuration files are located in `poker/config/`:
 ### Dealer Configuration (`dealer_config.ini`)
 
 Key settings:
-- `gui_ws_port`: WebSocket port for GUI (default: 9000)
+- `gui_ws_port`: WebSocket port for backend communication (default: 9000)
 - `chips_tx_fee`: Transaction fee for CHIPS operations (default: 0.0001)
 - `dcv_commission`: Dealer commission percentage (default: 0.5%)
 - `min_cashiers`: Minimum cashiers required (default: 2)
@@ -121,7 +121,7 @@ Key settings:
 ### Player Configuration (`player_config.ini`)
 
 Key settings:
-- `gui_ws_port`: WebSocket port for GUI (default: 9001)
+- `gui_ws_port`: WebSocket port for backend communication (default: 9001)
 - `name`: Player display name
 - `table_stake_size`: Stake size in big blinds (20-100 range)
 - `max_allowed_dcv_commission`: Maximum acceptable dealer commission
@@ -129,7 +129,7 @@ Key settings:
 ### Cashier Configuration (`cashier_config.ini`)
 
 Key settings:
-- `gui_ws_port`: WebSocket port for GUI (default: 9002)
+- `gui_ws_port`: WebSocket port for backend communication (default: 9002)
 - Cashier node definitions with public keys and IPs
 
 ### Verus IDs and Keys Configuration (`verus_ids_keys.ini`)
@@ -184,17 +184,19 @@ The player will:
 
 ### Accessing the GUI
 
-The GUI is served via HTTP on the WebSocket port of each node:
+The GUI is served via HTTP on port `1234`:
 
-- **Dealer GUI**: `http://localhost:9000` (or configured port)
-- **Cashier GUI**: `http://localhost:9002` (or configured port)
-- **Player GUI**: `http://localhost:9001` (or configured port)
+- **Dealer GUI**: `http://localhost:1234`
+- **Cashier GUI**: `http://localhost:1234`
+- **Player GUI**: `http://localhost:1234`
 
 Players can also use cashier-hosted GUIs. After starting a player node, check the logs for available GUI URLs:
 
 ```
-[config.c:bet_display_cashier_hosted_gui:236] http://<cashier-ip>:9002/
+[config.c:bet_display_cashier_hosted_gui:236] http://<cashier-ip>:1234/
 ```
+
+The GUI connects to the backend WebSocket server on the configured `gui_ws_port` (default: 9000 for dealer, 9001 for player, 9002 for cashier).
 
 ### Funding and Withdrawals
 
