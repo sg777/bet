@@ -180,6 +180,51 @@ cJSON *get_cmm(const char *id, int16_t full_id)
 	return cmm;
 }
 
+// Get CMM content from a specific block height using getidentitycontent
+cJSON *get_cmm_from_height(const char *id, int16_t full_id, int32_t height_start)
+{
+	int32_t retval = OK;
+	char id_param[256] = { 0 };
+	cJSON *params = NULL, *result = NULL, *cmm = NULL;
+
+	if (NULL == id) {
+		return NULL;
+	}
+
+	strncpy(id_param, id, sizeof(id_param) - 1);
+	if (0 == full_id) {
+		snprintf(id_param + strlen(id_param), sizeof(id_param) - strlen(id_param), ".%s", bet_get_poker_id_fqn());
+	}
+	
+	// Use getidentitycontent with heightstart parameter
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(id_param));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(height_start));  // heightstart
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(-1));            // heightend (-1 = include mempool)
+	
+	retval = chips_rpc("getidentitycontent", params, &result);
+	cJSON_Delete(params);
+	
+	if (retval != OK || !result) {
+		dlg_info("getidentitycontent failed: %s", bet_err_str(retval));
+		return NULL;
+	}
+
+	// getidentitycontent returns contentmultimap directly or nested in result
+	cmm = cJSON_GetObjectItem(result, "contentmultimap");
+	if (!cmm) {
+		// Try getting from identity object if nested
+		cJSON *identity = cJSON_GetObjectItem(result, "identity");
+		if (identity) {
+			cmm = cJSON_GetObjectItem(identity, "contentmultimap");
+		}
+	}
+	if (cmm) {
+		cmm = cJSON_Duplicate(cmm, 1);  // Duplicate since result will be freed
+	}
+	return cmm;
+}
+
 /* Internal helper - get key data from CMM */
 static cJSON *get_cmm_key_data(const char *id, int16_t full_id, const char *key)
 {
@@ -960,9 +1005,11 @@ cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool
 	char *data_type = NULL, *data_key = NULL;
 	cJSON *data_obj = NULL, *cmm_obj = NULL;
 
-	// DON'T read entire CMM - just create a new object with the key to update
-	// Verus updateidentity will merge this with existing contentmultimap
-	cmm_obj = cJSON_CreateObject();
+	// Read existing CMM and merge - Verus replaces entire CMM on update
+	cmm_obj = get_cmm(id, 0);
+	if (!cmm_obj) {
+		cmm_obj = cJSON_CreateObject();
+	}
 
 	if (is_key_vdxf_id) {
 		data_type = get_vdxf_id(BYTEVECTOR_VDXF_ID);
@@ -975,6 +1022,8 @@ cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool
 	data_obj = cJSON_CreateObject();
 	jaddstr(data_obj, data_type, hex_data);
 
+	// Remove old key if exists, then add new
+	cJSON_DeleteItemFromObject(cmm_obj, data_key);
 	cJSON_AddItemToObject(cmm_obj, data_key, data_obj);
 
 	return update_cmm(id, cmm_obj);
