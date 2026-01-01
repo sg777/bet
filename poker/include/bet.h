@@ -261,8 +261,9 @@ struct table {
 	struct float_num min_stake;
 	struct float_num max_stake;
 	struct float_num big_blind;
-	char table_id[16];
-	char dealer_id[16];
+	char table_id[64];
+	char dealer_id[64];
+	char cashier_id[64];  // Trusted cashier handling player funds
 };
 extern struct table player_t;
 

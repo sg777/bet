@@ -405,6 +405,11 @@ bool is_id_exists(const char *id, int16_t full_id)
 	char id_param[256] = { 0 };
 	cJSON *params = NULL, *result = NULL;
 
+	if (!id || id[0] == '\0') {
+		dlg_error("is_id_exists called with empty ID");
+		return false;
+	}
+
 	strncpy(id_param, id, sizeof(id_param) - 1);
 	if (0 == full_id) {
 		snprintf(id_param + strlen(id_param), sizeof(id_param) - strlen(id_param), ".%s", bet_get_poker_id_fqn());
