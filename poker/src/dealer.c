@@ -8,6 +8,7 @@
 #include "commands.h"
 #include "dealer_registration.h"
 #include "config.h"
+#include "poker_vdxf.h"
 
 struct d_deck_info_struct d_deck_info;
 struct game_meta_info_struct game_meta_info;
@@ -44,13 +45,13 @@ int32_t add_dealer(char *dealer_id)
 	}
 
 	dealers_info = cJSON_CreateObject();
-	dealers = list_dealers();
+	dealers = poker_list_dealers();
 	if (!dealers) {
 		dealers = cJSON_CreateArray();
 	}
 	jaddistr(dealers, dealer_id);
 	cJSON_AddItemToObject(dealers_info, "dealers", dealers);
-		out = update_cmm_from_id_key_data_cJSON(verus_config.initialized ? verus_config.dealers_short : DEALERS_ID, verus_config.initialized ? verus_config.dealers_key : DEALERS_KEY, dealers_info, false);
+		out = poker_update_key_json(verus_config.initialized ? verus_config.dealers_short : DEALERS_ID, verus_config.initialized ? verus_config.dealers_key : DEALERS_KEY, dealers_info, false);
 
 	if (!out) {
 		return ERR_UPDATEIDENTITY;
@@ -66,7 +67,7 @@ int32_t dealer_sb_deck(char *id, bits256 *player_r, int32_t player_id)
 	char str[65], *game_id_str = NULL;
 	cJSON *d_blinded_deck = NULL;
 
-	game_id_str = get_str_from_id_key(id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(id, T_GAME_ID_KEY);
 
 	dlg_info("Player::%d deck...", player_id);
 	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
@@ -85,7 +86,7 @@ int32_t dealer_sb_deck(char *id, bits256 *player_r, int32_t player_id)
 		jaddistr(d_blinded_deck, bits256_str(str, player_r[i]));
 	}
 	dlg_info("Updating Player ::%d blinded deck at the key ::%s by dealer..", player_id, all_t_d_p_keys[player_id]);
-	cJSON *out = append_cmm_from_id_key_data_cJSON(id, get_key_data_vdxf_id(all_t_d_p_keys[player_id], game_id_str),
+	cJSON *out = poker_append_key_json(id, get_key_data_vdxf_id(all_t_d_p_keys[player_id], game_id_str),
 						       d_blinded_deck, true);
 
 	if (!out)
@@ -116,7 +117,7 @@ int32_t dealer_table_init(struct table t)
 	case G_ZEROIZED_STATE:
 		game_id = rand256(0);
 		dlg_info("Updating %s key...", T_GAME_ID_KEY);
-		out = append_cmm_from_id_key_data_hex(t.table_id, T_GAME_ID_KEY, bits256_str(hexstr, game_id), false);
+		out = poker_append_key_hex(t.table_id, T_GAME_ID_KEY, bits256_str(hexstr, game_id), false);
 		if (!out)
 			return ERR_TABLE_LAUNCH;
 		dlg_info("%s", cJSON_Print(out));
@@ -129,7 +130,7 @@ int32_t dealer_table_init(struct table t)
 		// No break is intentional
 	case G_TABLE_ACTIVE:
 		dlg_info("Updating %s key...", T_TABLE_INFO_KEY);
-		out = append_cmm_from_id_key_data_cJSON(
+		out = poker_append_key_json(
 			t.table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, bits256_str(hexstr, game_id)),
 			struct_table_to_cJSON(&t), true);
 		if (!out)
@@ -160,7 +161,7 @@ bool is_players_shuffled_deck(char *table_id)
 	if (game_state == G_DECK_SHUFFLING_P) {
 		return true;
 	} else if (game_state == G_PLAYERS_JOINED) {
-		game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+		game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 		t_player_info =
 			get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
 		num_players = jint(t_player_info, "num_players");
@@ -182,7 +183,7 @@ int32_t dealer_shuffle_deck(char *id)
 	bits256 t_p_r[CARDS_MAXCARDS];
 
 	dealer_init_deck();
-	game_id_str = get_str_from_id_key(id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(id, T_GAME_ID_KEY);
 
 	for (int32_t i = 0; i < num_of_players; i++) {
 		cJSON *player_deck =
@@ -201,7 +202,7 @@ int32_t dealer_shuffle_deck(char *id)
 		jaddistr(t_d_deck_info, bits256_str(str, d_deck_info.dealer_r[i].prod));
 	}
 	dlg_info("Updating the key :: %s, which contains public points of dealer blinded values..", T_D_DECK_KEY);
-	cJSON *out = append_cmm_from_id_key_data_cJSON(id, get_key_data_vdxf_id(T_D_DECK_KEY, game_id_str),
+	cJSON *out = poker_append_key_json(id, get_key_data_vdxf_id(T_D_DECK_KEY, game_id_str),
 						       t_d_deck_info, true);
 	if (!out)
 		retval = ERR_DECK_BLINDING_DEALER;
@@ -218,7 +219,7 @@ int32_t handle_game_state(char *table_id)
 	dlg_info("%s", game_state_str(game_state));
 	switch (game_state) {
 	case G_TABLE_STARTED:
-		if (is_table_full(table_id))
+		if (poker_is_table_full(table_id))
 			append_game_state(table_id, G_PLAYERS_JOINED, NULL);
 		break;
 	case G_PLAYERS_JOINED:
@@ -249,9 +250,9 @@ int32_t register_table(struct table t)
 	int32_t retval = OK;
 	cJSON *d_table_info = NULL, *out = NULL;
 
-	d_table_info = get_cJSON_from_id_key(t.dealer_id, T_TABLE_INFO_KEY, 0);
+	d_table_info = poker_get_key_json(t.dealer_id, T_TABLE_INFO_KEY, 0);
 	if (d_table_info == NULL) {
-		out = update_cmm_from_id_key_data_cJSON(t.dealer_id, get_vdxf_id(T_TABLE_INFO_KEY),
+		out = poker_update_key_json(t.dealer_id, get_vdxf_id(T_TABLE_INFO_KEY),
 							struct_table_to_cJSON(&t), true);
 		if (!out)
 			retval = ERR_RESERVED;

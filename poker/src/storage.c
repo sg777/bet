@@ -3,6 +3,7 @@
 #include "misc.h"
 #include "err.h"
 #include "vdxf.h"
+#include "poker_vdxf.h"
 
 #include <string.h>
 #include <pwd.h>
@@ -600,7 +601,7 @@ int32_t insert_cashier_deck_info(char *table_id)
 	}
 	cJSON_hex(b_perm, &perm);
 
-	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 	t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
 	num_players = jint(t_player_info, "num_players");
 

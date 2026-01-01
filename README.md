@@ -94,8 +94,9 @@ Comprehensive documentation is available in the [`docs/`](./docs/) directory:
 
 - **[Documentation Index](./docs/README.md)** - Complete documentation guide and navigation
 - **[Getting Started](./docs/protocol/compile.md)** - Installation and setup instructions
+- **[System Architecture](./docs/verus_migration/architecture.md)** - Layered architecture and RPC abstraction
 - **[Configuration Guides](./docs/README.md#configuration-guides)** - Node configuration (dealer, player, cashier)
-- **[Architecture & Protocol](./docs/verus_migration/verus_migration.md)** - Verus ID architecture and protocol details
+- **[Verus Migration](./docs/verus_migration/verus_migration.md)** - Verus ID architecture and protocol details
 - **[API Reference](./docs/protocol/GUI_MESSAGE_FORMATS.md)** - GUI WebSocket API documentation
 
 ## License

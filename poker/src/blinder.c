@@ -4,6 +4,7 @@
 #include "cards.h"
 #include "err.h"
 #include "game.h"
+#include "poker_vdxf.h"
 
 char all_t_b_p_keys[all_t_b_p_keys_no][128] = { T_B_P1_DECK_KEY, T_B_P2_DECK_KEY, T_B_P3_DECK_KEY, T_B_P4_DECK_KEY,
 						T_B_P5_DECK_KEY, T_B_P6_DECK_KEY, T_B_P7_DECK_KEY, T_B_P8_DECK_KEY,
@@ -21,7 +22,7 @@ int32_t cashier_sb_deck(char *id, bits256 *d_blinded_deck, int32_t player_id)
 	char str[65], *game_id_str = NULL;
 	cJSON *b_blinded_deck = NULL;
 
-	game_id_str = get_str_from_id_key(id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(id, T_GAME_ID_KEY);
 	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		dlg_info("%s", bits256_str(str, d_blinded_deck[i]));
 	}
@@ -34,7 +35,7 @@ int32_t cashier_sb_deck(char *id, bits256 *d_blinded_deck, int32_t player_id)
 		jaddibits256(b_blinded_deck, d_blinded_deck[i]);
 	}
 	dlg_info("b_blinded_deck::%s", cJSON_Print(b_blinded_deck));
-	cJSON *out = append_cmm_from_id_key_data_cJSON(id, get_key_data_vdxf_id(all_t_b_p_keys[player_id], game_id_str),
+	cJSON *out = poker_append_key_json(id, get_key_data_vdxf_id(all_t_b_p_keys[player_id], game_id_str),
 						       b_blinded_deck, true);
 
 	if (!out)
@@ -53,7 +54,7 @@ void cashier_init_deck(char *table_id)
 
 	bet_permutation(b_deck_info.b_permi, CARDS_MAXCARDS);
 
-	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 	t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
 	num_players = jint(t_player_info, "num_players");
 	for (int32_t i = 0; i < num_players; i++) {
@@ -69,7 +70,7 @@ int32_t cashier_shuffle_deck(char *id)
 	bits256 t_d_p_deck[CARDS_MAXCARDS];
 
 	cashier_init_deck(id);
-	game_id_str = get_str_from_id_key(id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(id, T_GAME_ID_KEY);
 	t_player_info = get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
 	num_players = jint(t_player_info, "num_players");
 
@@ -97,7 +98,7 @@ int32_t reveal_bv(char *table_id)
 	player_id = jint(game_state_info, "player_id");
 	card_id = jint(game_state_info, "card_id");
 
-	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 
 	bv_info = cJSON_CreateArray();
 	if (player_id == -1) {
@@ -117,7 +118,7 @@ int32_t reveal_bv(char *table_id)
 	jadd(card_bv, "bv", bv_info);
 
 	dlg_info("bv_info::%s", cJSON_Print(card_bv));
-	out = append_cmm_from_id_key_data_cJSON(table_id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str), card_bv,
+	out = poker_append_key_json(table_id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str), card_bv,
 						true);
 
 	if (!out) {
@@ -133,7 +134,7 @@ static int32_t handle_bv_reveal_card(char *table_id)
 	cJSON *card_bv = NULL, *game_state_info = NULL;
 
 	game_state_info = get_game_state_info(table_id);
-	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 	card_bv = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str));
 
 	if (card_bv && ((jint(game_state_info, "player_id") == jint(card_bv, "player_id")) &&

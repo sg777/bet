@@ -15,6 +15,7 @@ This directory contains comprehensive documentation for the Pangea-Bet platform.
 - **[Cashier Configuration](./protocol/cashier_configuration.md)** - Cashier node setup and settings
 
 ### Architecture & Protocol
+- **[System Architecture](./verus_migration/architecture.md)** - Layered architecture and RPC abstraction
 - **[Verus Migration Guide](./verus_migration/verus_migration.md)** - Overview of Verus ID-based architecture
 - **[ID Creation Process](./verus_migration/id_creation_process.md)** - Creating and managing Verus IDs
 - **[Keys and Data Structure](./verus_migration/ids_keys_data.md)** - VDXF key structure and data storage
@@ -49,7 +50,8 @@ docs/
 │   ├── GUI_MESSAGE_FORMATS.md
 │   └── ...
 └── verus_migration/       # Verus ID architecture and migration
-    ├── verus_migration.md # Architecture overview
+    ├── architecture.md    # System architecture and RPC abstraction
+    ├── verus_migration.md # Migration overview
     ├── id_creation_process.md
     ├── ids_keys_data.md
     ├── game_state.md
@@ -74,6 +76,7 @@ docs/
 - [Transaction Flow](./protocol/tx_flow.md)
 
 **Developing or integrating?**
+- [System Architecture](./verus_migration/architecture.md) - Understand the layered design
 - [GUI Message Formats](./protocol/GUI_MESSAGE_FORMATS.md)
 - [API Reference](./protocol/bet-api.md)
 - [Transaction Types](./protocol/tx_types.md)

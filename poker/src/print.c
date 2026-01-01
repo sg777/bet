@@ -2,6 +2,7 @@
 #include "misc.h"
 #include "print.h"
 #include "game.h"
+#include "poker_vdxf.h"
 
 void print_struct_table(struct table *t)
 {
@@ -20,7 +21,7 @@ void print_cashiers_id(char *id)
 {
 	char *game_id = NULL;
 
-	game_id = get_str_from_id_key(id, get_vdxf_id(T_GAME_ID_KEY));
+	game_id = poker_get_key_str(id, get_vdxf_id(T_GAME_ID_KEY));
 	if (game_id) {
 		dlg_info("game_id::%s", game_id);
 		for (int32_t i = 0; i < all_t_b_p_keys_no; i++) {
@@ -68,7 +69,7 @@ void print_table_id(char *id)
 {
 	char *game_id = NULL;
 
-	game_id = get_str_from_id_key(id, get_vdxf_id(T_GAME_ID_KEY));
+	game_id = poker_get_key_str(id, get_vdxf_id(T_GAME_ID_KEY));
 	if (game_id) {
 		dlg_info("game_id::%s", game_id);
 
@@ -105,7 +106,7 @@ void print_player_id(char *id)
 {
 	char *game_id = NULL;
 
-	game_id = get_str_from_id_key(id, get_vdxf_id(T_GAME_ID_KEY));
+	game_id = poker_get_key_str(id, get_vdxf_id(T_GAME_ID_KEY));
 	if (game_id) {
 		cJSON *player_deck = NULL;
 		player_deck = get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(PLAYER_DECK_KEY, game_id));
@@ -124,7 +125,7 @@ void print_table_key_info(int argc, char **argv)
 	cJSON *key_info = NULL;
 
 	if (argc == 4) {
-		game_id_str = get_str_from_id_key(argv[2], get_vdxf_id(T_GAME_ID_KEY));
+		game_id_str = poker_get_key_str(argv[2], get_vdxf_id(T_GAME_ID_KEY));
 		if (argv[3]) {
 			dlg_info("%s::%s", game_id_str, get_key_data_vdxf_id(argv[3], game_id_str));
 			key_info = get_cJSON_from_id_key_vdxfid(argv[2], get_key_data_vdxf_id(argv[3], game_id_str));
@@ -181,13 +182,13 @@ void print_vdxf_info(int argc, char **argv)
 			cJSON_Delete(json_data);
 		}
 	} else if (strcmp(vdxf_id, get_vdxf_id(T_GAME_ID_KEY)) == 0) {
-		str_data = get_str_from_id_key(id, get_full_key(key));
+		str_data = poker_get_key_str(id, get_full_key(key));
 		if (str_data) {
 			dlg_info("%s", str_data);
 			free(str_data);
 		}
 	} else if (strcmp(vdxf_id, get_vdxf_id(T_GAME_INFO_KEY)) == 0) {
-		char *game_id_str = get_str_from_id_key(id, T_GAME_ID_KEY);
+		char *game_id_str = poker_get_key_str(id, T_GAME_ID_KEY);
 		if (game_id_str) {
 			dlg_info("Game ID: %s", game_id_str);
 			json_data =

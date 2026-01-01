@@ -36,6 +36,7 @@
 #include "dealer.h"
 #include "blinder.h"
 #include "dealer_registration.h"
+#include "poker_vdxf.h"
 
 #include <string.h>
 #include <strings.h>
@@ -461,12 +462,12 @@ void bet_start(int argc, char **argv)
 		playing_nodes_init();
 		bet_handle_game(argc, argv);
 	} else if (strcmp(cmd, "list_dealers") == 0) {
-		cJSON *dealers = list_dealers();
+		cJSON *dealers = poker_list_dealers();
 		if (dealers) {
 			dlg_info("Dealers ::%s", cJSON_Print(dealers));
 		}
 	} else if (strcmp(cmd, "list_tables") == 0) {
-		list_tables();
+		poker_list_tables();
 	}
 	// Transaction commands
 	else if (strcmp(cmd, "consolidate") == 0) {

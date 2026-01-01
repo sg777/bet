@@ -3,6 +3,7 @@
 #include "err.h"
 #include "misc.h"
 #include "commands.h"
+#include "poker_vdxf.h"
 
 double get_dealer_registration_fee(void)
 {
@@ -32,13 +33,13 @@ static int32_t add_dealer_to_list(char *dealer_id)
 	}
 
 	dealers_info = cJSON_CreateObject();
-	dealers = list_dealers();
+	dealers = poker_list_dealers();
 	if (!dealers) {
 		dealers = cJSON_CreateArray();
 	}
 	jaddistr(dealers, dealer_id);
 	cJSON_AddItemToObject(dealers_info, "dealers", dealers);
-	out = update_cmm_from_id_key_data_cJSON(DEALERS_ID, DEALERS_KEY, dealers_info, false);
+	out = poker_update_key_json(DEALERS_ID, DEALERS_KEY, dealers_info, false);
 
 	if (!out) {
 		return ERR_UPDATEIDENTITY;
@@ -54,7 +55,7 @@ bool is_dealer_registered(char *dealer_id)
 		return false;
 	}
 
-	cJSON *dealers = list_dealers();
+	cJSON *dealers = poker_list_dealers();
 	if (!dealers) {
 		return false;
 	}
@@ -134,7 +135,7 @@ int32_t register_dealer(char *dealer_id)
 	cJSON_AddItemToObject(registration_info, "tx_data", tx_data);
 	cJSON_AddItemToObject(registration_info, "tx_id", op_id);
 
-	cJSON *out = update_cmm_from_id_key_data_cJSON(dealer_id, "registration_info", registration_info, false);
+	cJSON *out = poker_update_key_json(dealer_id, "registration_info", registration_info, false);
 	if (!out) {
 		dlg_error("Failed to store registration info for dealer %s", dealer_id);
 		return ERR_UPDATEIDENTITY;
@@ -183,7 +184,7 @@ int32_t deregister_dealer(char *dealer_id)
 	}
 
 	// Remove dealer from dealers list
-	dealers = list_dealers();
+	dealers = poker_list_dealers();
 	if (dealers) {
 		cJSON *new_dealers = cJSON_CreateArray();
 		for (int32_t i = 0; i < cJSON_GetArraySize(dealers); i++) {
@@ -194,7 +195,7 @@ int32_t deregister_dealer(char *dealer_id)
 
 		cJSON *dealers_info = cJSON_CreateObject();
 		cJSON_AddItemToObject(dealers_info, "dealers", new_dealers);
-		cJSON *out = update_cmm_from_id_key_data_cJSON(DEALERS_ID, DEALERS_KEY, dealers_info, false);
+		cJSON *out = poker_update_key_json(DEALERS_ID, DEALERS_KEY, dealers_info, false);
 
 		if (!out) {
 			dlg_error("Failed to update dealers list");
@@ -255,7 +256,7 @@ int32_t raise_dealer_registration_dispute(char *dealer_id, char *dispute_action)
 	}
 
 	// Get stored registration info from dealer's ID
-	registration_info = get_cJSON_from_id_key(dealer_id, "registration_info", 0);
+	registration_info = poker_get_key_json(dealer_id, "registration_info", 0);
 	if (!registration_info) {
 		dlg_error("No registration info found for dealer %s", dealer_id);
 		return ERR_ID_NOT_FOUND;

@@ -1,6 +1,7 @@
 #include "bet.h"
 #include "game.h"
 #include "err.h"
+#include "poker_vdxf.h"
 
 struct t_game_info_struct t_game_info;
 
@@ -37,7 +38,7 @@ cJSON *append_game_state(char *table_id, int32_t game_state, cJSON *game_state_i
 	char *game_id_str = NULL;
 	cJSON *t_game_info = NULL, *out = NULL;
 
-	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 	if (!game_id_str) {
 		dlg_warn("Porbabaly the table is not initialized");
 		return NULL;
@@ -47,7 +48,7 @@ cJSON *append_game_state(char *table_id, int32_t game_state, cJSON *game_state_i
 	if (game_state_info)
 		cJSON_AddItemToObject(t_game_info, "game_state_info", game_state_info);
 
-	out = append_cmm_from_id_key_data_cJSON(table_id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str),
+	out = poker_append_key_json(table_id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str),
 						t_game_info, true);
 	return out;
 }
@@ -58,7 +59,7 @@ int32_t get_game_state(char *table_id)
 	char *game_id_str = NULL;
 	cJSON *t_game_info = NULL;
 
-	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 	if (!game_id_str) {
 		/*
 			Game ID is NULL, it probably mean the table hasn't been started yet, so game state is in zeroized state.
@@ -79,7 +80,7 @@ cJSON *get_game_state_info(char *table_id)
 	char *game_id_str = NULL;
 	cJSON *t_game_info = NULL, *game_state_info = NULL;
 
-	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 	if (!game_id_str)
 		return NULL;
 
@@ -116,7 +117,7 @@ int32_t init_game_meta_info(char *table_id)
 	char *game_id_str = NULL;
 	cJSON *t_player_info = NULL;
 
-	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 	t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
 
 	game_meta_info.num_players = jint(t_player_info, "num_players");

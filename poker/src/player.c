@@ -7,6 +7,7 @@
 #include "game.h"
 #include "config.h"
 #include "print.h"
+#include "poker_vdxf.h"
 
 struct p_deck_info_struct p_deck_info;
 
@@ -33,11 +34,11 @@ int32_t player_init_deck()
 	}
 
 	dlg_info("Updating %s key...", T_GAME_ID_KEY);
-	cJSON *out = append_cmm_from_id_key_data_hex(player_config.verus_pid, T_GAME_ID_KEY,
-						     bits256_str(str, p_deck_info.game_id), false);
+	cJSON *out = poker_append_key_hex(player_config.verus_pid, T_GAME_ID_KEY,
+					     bits256_str(str, p_deck_info.game_id), false);
 
 	dlg_info("Updating %s key...", PLAYER_DECK_KEY);
-	out = append_cmm_from_id_key_data_cJSON(
+	out = poker_append_key_json(
 		player_config.verus_pid, get_key_data_vdxf_id(PLAYER_DECK_KEY, bits256_str(str, p_deck_info.game_id)),
 		player_deck, true);
 	dlg_info("%s", cJSON_Print(out));
@@ -87,7 +88,7 @@ int32_t reveal_card(char *table_id)
 	card_id = jint(game_state_info, "card_id");
 
 	if ((player_id == p_deck_info.player_id) || (player_id == -1)) {
-		game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+		game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 
 		while (1) {
 			bv_info = get_cJSON_from_id_key_vdxfid(table_id,
@@ -189,7 +190,7 @@ int32_t handle_verus_player()
 	}
 
 	// Find a table
-	if ((retval = find_table()) != OK) {
+	if ((retval = poker_find_table()) != OK) {
 		if (retval == ERR_PA_EXISTS) {
 			dlg_info("Player already exists in the table. Attempting to rejoin.");
 			// TODO: Implement rejoin logic here
@@ -202,7 +203,7 @@ int32_t handle_verus_player()
 	print_struct_table(&player_t);
 
 	// Join the table
-	if ((retval = join_table()) != OK) {
+	if ((retval = poker_join_table()) != OK) {
 		dlg_error("Failed to join table: %s", bet_err_str(retval));
 		return retval;
 	}

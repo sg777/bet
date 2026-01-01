@@ -3,6 +3,7 @@
 #include "cards.h"
 #include "deck.h"
 #include "print.h"
+#include "poker_vdxf.h"
 
 int32_t deck_size = 3;
 
@@ -245,9 +246,9 @@ void test_deck_shuffling()
 	}
 }
 
-void test_decode_table_info_from_str(char *str)
+void test_poker_decode_table_info_str(char *str)
 {
 	struct table *t = NULL;
-	t = decode_table_info_from_str(str);
+	t = poker_decode_table_info_str(str);
 	print_struct_table(t);
 }
