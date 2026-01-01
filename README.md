@@ -6,74 +6,25 @@
 
 ## Overview
 
-Pangea-Bet enables decentralized poker games where players can join tables, play hands, and settle funds without trusting a central authority. The platform uses:
-
-- **Verus IDs (VDXF)** for node communication and game state storage
-- **CHIPS blockchain** for all transactions and payments
-- **WebSockets** for real-time GUI communication
-- **Cryptographic protocols** for secure card shuffling and dealing
-
-## Architecture
-
-### Communication Model
-
-The platform uses **Verus IDs (VDXF)** for all inter-node communication, eliminating the need for static IP addresses or traditional socket-based communication:
-
-- **Node Discovery**: Nodes discover each other through Verus IDs on the blockchain
-- **State Storage**: Game state is stored in Verus ID contentmultimaps (CMM) using key-value pairs
-- **Data Synchronization**: All nodes poll Verus IDs to retrieve game state updates
-- **Reliability**: Player disconnections are handled gracefully by reading state from the blockchain
-
-See the [Verus Migration Documentation](./docs/verus_migration/verus_migration.md) for detailed information.
-
-### Payment Model
-
-- **CHIPS-Only**: All payments are recorded as CHIPS blockchain transactions
-- **On-Chain Settlement**: Game actions (bets, wins, payouts) are recorded on-chain
-- **Multi-Signature Addresses**: Player funds are held in multi-sig addresses for security
-- **Dispute Resolution**: Transaction history on-chain enables dispute resolution
+Pangea-Bet is a decentralized poker platform built on the CHIPS blockchain. It uses Verus IDs for node communication and game state storage, with all transactions recorded on-chain.
 
 ### Node Types
 
-The platform consists of three node types:
+1. **Dealer**: Manages tables and coordinates gameplay
+2. **Player**: Joins tables and plays games
+3. **Cashier**: Validates transactions and processes payouts
 
-1. **Dealer Node**: Manages game tables, coordinates gameplay, collects commission
-2. **Cashier Node**: Validates transactions, processes payouts, provides dispute resolution
-3. **Player Node**: Connects to tables, participates in games, manages player funds
+### Ports
 
-### Network Ports
-
-Each node type uses configurable WebSocket ports for backend communication:
-
-- **Dealer**: Default WebSocket port `9000` (configurable via `dealer_config.ini`)
-- **Player**: Default WebSocket port `9001` (configurable via `player_config.ini`)
-- **Cashier**: Default WebSocket port `9002` (configurable via `cashier_config.ini`)
-
-The GUI HTTP server runs on port `1234` for serving the web interface. WebSocket connections for game communication use the configurable ports above.
+- **GUI HTTP**: Port `1234` (serves web interface)
+- **WebSocket**: Ports `9000` (dealer), `9001` (player), `9002` (cashier) - configurable in respective config files
 
 ## Prerequisites
 
-### System Requirements
-
-- **Operating System**: Linux or macOS
-- **CHIPS Node**: Running CHIPS daemon (`chipsd`) with blockchain synced
-- **Verus IDs**: Valid Verus IDs registered on the CHIPS blockchain (for dealer/cashier)
-- **Network**: Port `1234` open for GUI HTTP access, and WebSocket ports open for backend communication (default: 9000-9002)
-
-### Verus ID Requirements
-
-Dealer and cashier nodes require Verus IDs registered on the CHIPS blockchain. Players can join using their Verus IDs or by connecting to public tables.
-
-The default identity structure:
-```
-sg777z.chips.vrsc@ (root identity)
-├── dealer.sg777z.chips.vrsc@
-│   └── <dealer_name>.sg777z.chips.vrsc@
-├── cashier.sg777z.chips.vrsc@
-└── <player_name>.sg777z.chips.vrsc@
-```
-
-See [ID Creation Process](./docs/verus_migration/id_creation_process.md) for details.
+- Linux or macOS
+- Running CHIPS daemon (`chipsd`) with blockchain synced
+- Verus IDs registered on CHIPS blockchain (for dealer/cashier)
+- Ports `1234` and `9000-9002` open
 
 ## Installation
 
@@ -105,128 +56,41 @@ Pre-compiled binaries are available in the [Releases](https://github.com/sg777/b
 
 ## Configuration
 
-All configuration files are located in `poker/config/`:
-
-### Dealer Configuration (`dealer_config.ini`)
-
-Key settings:
-- `gui_ws_port`: WebSocket port for backend communication (default: 9000)
-- `chips_tx_fee`: Transaction fee for CHIPS operations (default: 0.0001)
-- `dcv_commission`: Dealer commission percentage (default: 0.5%)
-- `min_cashiers`: Minimum cashiers required (default: 2)
-- `max_players`: Maximum players per table (default: 2)
-- `big_blind`: Big blind amount in CHIPS
-- `min_stake` / `max_stake`: Table stake limits in big blinds
-
-### Player Configuration (`player_config.ini`)
-
-Key settings:
-- `gui_ws_port`: WebSocket port for backend communication (default: 9001)
-- `name`: Player display name
-- `table_stake_size`: Stake size in big blinds (20-100 range)
-- `max_allowed_dcv_commission`: Maximum acceptable dealer commission
-
-### Cashier Configuration (`cashier_config.ini`)
-
-Key settings:
-- `gui_ws_port`: WebSocket port for backend communication (default: 9002)
-- Cashier node definitions with public keys and IPs
-
-### Verus IDs and Keys Configuration (`verus_ids_keys.ini`)
-
-Configure Verus identity names and VDXF keys used by the platform. Default values are defined in the code, but can be customized here.
-
-See [Configuration Documentation](./docs/protocol/) for detailed configuration options.
+Configuration files are in `poker/config/`. See [Configuration Documentation](./docs/protocol/) for details.
 
 ## Usage
 
-### Starting a Dealer Node
+### Starting Nodes
 
 ```bash
-cd poker
-./bin/bet dealer
+# Dealer
+cd poker && ./bin/bet dealer
+
+# Cashier
+cd poker && ./bin/cashierd
+
+# Player
+cd poker && ./bin/bet player
 ```
-
-The dealer will:
-1. Connect to the CHIPS blockchain
-2. Register/update its Verus ID with table information
-3. Wait for players to join
-4. Coordinate gameplay
-5. Record all game actions on-chain
-
-### Starting a Cashier Node
-
-```bash
-cd poker
-./bin/cashierd
-```
-
-The cashier will:
-1. Connect to the CHIPS blockchain
-2. Monitor dealer Verus IDs for table information
-3. Validate player transactions
-4. Process payouts
-5. Handle dispute resolution
-
-### Starting a Player Node
-
-```bash
-cd poker
-./bin/bet player
-```
-
-The player will:
-1. Connect to the CHIPS blockchain
-2. Discover available tables via dealer Verus IDs
-3. Join a table using the configured stake size
-4. Participate in games
-5. Connect to GUI for gameplay
 
 ### Accessing the GUI
 
-The GUI is served via HTTP on port `1234`:
-
-- **Dealer GUI**: `http://localhost:1234`
-- **Cashier GUI**: `http://localhost:1234`
-- **Player GUI**: `http://localhost:1234`
-
-Players can also use cashier-hosted GUIs. After starting a player node, check the logs for available GUI URLs:
-
-```
-[config.c:bet_display_cashier_hosted_gui:236] http://<cashier-ip>:1234/
-```
-
-The GUI connects to the backend WebSocket server on the configured `gui_ws_port` (default: 9000 for dealer, 9001 for player, 9002 for cashier).
+Open `http://localhost:1234` in your browser after starting any node.
 
 ### Funding and Withdrawals
 
-**Funding a player wallet**:
+**Get address and fund**:
 ```bash
-# Get a CHIPS address
 chips-cli getnewaddress
-
-# Send CHIPS to this address (requires funds in your CHIPS wallet)
+# Send CHIPS to this address
 ```
 
-**Withdrawing funds**:
+**Withdraw**:
 ```bash
-cd poker
-./bin/bet withdraw <amount> <destination_address>
+cd poker && ./bin/bet withdraw <amount> <destination_address>
 ```
 
-**Important**: Always ensure you have sufficient CHIPS to cover:
-- Table stake size
-- Transaction fees (approximately 0.0001 CHIPS per game action)
-- Reserve for multiple game actions (recommended: stake_size + 0.01 CHIPS)
-
-### Game Flow
-
-1. **Dealer Setup**: Dealer creates/updates table information on Verus ID
-2. **Player Discovery**: Players discover tables by reading dealer Verus IDs
-3. **Table Join**: Players join tables by creating pay-in transactions
-4. **Gameplay**: Game state is stored in Verus IDs, all nodes poll for updates
-5. **Settlement**: Winners receive payouts, dealer collects commission
-6. **Dispute Resolution**: Transaction history enables dispute resolution
+**Note**: Ensure sufficient CHIPS for stake size + transaction fees (~0.0001 CHIPS per action).
 
 ## Documentation
 
