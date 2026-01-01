@@ -5,7 +5,7 @@
  * instead of CLI commands.
  * 
  * Compilation:
- *   gcc -o chips_rest_api_test chips_rest_api_test.c -lcurl -lcjson
+ *   cd tools && make -f Makefile.test
  * 
  * Usage:
  *   ./chips_rest_api_test [rpc_url] [rpc_user] [rpc_password]
@@ -18,10 +18,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <curl/curl.h>
-
-// For cJSON - standard include (adjust path if needed)
-#include <cjson/cJSON.h>
-// Alternative if above doesn't work: #include "cJSON.h"
 
 // Structure to hold HTTP response data
 struct MemoryStruct {
@@ -64,7 +60,6 @@ char *chips_rpc_request(const char *url, const char *rpc_user, const char *rpc_p
     CURL *curl;
     CURLcode res;
     struct MemoryStruct chunk;
-    char *response = NULL;
 
     chunk.memory = malloc(1);
     chunk.size = 0;
@@ -76,35 +71,24 @@ char *chips_rpc_request(const char *url, const char *rpc_user, const char *rpc_p
         return NULL;
     }
 
-    // Build JSON-RPC request payload
-    cJSON *json = cJSON_CreateObject();
-    cJSON_AddStringToObject(json, "jsonrpc", "1.0");
-    cJSON_AddStringToObject(json, "id", "1");
-    cJSON_AddStringToObject(json, "method", method);
-    
-    // Parse params string as JSON array
-    cJSON *params_json = cJSON_Parse(params);
-    if (params_json) {
-        cJSON_AddItemToObject(json, "params", params_json);
-    } else {
-        // If params is not valid JSON, use empty array
-        cJSON_AddItemToObject(json, "params", cJSON_CreateArray());
-    }
-
-    char *json_string = cJSON_Print(json);
-    cJSON_Delete(json);
+    // Build JSON-RPC request payload manually
+    char json_payload[1024];
+    snprintf(json_payload, sizeof(json_payload),
+        "{\"jsonrpc\":\"1.0\",\"id\":\"1\",\"method\":\"%s\",\"params\":%s}",
+        method, params);
 
     // Set up curl options
     curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_string);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_payload);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-    curl_easy_setopt(curl, CURLOPT_USERPWD, rpc_user ? rpc_user : "");
-    if (rpc_password) {
-        char userpwd[512];
-        snprintf(userpwd, sizeof(userpwd), "%s:%s", rpc_user ? rpc_user : "", rpc_password);
-        curl_easy_setopt(curl, CURLOPT_USERPWD, userpwd);
-    }
+    
+    // Set authentication
+    char userpwd[512];
+    snprintf(userpwd, sizeof(userpwd), "%s:%s", 
+             rpc_user ? rpc_user : "", 
+             rpc_password ? rpc_password : "");
+    curl_easy_setopt(curl, CURLOPT_USERPWD, userpwd);
     
     // Set HTTP headers
     struct curl_slist *headers = NULL;
@@ -114,7 +98,6 @@ char *chips_rpc_request(const char *url, const char *rpc_user, const char *rpc_p
     // Perform the request
     res = curl_easy_perform(curl);
 
-    free(json_string);
     curl_slist_free_all(headers);
 
     // Check for errors
@@ -140,57 +123,7 @@ char *chips_rpc_request(const char *url, const char *rpc_user, const char *rpc_p
         return NULL;
     }
 
-    response = chunk.memory;
-    return response;
-}
-
-/**
- * Parse and print blockchain info from JSON-RPC response
- */
-void print_blockchain_info(const char *json_response)
-{
-    cJSON *json = cJSON_Parse(json_response);
-    if (!json) {
-        fprintf(stderr, "Error parsing JSON response\n");
-        return;
-    }
-
-    // Check for error in response
-    cJSON *error = cJSON_GetObjectItem(json, "error");
-    if (error && !cJSON_IsNull(error)) {
-        fprintf(stderr, "RPC Error: %s\n", cJSON_Print(error));
-        cJSON_Delete(json);
-        return;
-    }
-
-    // Get result object
-    cJSON *result = cJSON_GetObjectItem(json, "result");
-    if (!result) {
-        fprintf(stderr, "No 'result' field in response\n");
-        cJSON_Delete(json);
-        return;
-    }
-
-    // Extract common fields
-    cJSON *chain = cJSON_GetObjectItem(result, "chain");
-    cJSON *blocks = cJSON_GetObjectItem(result, "blocks");
-    cJSON *headers = cJSON_GetObjectItem(result, "headers");
-    cJSON *difficulty = cJSON_GetObjectItem(result, "difficulty");
-    cJSON *mediantime = cJSON_GetObjectItem(result, "mediantime");
-    cJSON *verificationprogress = cJSON_GetObjectItem(result, "verificationprogress");
-    cJSON *initialblockdownload = cJSON_GetObjectItem(result, "initialblockdownload");
-
-    printf("\n=== CHIPS Blockchain Info ===\n");
-    if (chain) printf("Chain: %s\n", cJSON_GetStringValue(chain));
-    if (blocks) printf("Blocks: %lld\n", (long long)cJSON_GetNumberValue(blocks));
-    if (headers) printf("Headers: %lld\n", (long long)cJSON_GetNumberValue(headers));
-    if (difficulty) printf("Difficulty: %.8f\n", cJSON_GetNumberValue(difficulty));
-    if (mediantime) printf("Median Time: %lld\n", (long long)cJSON_GetNumberValue(mediantime));
-    if (verificationprogress) printf("Verification Progress: %.4f\n", cJSON_GetNumberValue(verificationprogress));
-    if (initialblockdownload) printf("Initial Block Download: %s\n", cJSON_IsTrue(initialblockdownload) ? "true" : "false");
-    printf("\nFull Response:\n%s\n", cJSON_Print(result));
-
-    cJSON_Delete(json);
+    return chunk.memory;
 }
 
 int main(int argc, char *argv[])
@@ -221,13 +154,13 @@ int main(int argc, char *argv[])
     }
 
     printf("Connecting to CHIPS RPC endpoint: %s\n", rpc_url);
-    printf("RPC User: %s\n", rpc_user);
+    printf("RPC User: %s\n\n", rpc_user);
 
-    // Initialize curl globally (optional, but good practice)
+    // Initialize curl globally
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
-    // Make RPC call to getblockchaininfo (modern equivalent of getinfo)
-    printf("\nCalling getblockchaininfo...\n");
+    // Make RPC call to getblockchaininfo
+    printf("Calling getblockchaininfo...\n\n");
     char *response = chips_rpc_request(rpc_url, rpc_user, rpc_password, "getblockchaininfo", "[]");
 
     if (!response) {
@@ -236,14 +169,10 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    printf("\nRaw Response:\n%s\n", response);
-
-    // Parse and print formatted output
-    print_blockchain_info(response);
+    printf("=== CHIPS Blockchain Info ===\n%s\n", response);
 
     free(response);
     curl_global_cleanup();
 
     return 0;
 }
-

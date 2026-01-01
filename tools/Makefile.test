@@ -1,35 +1,16 @@
-# Makefile for chips_rest_api_test.c
-# 
-# Prerequisites:
-#   - libcurl development libraries
-#   - cJSON library (or install via package manager)
-#
-# Ubuntu/Debian: sudo apt-get install libcurl4-openssl-dev libcjson-dev
-# macOS: brew install curl cjson
-
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -g
-LDFLAGS = -lcurl -lcjson
+LDFLAGS = -lcurl
 
 TARGET = chips_rest_api_test
 SOURCE = chips_rest_api_test.c
 
-# Check if cJSON is in a local directory
-CJSON_INC = -I../external/cjson
-CJSON_LIB = -L../external/cjson -lcjson
-
-# Default: try system cJSON first
 all: $(TARGET)
 
 $(TARGET): $(SOURCE)
 	$(CC) $(CFLAGS) -o $(TARGET) $(SOURCE) $(LDFLAGS)
 
-# Alternative: use local cJSON if available
-local-cjson: $(SOURCE)
-	$(CC) $(CFLAGS) $(CJSON_INC) -o $(TARGET) $(SOURCE) -lcurl $(CJSON_LIB)
-
 clean:
 	rm -f $(TARGET)
 
-.PHONY: all clean local-cjson
-
+.PHONY: all clean

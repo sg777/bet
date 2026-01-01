@@ -43,6 +43,7 @@ typedef enum {
     ERR_CHIPS_INSUFFICIENT_FUNDS = 38,
     ERR_CHIPS_TX_FAILED = 39,
     ERR_CHIPS_COMMAND = 40,
+    ERR_CHIPS_RPC = 41,
 
     // LN Errors (49-64)
     ERR_LN = 49,

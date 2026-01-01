@@ -56,3 +56,7 @@ dist/*
 bet_version.h
 compile_commands.json
 .vscode/
+
+# RPC credentials (contains secrets - never commit)
+poker/.rpccredentials
+.rpccredentials

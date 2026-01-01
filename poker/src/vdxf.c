@@ -9,22 +9,36 @@
 
 struct table player_t = { 0 };
 
+/* Forward declarations for internal helpers */
+static cJSON *get_cmm_key_data(const char *id, int16_t full_id, const char *key);
+static const char *get_key_data_type(const char *key_name);
+static char *get_str_from_id_key_vdxfid(char *id, char *key_vdxfid);
+static cJSON *get_z_getoperationstatus(char *op_id);
+static cJSON *get_t_player_info(char *table_id);
+static bool check_if_enough_funds_avail(char *table_id);
+static int32_t check_if_d_t_available(char *dealer_id, char *table_id, cJSON **t_table_info);
+static cJSON *get_available_t_of_d(char *dealer_id);
+static bool is_playerid_added(char *table_id);
+static int32_t check_player_join_status(char *table_id, char *verus_pid);
+
 char *get_vdxf_id(const char *key_name)
 {
-	int argc = 3;
-	char **argv = NULL;
-	cJSON *argjson = NULL;
+	cJSON *params = NULL, *result = NULL;
+	int32_t retval;
 
 	if (!key_name)
 		return NULL;
 
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, verus_chips_cli, "getvdxfid", key_name);
-	argjson = cJSON_CreateObject();
-	make_command(argc, argv, &argjson);
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(key_name));
+	
+	retval = chips_rpc("getvdxfid", params, &result);
+	cJSON_Delete(params);
+	
+	if (retval != OK || !result)
+		return NULL;
 
-	bet_dealloc_args(argc, &argv);
-	return jstr(argjson, "vdxfid");
+	return jstr(result, "vdxfid");
 }
 
 char *get_key_vdxf_id(char *key_name)
@@ -52,15 +66,10 @@ char *get_full_key(char *key_name)
 	return full_key;
 }
 
-char *get_key_data_type(const char *key_name)
+/* Internal helper - get data type for a key (all keys use bytevector) */
+static const char *get_key_data_type(const char *key_name)
 {
-	if (!key_name) {
-		dlg_error("%s: Null key name provided", __func__);
-		return NULL;
-	}
-
-	// TODO: Implement a more sophisticated key type determination system
-	// For now, all keys are treated as byte vectors
+	(void)key_name; // All keys use bytevector type
 	return BYTEVECTOR_VDXF_ID;
 }
 
@@ -77,36 +86,34 @@ char *get_key_data_vdxf_id(char *key_name, char *data)
 	return get_vdxf_id(full_key);
 }
 
-cJSON *update_with_retry(int argc, char **argv)
+static cJSON *update_with_retry(const char *method, cJSON *params)
 {
-	int32_t retries = 3, i = 0;
-	cJSON *argjson = NULL;
+	int32_t retries = 3, i = 0, retval;
+	cJSON *result = NULL;
 
 	do {
-		argjson = cJSON_CreateObject();
-		make_command(argc, argv, &argjson);
-		if (jint(argjson, "error") == 0) {
+		retval = chips_rpc(method, params, &result);
+		if (retval == OK && result && jint(result, "error") == 0) {
 			wait_for_a_blocktime();
-			if (check_if_tx_exists(jstr(argjson, "tx")))
+			if (check_if_tx_exists(jstr(result, "tx")))
 				break;
 		}
-		dlg_warn("Retrying the updateidentity");
+		dlg_warn("Retrying %s", method);
+		if (result) cJSON_Delete(result);
+		result = NULL;
 		sleep(1);
 		i++;
 	} while (i < retries);
 
-	if (jint(argjson, "error")) {
-		dlg_error("Error in doing the updateidentity");
+	if (result && jint(result, "error")) {
+		dlg_error("Error in %s", method);
 	}
-	return argjson;
+	return result;
 }
 
 cJSON *update_cmm(char *id, cJSON *cmm)
 {
-	cJSON *id_info = NULL, *argjson = NULL;
-	int argc;
-	char **argv = NULL;
-	char params[arg_size] = { 0 };
+	cJSON *id_info = NULL, *params = NULL, *result = NULL;
 
 	if ((NULL == id) || (NULL == verus_chips_cli)) {
 		return NULL;
@@ -115,251 +122,95 @@ cJSON *update_cmm(char *id, cJSON *cmm)
 	id_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(id_info, "name", id);
 	cJSON_AddStringToObject(id_info, "parent", get_vdxf_id(bet_get_poker_id_fqn()));
-	cJSON_AddItemToObject(id_info, "contentmultimap", cmm);
+	cJSON_AddItemToObject(id_info, "contentmultimap", cJSON_Duplicate(cmm, 1));
 
-	argc = 3;
-	bet_alloc_args(argc, &argv);
-	snprintf(params, arg_size, "\'%s\'", cJSON_Print(id_info));
-	argv = bet_copy_args(argc, verus_chips_cli, "updateidentity", params);
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, id_info);
 
-	argjson = update_with_retry(argc, argv);
-
-	bet_dealloc_args(argc, &argv);
-	return argjson;
-}
-
-cJSON *append_pa_to_cmm(char *id, char *pa)
-{
-	int argc;
-	char **argv = NULL, params[arg_size] = { 0 };
-	cJSON *id_info = NULL, *argjson = NULL, *pa_arr = NULL, *cmm = NULL;
-
-	if ((!id) || (!pa) || (!verus_chips_cli))
-		return NULL;
-
-	id_info = cJSON_CreateObject();
-	cJSON_AddStringToObject(id_info, "name", id);
-	cJSON_AddStringToObject(id_info, "parent", get_vdxf_id(bet_get_poker_id_fqn()));
-
-	cmm = get_cmm(id, 0);
-	cJSON_AddItemToObject(id_info, "contentmultimap", cmm);
-
-	pa_arr = cJSON_CreateArray();
-	pa_arr = get_primaryaddresses(id, 0);
-	jaddistr(pa_arr, pa);
-	dlg_info("%s", cJSON_Print(pa_arr));
-	cJSON_AddItemToObject(id_info, "primaryaddresses", pa_arr);
-
-	argc = 3;
-	bet_alloc_args(argc, &argv);
-	snprintf(params, arg_size, "\'%s\'", cJSON_Print(id_info));
-	argv = bet_copy_args(argc, verus_chips_cli, "updateidentity", params);
-
-	argjson = update_with_retry(argc, argv);
-
-#if 0
-	argjson = cJSON_CreateObject();
-	make_command(argc, argv, &argjson);
-#endif
-
-end:
-	bet_dealloc_args(argc, &argv);
-	return argjson;
+	result = update_with_retry("updateidentity", params);
+	cJSON_Delete(params);
+	return result;
 }
 
 cJSON *get_cmm(const char *id, int16_t full_id)
 {
-	int32_t retval = OK, argc;
-	char **argv = NULL, params[128] = { 0 };
-	cJSON *argjson = NULL, *cmm = NULL;
+	int32_t retval = OK;
+	char id_param[256] = { 0 };
+	cJSON *params = NULL, *result = NULL, *cmm = NULL;
 
 	if (NULL == id) {
 		return NULL;
 	}
 
-	strncpy(params, id, strlen(id));
+	strncpy(id_param, id, sizeof(id_param) - 1);
 	if (0 == full_id) {
-		sprintf(params + strlen(params), ".%s", bet_get_poker_id_fqn());
+		snprintf(id_param + strlen(id_param), sizeof(id_param) - strlen(id_param), ".%s", bet_get_poker_id_fqn());
 	}
-	argc = 4;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, verus_chips_cli, "getidentity", params, "-1");
-
-	argjson = cJSON_CreateObject();
-	retval = make_command(argc, argv, &argjson);
-	if (retval != OK) {
+	
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(id_param));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(-1));
+	
+	retval = chips_rpc("getidentity", params, &result);
+	cJSON_Delete(params);
+	
+	if (retval != OK || !result) {
 		dlg_info("%s", bet_err_str(retval));
-		goto end;
+		return NULL;
 	}
 
-	cmm = cJSON_CreateObject();
-	cmm = cJSON_GetObjectItem(cJSON_GetObjectItem(argjson, "identity"), "contentmultimap");
-
+	cmm = cJSON_GetObjectItem(cJSON_GetObjectItem(result, "identity"), "contentmultimap");
 	if (cmm) {
 		cmm->next = NULL;
 	}
-end:
-	bet_dealloc_args(argc, &argv);
 	return cmm;
 }
 
-cJSON *update_primaryaddresses(char *id, cJSON *primaryaddress)
-{
-	cJSON *id_info = NULL, *argjson = NULL;
-	int argc;
-	char **argv = NULL;
-	char params[arg_size] = { 0 };
-
-	if ((NULL == id) || (NULL == primaryaddress) || (NULL == verus_chips_cli)) {
-		return NULL;
-	}
-
-	id_info = cJSON_CreateObject();
-	cJSON_AddStringToObject(id_info, "name", id);
-	cJSON_AddStringToObject(id_info, "parent", get_vdxf_id(bet_get_poker_id_fqn()));
-	cJSON_AddItemToObject(id_info, "primaryaddresses", primaryaddress);
-
-	argc = 3;
-	bet_alloc_args(argc, &argv);
-	snprintf(params, arg_size, "\'%s\'", cJSON_Print(id_info));
-	argv = bet_copy_args(argc, verus_chips_cli, "updateidentity", params);
-
-	argjson = update_with_retry(argc, argv);
-
-end:
-	bet_dealloc_args(argc, &argv);
-	dlg_info("%s::%d::%s\n", __FUNCTION__, __LINE__, cJSON_Print(argjson));
-	return argjson;
-}
-
-cJSON *get_primaryaddresses(char *id, int16_t full_id)
-{
-	int32_t argc, retval = OK;
-	char **argv = NULL, params[128] = { 0 };
-	cJSON *argjson = NULL, *pa = NULL, *id_obj = NULL;
-
-	if (NULL == id) {
-		return NULL;
-	}
-	strncpy(params, id, strlen(id));
-	if (0 == full_id) {
-		sprintf(params + strlen(params), ".%s", bet_get_poker_id_fqn());
-	}
-	argc = 4;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, verus_chips_cli, "getidentity", params, "-1");
-
-	argjson = cJSON_CreateObject();
-	retval = make_command(argc, argv, &argjson);
-	if (retval != OK) {
-		dlg_error("%s::%d::%s\n", __func__, __LINE__, bet_err_str(retval));
-		goto end;
-	}
-
-	id_obj = cJSON_GetObjectItem(argjson, "identity");
-	pa = cJSON_CreateArray();
-	pa = cJSON_GetObjectItem(id_obj, "primaryaddresses");
-
-	pa->next = NULL;
-
-end:
-	bet_dealloc_args(argc, &argv);
-	return pa;
-}
-
-cJSON *get_cmm_key_data(const char *id, int16_t full_id, const char *key)
+/* Internal helper - get key data from CMM */
+static cJSON *get_cmm_key_data(const char *id, int16_t full_id, const char *key)
 {
 	cJSON *cmm = NULL, *cmm_key_data = NULL;
 
 	if ((id == NULL) || (key == NULL))
 		return NULL;
 
-	cmm = cJSON_CreateObject();
 	if ((cmm = get_cmm(id, full_id)) == NULL)
 		return NULL;
-	cmm_key_data = cJSON_CreateObject();
 	if ((cmm_key_data = cJSON_GetObjectItem(cmm, key)) == NULL)
 		return NULL;
 	cmm_key_data->next = NULL;
 	return cmm_key_data;
 }
 
-cJSON *get_id_key_data(char *id, int16_t full_id, char *key)
+/* Internal helper - get cashiers info */
+static cJSON *get_cashiers_info(char *cashier_id)
 {
-	cJSON *cmm = NULL, *cmm_key_data = NULL;
+	return get_cmm_key_data(cashier_id, 0, get_vdxf_id(verus_config.initialized ? verus_config.cashiers_key : CASHIERS_KEY));
+}
 
-	cmm = get_cmm(id, full_id);
+/* Internal helper - get z_getoperationstatus */
+static cJSON *get_z_getoperationstatus(char *op_id)
+{
+	int32_t retval;
+	cJSON *params = NULL, *op_id_arr = NULL, *result = NULL;
 
-	if (NULL == cmm) {
+	if (NULL == op_id) {
 		return NULL;
 	}
-	cmm_key_data = cJSON_CreateObject();
-	cmm_key_data = cJSON_GetObjectItem(cmm, key);
-
-	return cmm_key_data;
-}
-
-cJSON *update_t_game_ids(char *id)
-{
-	char hexstr[65], *game_ids_info_hex = NULL;
-	cJSON *game_ids_info = NULL, *t_game_ids = NULL, *cmm = NULL;
-
-	game_ids_info = cJSON_CreateArray();
-	jaddistr(game_ids_info, bits256_str(hexstr, game_id));
-	cJSON_hex(game_ids_info, &game_ids_info_hex);
-
-	t_game_ids = cJSON_CreateObject();
-	jaddstr(t_game_ids, get_vdxf_id(BYTEVECTOR_VDXF_ID), game_ids_info_hex);
-
-	cmm = cJSON_CreateObject();
-	cJSON_AddItemToObject(cmm, get_vdxf_id(T_GAME_ID_KEY), t_game_ids);
-	cJSON *out = update_cmm(id, cmm);
-
-	return out;
-}
-
-struct table *get_dealers_config_table(char *dealer_id, char *table_id)
-{
-	cJSON *dealer_cmm_data = NULL;
-	char *str = NULL;
-	uint8_t *table_data = NULL;
-	struct table *t = NULL;
-
-	if (NULL == dealer_id)
-		goto end;
-
-	dealer_cmm_data = cJSON_CreateObject();
-	dealer_cmm_data = get_cmm_key_data(dealer_id, 0, get_vdxf_id(T_TABLE_INFO_KEY));
-	if (dealer_cmm_data == NULL) {
-		dlg_info("%s::%d::The key ::%s is not found in the cmm of id ::%s\n", __FUNCTION__, __LINE__,
-			 get_vdxf_id(T_TABLE_INFO_KEY), dealer_id);
-		goto end;
+	
+	op_id_arr = cJSON_CreateArray();
+	jaddistr(op_id_arr, op_id);
+	
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, op_id_arr);
+	
+	retval = chips_rpc("z_getoperationstatus", params, &result);
+	cJSON_Delete(params);
+	
+	if (retval != OK) {
+		return NULL;
 	}
-
-	//TODO:Right now we dealing with single table, when multi table support comes,
-	// we need to make checks whether the table with the specific name exists or not.
-
-	str = jstr(cJSON_GetArrayItem(dealer_cmm_data, 0), get_vdxf_id(STRING_VDXF_ID));
-
-	table_data = calloc(1, (strlen(str) + 1) / 2);
-	decode_hex(table_data, (strlen(str) + 1) / 2, str);
-
-	t = calloc(1, sizeof(struct table));
-	t = (struct table *)table_data;
-
-end:
-	return t;
-}
-
-cJSON *get_cashiers_info(char *cashier_id)
-{
-	cJSON *cashier_cmm_data = NULL;
-
-	cashier_cmm_data = cJSON_CreateObject();
-	cashier_cmm_data = get_cmm_key_data(cashier_id, 0, get_vdxf_id(verus_config.initialized ? verus_config.cashiers_key : CASHIERS_KEY));
-
-end:
-	return cashier_cmm_data;
+	return result;
 }
 
 cJSON *update_cashiers(char *ip)
@@ -536,26 +387,24 @@ int32_t find_table()
 
 bool is_id_exists(const char *id, int16_t full_id)
 {
-	int32_t argc, retval = OK, id_exists = false;
-	char **argv = NULL;
-	char params[128] = { 0 };
-	cJSON *argjson = NULL;
+	int32_t retval = OK;
+	char id_param[256] = { 0 };
+	cJSON *params = NULL, *result = NULL;
 
-	strncpy(params, id, strlen(id));
+	strncpy(id_param, id, sizeof(id_param) - 1);
 	if (0 == full_id) {
-		sprintf(params + strlen(params), ".%s", bet_get_poker_id_fqn());
+		snprintf(id_param + strlen(id_param), sizeof(id_param) - strlen(id_param), ".%s", bet_get_poker_id_fqn());
 	}
-	argc = 4;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, verus_chips_cli, "getidentity", params, "-1");
-
-	argjson = cJSON_CreateObject();
-	retval = make_command(argc, argv, &argjson);
-	if (retval == OK)
-		id_exists = true;
-
-	bet_dealloc_args(argc, &argv);
-	return id_exists;
+	
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(id_param));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(-1));
+	
+	retval = chips_rpc("getidentity", params, &result);
+	cJSON_Delete(params);
+	
+	if (result) cJSON_Delete(result);
+	return (retval == OK);
 }
 
 int32_t check_player_join_status(char *table_id, char *verus_pid)
@@ -581,33 +430,12 @@ int32_t check_player_join_status(char *table_id, char *verus_pid)
 	return retval;
 }
 
-cJSON *get_z_getoperationstatus(char *op_id)
-{
-	int argc = 3;
-	char **argv = NULL, op_param[arg_size] = { 0 };
-	cJSON *argjson = NULL, *op_id_arr = NULL;
-
-	if (NULL == op_id) {
-		return NULL;
-	}
-	bet_alloc_args(argc, &argv);
-	op_id_arr = cJSON_CreateArray();
-	jaddistr(op_id_arr, op_id);
-	snprintf(op_param, arg_size, "\'%s\'", cJSON_Print(op_id_arr));
-	argv = bet_copy_args(argc, verus_chips_cli, "z_getoperationstatus", op_param);
-	argjson = cJSON_CreateObject();
-	make_command(argc, argv, &argjson);
-
-	bet_dealloc_args(argc, &argv);
-	return argjson;
-}
-
 cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 {
-	int32_t hex_data_len, argc, minconf = 1;
+	int32_t hex_data_len, retval, minconf = 1;
 	double fee = 0.0001;
-	char *hex_data = NULL, **argv = NULL, params[4][arg_size] = { 0 };
-	cJSON *currency_detail = NULL, *argjson = NULL, *tx_params = NULL;
+	char *hex_data = NULL;
+	cJSON *currency_detail = NULL, *result = NULL, *tx_params = NULL, *params = NULL;
 
 	if (amount < 0) {
 		dlg_error("Amount cannot be negative");
@@ -631,37 +459,37 @@ cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 	tx_params = cJSON_CreateArray();
 	cJSON_AddItemToArray(tx_params, currency_detail);
 
-	snprintf(params[0], arg_size, "\'*\'");
-	snprintf(params[1], arg_size, "\'%s\'", cJSON_Print(tx_params));
-	snprintf(params[2], arg_size, "%d %f false", minconf, fee);
+	// Build params array: [source, destinations, minconf, fee, returntx, data]
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString("*"));
+	cJSON_AddItemToArray(params, cJSON_Duplicate(tx_params, 1));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(minconf));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(fee));
+	cJSON_AddItemToArray(params, cJSON_CreateBool(0)); // returntx = false
 
 	if (data != NULL) {
 		hex_data_len = 2 * strlen(cJSON_Print(data)) + 1;
 		hex_data = calloc(hex_data_len, sizeof(char));
 		str_to_hexstr(cJSON_Print(data), hex_data);
-		snprintf(params[3], arg_size, "\'%s\'", hex_data);
-	} else {
-		snprintf(params[3], arg_size, "\'\'"); // Empty data parameter
-	}
-
-	argc = 6;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, verus_chips_cli, "sendcurrency", params[0], params[1], params[2], params[3]);
-
-	argjson = cJSON_CreateObject();
-	make_command(argc, argv, &argjson);
-
-	if (hex_data != NULL) {
+		cJSON_AddItemToArray(params, cJSON_CreateString(hex_data));
 		free(hex_data);
 	}
-	return argjson;
+
+	retval = chips_rpc("sendcurrency", params, &result);
+	cJSON_Delete(params);
+	cJSON_Delete(tx_params);
+
+	if (retval != OK) {
+		dlg_error("sendcurrency failed: %s", bet_err_str(retval));
+		return NULL;
+	}
+	return result;
 }
 
 cJSON *getaddressutxos(char verus_addresses[][100], int n)
 {
-	int argc;
-	char **argv = NULL, params[arg_size] = { 0 };
-	cJSON *addresses = NULL, *addr_info = NULL, *argjson = NULL;
+	int32_t retval;
+	cJSON *addresses = NULL, *addr_info = NULL, *params = NULL, *result = NULL;
 
 	addresses = cJSON_CreateArray();
 	addr_info = cJSON_CreateObject();
@@ -671,18 +499,17 @@ cJSON *getaddressutxos(char verus_addresses[][100], int n)
 	}
 
 	cJSON_AddItemToObject(addr_info, "addresses", addresses);
-	snprintf(params, arg_size, "\'%s\'", cJSON_Print(addr_info));
-
-	argc = 3;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, verus_chips_cli, "getaddressutxos", params);
-
-	argjson = cJSON_CreateObject();
-	make_command(argc, argv, &argjson);
-
-end:
-	bet_dealloc_args(argc, &argv);
-	return argjson;
+	
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, addr_info);
+	
+	retval = chips_rpc("getaddressutxos", params, &result);
+	cJSON_Delete(params);
+	
+	if (retval != OK) {
+		return NULL;
+	}
+	return result;
 }
 
 struct table *decode_table_info_from_str(char *str)
@@ -725,27 +552,6 @@ struct table *decode_table_info(cJSON *dealer_cmm_data)
 
 end:
 	return t;
-}
-
-cJSON *get_available_t_of_d(char *dealer_id)
-{
-	int32_t game_state;
-	cJSON *t_table_info = NULL;
-
-	if (!dealer_id)
-		return NULL;
-
-	t_table_info = get_cJSON_from_id_key(dealer_id, T_TABLE_INFO_KEY, 0);
-	if (!t_table_info)
-		return NULL;
-
-	game_state = get_game_state(jstr(t_table_info, "table_id"));
-
-	if ((game_state == G_TABLE_STARTED) && (!is_table_full(jstr(t_table_info, "table_id"))) &&
-	    (!is_playerid_added(jstr(t_table_info, "table_id")))) {
-		return t_table_info;
-	}
-	return NULL;
 }
 
 static void update_player_ids(cJSON *t_player_info)
@@ -821,7 +627,8 @@ bool is_table_full(char *table_id)
 	return is_full;
 }
 
-bool is_playerid_added(char *table_id)
+/* Internal helper - check if player ID is already added to table */
+static bool is_playerid_added(char *table_id)
 {
 	int32_t game_state;
 	char *game_id_str = NULL;
@@ -830,9 +637,7 @@ bool is_playerid_added(char *table_id)
 	game_state = get_game_state(table_id);
 	if (game_state == G_TABLE_STARTED) {
 		game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
-
-		t_player_info =
-			get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+		t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
 		player_info = jobj(t_player_info, "player_info");
 		for (int32_t i = 0; i < cJSON_GetArraySize(player_info); i++) {
 			if (strstr(jstri(player_info, i), player_config.verus_pid))
@@ -842,24 +647,62 @@ bool is_playerid_added(char *table_id)
 	return false;
 }
 
-int32_t check_if_pa_exists(char *table_id, char *pa)
+/* Internal helper - get available table of dealer */
+static cJSON *get_available_t_of_d(char *dealer_id)
+{
+	int32_t game_state;
+	cJSON *t_table_info = NULL;
+
+	if (!dealer_id)
+		return NULL;
+
+	t_table_info = get_cJSON_from_id_key(dealer_id, T_TABLE_INFO_KEY, 0);
+	if (!t_table_info)
+		return NULL;
+
+	game_state = get_game_state(jstr(t_table_info, "table_id"));
+
+	if ((game_state == G_TABLE_STARTED) && (!is_table_full(jstr(t_table_info, "table_id"))) &&
+	    (!is_playerid_added(jstr(t_table_info, "table_id")))) {
+		return t_table_info;
+	}
+	return NULL;
+}
+
+/* Internal helper - check if dealer table is available */
+static int32_t check_if_d_t_available(char *dealer_id, char *table_id, cJSON **t_table_info)
 {
 	int32_t retval = OK;
-	cJSON *pa_arr = NULL;
+	int32_t game_state;
 
-	pa_arr = cJSON_CreateArray();
-	pa_arr = get_primaryaddresses(table_id, 0);
-	if (pa_arr) {
-		for (int32_t i = 0; i < cJSON_GetArraySize(pa_arr); i++) {
-			if (0 == strcmp(jstri(pa_arr, i), pa)) {
-				return !retval;
-			}
+	if ((!dealer_id) || (!table_id) || (!is_dealer_registered(dealer_id)) || (!is_id_exists(table_id, 0))) {
+		return ERR_CONFIG_PLAYER_ARGS;
+	}
+
+	*t_table_info = get_cJSON_from_id_key(dealer_id, T_TABLE_INFO_KEY, 0);
+	if (*t_table_info == NULL) {
+		return ERR_T_TABLE_INFO_NULL;
+	}
+
+	if ((0 == strcmp(jstr(*t_table_info, "table_id"), table_id))) {
+		if (is_playerid_added(table_id)) {
+			return ERR_DUPLICATE_PLAYERID;
+		}
+		game_state = get_game_state(table_id);
+		if (game_state < G_TABLE_STARTED) {
+			return ERR_TABLE_IS_NOT_STARTED;
+		} else if (game_state > G_TABLE_STARTED) {
+			return ERR_TABLE_IS_FULL;
+		}
+		if (is_table_full(table_id)) {
+			return ERR_TABLE_IS_FULL;
 		}
 	}
 	return retval;
 }
 
-bool check_if_enough_funds_avail(char *table_id)
+/* Internal helper - check if enough funds available */
+static bool check_if_enough_funds_avail(char *table_id)
 {
 	double balance = 0.0, min_stake = 0.0;
 	char *game_id_str = NULL;
@@ -867,7 +710,7 @@ bool check_if_enough_funds_avail(char *table_id)
 
 	game_id_str = get_str_from_id_key(table_id, get_vdxf_id(T_GAME_ID_KEY));
 	if (!game_id_str)
-		false;
+		return false;
 
 	t_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
 	if (t_table_info) {
@@ -879,43 +722,19 @@ bool check_if_enough_funds_avail(char *table_id)
 	return false;
 }
 
-int32_t check_if_d_t_available(char *dealer_id, char *table_id, cJSON **t_table_info)
+/* Internal helper - get player info for table */
+static cJSON *get_t_player_info(char *table_id)
 {
-	int32_t retval = OK;
 	int32_t game_state;
+	char *game_id_str = NULL;
+	cJSON *t_player_info = NULL;
 
-	if ((!dealer_id) || (!table_id) || (!is_dealer_registered(dealer_id)) || (!is_id_exists(table_id, 0))) {
-		return ERR_CONFIG_PLAYER_ARGS;
+	game_state = get_game_state(table_id);
+	if (game_state == G_TABLE_STARTED) {
+		game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+		t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
 	}
-
-	/*
-	* Check if the dealer added the table info to the dealers ID
-	*/
-	*t_table_info = get_cJSON_from_id_key(dealer_id, T_TABLE_INFO_KEY, 0);
-	if (*t_table_info == NULL) {
-		return ERR_T_TABLE_INFO_NULL;
-	}
-
-	if ((0 == strcmp(jstr(*t_table_info, "table_id"), table_id))) {
-		// Check is the verus id of the player in the join request is already been added to the table
-		if (is_playerid_added(table_id)) {
-			return ERR_DUPLICATE_PLAYERID;
-		}
-
-		// Check if the table is started
-		game_state = get_game_state(table_id);
-		if (game_state < G_TABLE_STARTED) {
-			return ERR_TABLE_IS_NOT_STARTED;
-		} else if (game_state > G_TABLE_STARTED) {
-			return ERR_TABLE_IS_FULL;
-		}
-
-		// Check if the table is full
-		if (is_table_full(table_id)) {
-			return ERR_TABLE_IS_FULL;
-		}
-	}
-	return retval;
+	return t_player_info;
 }
 
 /*
@@ -932,7 +751,7 @@ char *get_str_from_id_key(char *id, char *key)
 	return NULL;
 }
 
-char *get_str_from_id_key_vdxfid(char *id, char *key_vdxfid)
+static char *get_str_from_id_key_vdxfid(char *id, char *key_vdxfid)
 {
 	cJSON *cmm = NULL;
 
@@ -1089,22 +908,7 @@ cJSON *update_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool 
 	return result;
 }
 
-cJSON *get_t_player_info(char *table_id)
-{
-	int32_t game_state;
-	char *game_id_str = NULL;
-	cJSON *t_player_info = NULL;
-
-	game_state = get_game_state(table_id);
-	if (game_state == G_TABLE_STARTED) {
-		game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
-		t_player_info =
-			get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
-	}
-	return t_player_info;
-}
-
-int32_t do_payin_tx_checks(char *txid, cJSON *payin_tx_data)
+static int32_t do_payin_tx_checks(char *txid, cJSON *payin_tx_data)
 {
 	int32_t retval = OK, game_state;
 	double amount = 0;
@@ -1415,78 +1219,75 @@ int32_t add_dealer_to_dealers(char *dealer_id)
 
 int32_t id_canspendfor(char *id, int32_t full_id, int32_t *err_no)
 {
-	int32_t argc, retval = OK, id_canspendfor_value = false;
-	char **argv = NULL;
-	char params[128] = { 0 };
-	cJSON *argjson = NULL, *obj = NULL;
+	int32_t retval = OK, id_canspendfor_value = false;
+	char id_param[256] = { 0 };
+	cJSON *params = NULL, *result = NULL, *obj = NULL;
 
 	if (!is_id_exists(id, full_id)) {
 		*err_no = ERR_ID_NOT_FOUND;
 		return false;
 	}
 
-	strncpy(params, id, strlen(id));
+	strncpy(id_param, id, sizeof(id_param) - 1);
 	if (0 == full_id) {
-		sprintf(params + strlen(params), ".%s", bet_get_poker_id_fqn());
+		snprintf(id_param + strlen(id_param), sizeof(id_param) - strlen(id_param), ".%s", bet_get_poker_id_fqn());
 	}
-	argc = 4;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, verus_chips_cli, "getidentity", params, "-1");
-
-	argjson = cJSON_CreateObject();
-	retval = make_command(argc, argv, &argjson);
+	
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(id_param));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(-1));
+	
+	retval = chips_rpc("getidentity", params, &result);
+	cJSON_Delete(params);
 
 	if (retval != OK) {
 		*err_no = retval;
-		goto end;
+		return false;
 	}
 
-	if (((obj = jobj(argjson, "canspendfor")) != NULL) && (is_cJSON_True(obj)))
+	if (((obj = jobj(result, "canspendfor")) != NULL) && (is_cJSON_True(obj)))
 		id_canspendfor_value = true;
 	else
 		*err_no = ERR_ID_AUTH;
 
-	bet_dealloc_args(argc, &argv);
-
-end:
+	if (result) cJSON_Delete(result);
 	return id_canspendfor_value;
 }
 
 int32_t id_cansignfor(char *id, int32_t full_id, int32_t *err_no)
 {
-	int32_t argc = 4, retval = OK, id_cansignfor_value = false;
-	char **argv = NULL;
-	char params[128] = { 0 };
-	cJSON *argjson = NULL, *obj = NULL;
+	int32_t retval = OK, id_cansignfor_value = false;
+	char id_param[256] = { 0 };
+	cJSON *params = NULL, *result = NULL, *obj = NULL;
 
 	if (!is_id_exists(id, full_id)) {
 		*err_no = ERR_ID_NOT_FOUND;
 		return false;
 	}
 
-	strncpy(params, id, strlen(id));
+	strncpy(id_param, id, sizeof(id_param) - 1);
 	if (0 == full_id) {
-		sprintf(params + strlen(params), ".%s", bet_get_poker_id_fqn());
+		snprintf(id_param + strlen(id_param), sizeof(id_param) - strlen(id_param), ".%s", bet_get_poker_id_fqn());
 	}
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, verus_chips_cli, "getidentity", params, "-1");
-
-	argjson = cJSON_CreateObject();
-	retval = make_command(argc, argv, &argjson);
+	
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(id_param));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(-1));
+	
+	retval = chips_rpc("getidentity", params, &result);
+	cJSON_Delete(params);
 
 	if (retval != OK) {
 		*err_no = retval;
-		goto end;
+		return false;
 	}
 
-	if (((obj = jobj(argjson, "cansignfor")) != NULL) && (is_cJSON_True(obj)))
+	if (((obj = jobj(result, "cansignfor")) != NULL) && (is_cJSON_True(obj)))
 		id_cansignfor_value = true;
 	else
 		*err_no = ERR_ID_AUTH;
 
-	bet_dealloc_args(argc, &argv);
-
-end:
+	if (result) cJSON_Delete(result);
 	return id_cansignfor_value;
 }
 

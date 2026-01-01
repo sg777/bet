@@ -159,56 +159,70 @@ extern char all_game_key_names[all_game_keys_no][128];
 
 #define MAX_ID_LEN 128
 
+/* ============================================================================
+ * VDXF Key Operations
+ * ============================================================================ */
 char *get_vdxf_id(const char *key_name);
 char *get_key_vdxf_id(char *key_name);
 char *get_full_key(char *key_name);
-char *get_key_data_type(const char *key_name);
 char *get_key_data_vdxf_id(char *key_name, char *data);
-cJSON *update_with_retry(int argc, char **argv);
+
+/* ============================================================================
+ * Identity CMM (ContentMultiMap) Operations
+ * ============================================================================ */
 cJSON *update_cmm(char *id, cJSON *cmm);
-cJSON *append_pa_to_cmm(char *id, char *pa);
 cJSON *get_cmm(const char *id, int16_t full_id);
-cJSON *update_primaryaddresses(char *id, cJSON *primaryaddress);
-cJSON *get_primaryaddresses(char *id, int16_t full_id);
-cJSON *get_cmm_key_data(const char *id, int16_t full_id, const char *key);
-cJSON *get_id_key_data(char *id, int16_t full_id, char *key);
-cJSON *update_t_game_ids(char *id);
-cJSON *get_cashiers_info(char *cashier_id);
+
+/* ============================================================================
+ * Identity Verification
+ * ============================================================================ */
+bool is_id_exists(const char *id, int16_t full_id);
+int32_t id_canspendfor(char *id, int32_t full_id, int32_t *err_no);
+int32_t id_cansignfor(char *id, int32_t full_id, int32_t *err_no);
+
+/* ============================================================================
+ * Currency/Transaction Operations
+ * ============================================================================ */
+cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data);
+cJSON *getaddressutxos(char verus_addresses[][100], int n);
+
+/* ============================================================================
+ * Poker Key Data Access (internal - use poker_vdxf.h for public API)
+ * ============================================================================ */
+char *get_str_from_id_key(char *id, char *key);
+cJSON *get_cJSON_from_id_key(const char *id, const char *key, int32_t is_full_id);
+cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid);
+cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id);
+cJSON *append_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool is_key_vdxf_id);
+cJSON *update_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool is_key_vdxf_id);
+
+/* ============================================================================
+ * Poker Table Operations (internal - use poker_vdxf.h for public API)
+ * ============================================================================ */
+struct table *decode_table_info_from_str(char *str);
+struct table *decode_table_info(cJSON *dealer_cmm_data);
+bool is_table_full(char *table_id);
+bool is_table_registered(char *table_id, char *dealer_id);
+
+/* ============================================================================
+ * Poker Game State (internal - use poker_vdxf.h for public API)
+ * ============================================================================ */
 cJSON *update_cashiers(char *ip);
 int32_t get_player_id(int *player_id);
 int32_t join_table();
 int32_t find_table();
-bool is_id_exists(const char *id, int16_t full_id);
-int32_t check_player_join_status(char *table_id, char *pa);
-cJSON *get_z_getoperationstatus(char *op_id);
-cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data);
-cJSON *getaddressutxos(char verus_addresses[][100], int n);
-struct table *decode_table_info_from_str(char *str);
-struct table *decode_table_info(cJSON *dealer_cmm_data);
-cJSON *get_available_t_of_d(char *dealer_id);
-bool is_table_full(char *table_id);
-int32_t check_if_pa_exists(char *table_id, char *pa);
-bool check_if_enough_funds_avail(char *table_id);
-int32_t check_if_d_t_available(char *dealer_id, char *table_id, cJSON **t_table_info);
-char *get_str_from_id_key(char *id, char *key);
-char *get_str_from_id_key_vdxfid(char *id, char *key_vdxfid);
-cJSON *get_cJSON_from_id_key(const char *id, const char *key, int32_t is_full_id);
-cJSON *get_cJSON_from_table_id_key(char *table_id, char *key);
-cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid);
-cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id);
-cJSON *append_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool is_key_vdxf_id);
-cJSON *update_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id);
-cJSON *update_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool is_key_vdxf_id);
-cJSON *get_t_player_info(char *table_id);
-int32_t do_payin_tx_checks(char *txid, cJSON *payin_tx_data);
 void process_block(char *block_hash);
+
+/* ============================================================================
+ * Dealer/Table Registry (internal - use poker_vdxf.h for public API)
+ * ============================================================================ */
 cJSON *list_dealers();
 void list_tables();
 int32_t verify_poker_setup();
-int32_t add_dealer_to_dealers(char *dealer_id);
-int32_t id_canspendfor(char *id, int32_t full_id, int32_t *err_no);
-int32_t id_cansignfor(char *id, int32_t full_id, int32_t *err_no);
-bool is_table_registered(char *table_id, char *dealer_id);
-bool is_playerid_added(char *table_id);
+
+/* ============================================================================
+ * NOTE: For poker-specific operations, prefer using poker_vdxf.h which
+ * provides a cleaner API with the poker_* prefix functions.
+ * ============================================================================ */
 
 #endif

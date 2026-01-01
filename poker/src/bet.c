@@ -354,6 +354,7 @@ void bet_start(int argc, char **argv)
 	// Initialize common components for other commands
 	bet_init_config_paths(); // Initialize config paths relative to executable
 	bet_parse_verus_ids_keys_config(); // Load Verus IDs and Keys configuration
+	bet_parse_rpc_credentials(); // Load RPC credentials for REST API
 	bet_set_unique_id();
 	bet_parse_blockchain_config_ini_file();
 
@@ -493,6 +494,12 @@ void bet_start(int argc, char **argv)
 	} else if (strcmp(cmd, "spendable") == 0) {
 		cJSON *spendable_tx = chips_spendable_tx();
 		dlg_info("CHIPS Spendable tx's :: %s\n", cJSON_Print(spendable_tx));
+	} else if (strcmp(cmd, "balance") == 0) {
+		double balance = chips_get_balance();
+		dlg_info("CHIPS Balance: %.8f", balance);
+	} else if (strcmp(cmd, "blockcount") == 0) {
+		int32_t height = chips_get_block_count();
+		dlg_info("Block Height: %d", height);
 	}
 	// Data extraction and scanning
 	else if (strcmp(cmd, "extract_tx_data") == 0) {

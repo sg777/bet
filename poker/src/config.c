@@ -29,8 +29,10 @@ static char blockchain_config_ini_file_buf[PATH_MAX];
 static char verus_dealer_config_buf[PATH_MAX];
 static char verus_player_config_file_buf[PATH_MAX];
 static char verus_ids_keys_config_buf[PATH_MAX];
+static char rpc_credentials_config_buf[PATH_MAX];
 
 char *dealer_config_ini_file = dealer_config_ini_file_buf;
+char *rpc_credentials_file = rpc_credentials_config_buf;
 char *player_config_ini_file = player_config_ini_file_buf;
 char *cashier_config_ini_file = cashier_config_ini_file_buf;
 char *bets_config_ini_file = bets_config_ini_file_buf;
@@ -85,6 +87,18 @@ void bet_init_config_paths(void)
 	snprintf(verus_dealer_config, sizeof(verus_dealer_config_buf), "%s/verus_dealer.ini", config_base);
 	snprintf(verus_player_config_file, sizeof(verus_player_config_file_buf), "%s/verus_player.ini", config_base);
 	snprintf(verus_ids_keys_config_file, sizeof(verus_ids_keys_config_buf), "%s/verus_ids_keys.ini", config_base);
+	
+	// RPC credentials file is in poker/ directory (not config/) since it contains secrets
+	// Go up one level from config_base to get poker directory
+	char poker_base[PATH_MAX];
+	if (strstr(exe_dir, "/bin") != NULL || strstr(exe_dir, "bin") != NULL) {
+		// Executable is in bin/, poker/ is ..
+		snprintf(poker_base, sizeof(poker_base), "%s/..", exe_dir);
+	} else {
+		// Executable is in poker/
+		snprintf(poker_base, sizeof(poker_base), "%s", exe_dir);
+	}
+	snprintf(rpc_credentials_file, sizeof(rpc_credentials_config_buf), "%s/.rpccredentials", poker_base);
 }
 
 struct verus_player_config player_config = { 0 };
@@ -690,4 +704,85 @@ const char *bet_get_full_key_name(const char *key_name)
 	}
 	snprintf(full_key, sizeof(full_key), "%s%s", bet_get_key_prefix(), key_name);
 	return full_key;
+}
+
+/* RPC Credentials Configuration */
+struct rpc_credentials rpc_config = { 0 };
+
+void bet_parse_rpc_credentials(void)
+{
+	dictionary *ini = NULL;
+	const char *value = NULL;
+
+	// Default values
+	strncpy(rpc_config.url, "http://127.0.0.1:22778", sizeof(rpc_config.url) - 1);
+	strncpy(rpc_config.user, "", sizeof(rpc_config.user) - 1);
+	strncpy(rpc_config.password, "", sizeof(rpc_config.password) - 1);
+	rpc_config.use_rest_api = 0;  // Default to CLI mode for backwards compatibility
+	rpc_config.initialized = 0;
+
+	ini = iniparser_load(rpc_credentials_file);
+	if (ini == NULL) {
+		dlg_warn("Could not load %s, RPC credentials not configured", rpc_credentials_file);
+		dlg_info("To use REST API, create %s with [rpc] section containing url, user, password", rpc_credentials_file);
+		return;
+	}
+
+	// Load RPC URL
+	if ((value = iniparser_getstring(ini, "rpc:url", NULL)) != NULL) {
+		strncpy(rpc_config.url, value, sizeof(rpc_config.url) - 1);
+		rpc_config.url[sizeof(rpc_config.url) - 1] = '\0';
+	}
+
+	// Load RPC user
+	if ((value = iniparser_getstring(ini, "rpc:user", NULL)) != NULL) {
+		strncpy(rpc_config.user, value, sizeof(rpc_config.user) - 1);
+		rpc_config.user[sizeof(rpc_config.user) - 1] = '\0';
+	}
+
+	// Load RPC password
+	if ((value = iniparser_getstring(ini, "rpc:password", NULL)) != NULL) {
+		strncpy(rpc_config.password, value, sizeof(rpc_config.password) - 1);
+		rpc_config.password[sizeof(rpc_config.password) - 1] = '\0';
+	}
+
+	// Load use_rest_api flag (default to 1 if credentials file exists)
+	rpc_config.use_rest_api = iniparser_getboolean(ini, "rpc:use_rest_api", 1);
+
+	rpc_config.initialized = 1;
+	iniparser_freedict(ini);
+	
+	dlg_info("Loaded RPC credentials from %s", rpc_credentials_file);
+	dlg_info("RPC URL: %s, User: %s, REST API: %s", 
+		rpc_config.url, rpc_config.user, 
+		rpc_config.use_rest_api ? "enabled" : "disabled");
+}
+
+const char *bet_get_rpc_url(void)
+{
+	if (rpc_config.initialized) {
+		return rpc_config.url;
+	}
+	return "http://127.0.0.1:22778";
+}
+
+const char *bet_get_rpc_user(void)
+{
+	if (rpc_config.initialized) {
+		return rpc_config.user;
+	}
+	return "";
+}
+
+const char *bet_get_rpc_password(void)
+{
+	if (rpc_config.initialized) {
+		return rpc_config.password;
+	}
+	return "";
+}
+
+int bet_use_rest_api(void)
+{
+	return rpc_config.initialized && rpc_config.use_rest_api;
 }

@@ -64,6 +64,8 @@ const char *bet_err_str(int32_t err_no)
 		return "Error occured while running LN command";
 	case ERR_CHIPS_COMMAND:
 		return "Error occured while running Chips command";
+	case ERR_CHIPS_RPC:
+		return "Error occured while making CHIPS RPC call";
 	case ERR_LN_INVOICE_CREATE:
 		return "Error in creating LN invoice";
 	case ERR_LN_NEWADDR:

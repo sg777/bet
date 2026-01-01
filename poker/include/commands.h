@@ -62,6 +62,16 @@ int32_t chips_is_mempool_empty();
 struct cJSON *do_split_tx_amount(double amount, int32_t no_of_splits);
 int32_t run_command(int argc, char **argv);
 int32_t make_command(int argc, char **argv, cJSON **argjson);
+
+/**
+ * Unified CHIPS RPC interface - automatically uses REST or CLI based on config
+ * 
+ * @param method RPC method name (e.g., "getbalance", "getblockchaininfo")
+ * @param params cJSON array of parameters (can be NULL for no params)
+ * @param result Output cJSON object (caller must free with cJSON_Delete)
+ * @return OK on success, error code on failure
+ */
+int32_t chips_rpc(const char *method, cJSON *params, cJSON **result);
 char *ln_get_new_address();
 int32_t ln_block_height(int32_t *block_height);
 int32_t ln_listfunds();

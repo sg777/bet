@@ -27,9 +27,206 @@
 
 #include <stdarg.h>
 #include <inttypes.h>
+#include <curl/curl.h>
 #include "../../includes/math_compat.h"
+#include "config.h"
 
 double epsilon = 0.000000001;
+
+/* REST API support structures and functions */
+struct rpc_response {
+	char *data;
+	size_t size;
+};
+
+static size_t rpc_write_callback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+	size_t realsize = size * nmemb;
+	struct rpc_response *resp = (struct rpc_response *)userp;
+
+	char *ptr = realloc(resp->data, resp->size + realsize + 1);
+	if (!ptr) {
+		dlg_error("Not enough memory for RPC response");
+		return 0;
+	}
+
+	resp->data = ptr;
+	memcpy(&(resp->data[resp->size]), contents, realsize);
+	resp->size += realsize;
+	resp->data[resp->size] = '\0';
+
+	return realsize;
+}
+
+/**
+ * Internal: Make a JSON-RPC call via HTTP REST API
+ */
+static int32_t chips_rpc_rest(const char *method, const char *params_str, cJSON **result)
+{
+	CURL *curl;
+	CURLcode res;
+	struct rpc_response chunk = { 0 };
+
+	chunk.data = malloc(1);
+	chunk.size = 0;
+
+	curl = curl_easy_init();
+	if (!curl) {
+		dlg_error("Failed to initialize curl");
+		free(chunk.data);
+		return ERR_CHIPS_RPC;
+	}
+
+	// Build JSON-RPC request payload
+	char json_payload[8192];
+	snprintf(json_payload, sizeof(json_payload),
+		"{\"jsonrpc\":\"1.0\",\"id\":\"bet\",\"method\":\"%s\",\"params\":%s}",
+		method, params_str ? params_str : "[]");
+
+	// Set up curl options
+	curl_easy_setopt(curl, CURLOPT_URL, bet_get_rpc_url());
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_payload);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, rpc_write_callback);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+
+	// Set authentication
+	char userpwd[512];
+	snprintf(userpwd, sizeof(userpwd), "%s:%s", bet_get_rpc_user(), bet_get_rpc_password());
+	curl_easy_setopt(curl, CURLOPT_USERPWD, userpwd);
+
+	// Set HTTP headers
+	struct curl_slist *headers = NULL;
+	headers = curl_slist_append(headers, "Content-Type: application/json");
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+	// Perform the request
+	res = curl_easy_perform(curl);
+	curl_slist_free_all(headers);
+
+	if (res != CURLE_OK) {
+		dlg_error("curl_easy_perform() failed: %s", curl_easy_strerror(res));
+		curl_easy_cleanup(curl);
+		free(chunk.data);
+		return ERR_CHIPS_RPC;
+	}
+
+	long response_code;
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+	curl_easy_cleanup(curl);
+
+	if (response_code != 200) {
+		dlg_error("HTTP error: %ld, Response: %s", response_code, chunk.data);
+		free(chunk.data);
+		return ERR_CHIPS_RPC;
+	}
+
+	// Parse response
+	cJSON *json = cJSON_Parse(chunk.data);
+	free(chunk.data);
+
+	if (!json) {
+		dlg_error("Failed to parse RPC response");
+		return ERR_JSON_PARSING;
+	}
+
+	// Check for error in response
+	cJSON *error = cJSON_GetObjectItem(json, "error");
+	if (error && error->type != cJSON_NULL) {
+		dlg_error("RPC error: %s", cJSON_Print(error));
+		cJSON_Delete(json);
+		return ERR_CHIPS_RPC;
+	}
+
+	// Extract result
+	cJSON *res_obj = cJSON_GetObjectItem(json, "result");
+	if (res_obj) {
+		*result = cJSON_Duplicate(res_obj, 1);
+	} else {
+		*result = cJSON_Duplicate(json, 1);
+	}
+
+	cJSON_Delete(json);
+	return OK;
+}
+
+/**
+ * Internal: Make a JSON-RPC call via CLI command
+ */
+static int32_t chips_rpc_cli(const char *method, cJSON *params, cJSON **result)
+{
+	int argc = 2;
+	char **argv = NULL;
+	int32_t retval = OK;
+
+	// Count params
+	int param_count = params ? cJSON_GetArraySize(params) : 0;
+	argc += param_count;
+
+	// Allocate args
+	retval = bet_alloc_args(argc, &argv);
+	if (retval != OK) {
+		return retval;
+	}
+
+	// Build command: blockchain_cli method [params...]
+	strncpy(argv[0], blockchain_cli, arg_size - 1);
+	strncpy(argv[1], method, arg_size - 1);
+
+	// Add parameters
+	for (int i = 0; i < param_count; i++) {
+		cJSON *param = cJSON_GetArrayItem(params, i);
+		if (is_cJSON_String(param)) {
+			strncpy(argv[2 + i], param->valuestring, arg_size - 1);
+		} else if (is_cJSON_Number(param)) {
+			snprintf(argv[2 + i], arg_size, "%g", param->valuedouble);
+		} else {
+			// For objects/arrays, print as JSON string
+			char *json_str = cJSON_PrintUnformatted(param);
+			if (json_str) {
+				snprintf(argv[2 + i], arg_size, "'%s'", json_str);
+				free(json_str);
+			}
+		}
+	}
+
+	// Execute command
+	retval = make_command(argc, argv, result);
+	bet_dealloc_args(argc, &argv);
+
+	return retval;
+}
+
+/**
+ * Unified CHIPS RPC interface - automatically uses REST or CLI based on config
+ * 
+ * @param method RPC method name (e.g., "getbalance", "getblockchaininfo")
+ * @param params cJSON array of parameters (can be NULL for no params)
+ * @param result Output cJSON object (caller must free with cJSON_Delete)
+ * @return OK on success, error code on failure
+ */
+int32_t chips_rpc(const char *method, cJSON *params, cJSON **result)
+{
+	if (!method) {
+		dlg_error("RPC method cannot be NULL");
+		return ERR_ARGS_NULL;
+	}
+
+	if (bet_use_rest_api()) {
+		// Use REST API
+		char *params_str = NULL;
+		if (params) {
+			params_str = cJSON_PrintUnformatted(params);
+		}
+		int32_t retval = chips_rpc_rest(method, params_str ? params_str : "[]", result);
+		if (params_str) {
+			free(params_str);
+		}
+		return retval;
+	} else {
+		// Use CLI
+		return chips_rpc_cli(method, params, result);
+	}
+}
 
 char blockchain_cli[1024] = "verus -chain=chips";
 
@@ -703,18 +900,30 @@ cJSON *chips_create_raw_tx_with_data(double amount_to_transfer, char *address, c
 
 int32_t chips_get_block_count()
 {
-	int32_t argc, height;
-	char **argv = NULL, *rendered = NULL;
-	cJSON *block_height = NULL;
+	int32_t height = 0;
+	int32_t retval = OK;
+	cJSON *result = NULL;
 
-	argc = 2;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, blockchain_cli, "getblockcount");
-	make_command(argc, argv, &block_height);
+	retval = chips_rpc("getblockcount", NULL, &result);
+	if (retval != OK) {
+		dlg_error("%s", bet_err_str(retval));
+		return 0;
+	}
 
-	rendered = cJSON_Print(block_height);
-	height = atoi(rendered);
-	bet_dealloc_args(argc, &argv);
+	if (result != NULL) {
+		if (is_cJSON_Number(result)) {
+			height = (int32_t)result->valuedouble;
+		} else if (is_cJSON_String(result)) {
+			height = atoi(result->valuestring);
+		} else {
+			char *rendered = cJSON_Print(result);
+			if (rendered) {
+				height = atoi(rendered);
+				free(rendered);
+			}
+		}
+		cJSON_Delete(result);
+	}
 	return height;
 }
 
@@ -722,29 +931,32 @@ int32_t chips_get_block_count()
 
 double chips_get_balance()
 {
-	int32_t argc, retval = OK;
+	int32_t retval = OK;
 	double balance = 0;
-	char **argv = NULL;
-	cJSON *getbalanceInfo = NULL;
-	char *balance_str = NULL;
+	cJSON *result = NULL;
 
-	argc = 2;
-	argv = bet_copy_args(argc, blockchain_cli, "getbalance");
-	retval = make_command(argc, argv, &getbalanceInfo);
+	retval = chips_rpc("getbalance", NULL, &result);
 	if (retval != OK) {
 		dlg_error("%s", bet_err_str(retval));
-	} else if (getbalanceInfo != NULL) {
-		// getbalance returns a plain number string (make_command creates cJSON_CreateString)
-		// Use unstringify to remove quotes from cJSON_Print output
-		balance_str = cJSON_Print(getbalanceInfo);
-		if (balance_str != NULL) {
-			char *clean_str = unstringify(balance_str);
-			balance = atof(clean_str);
-			free(balance_str);
-		}
-		cJSON_Delete(getbalanceInfo);
+		return 0;
 	}
-	bet_dealloc_args(argc, &argv);
+
+	if (result != NULL) {
+		if (is_cJSON_Number(result)) {
+			balance = result->valuedouble;
+		} else if (is_cJSON_String(result)) {
+			balance = atof(result->valuestring);
+		} else {
+			// For CLI mode which may return stringified number
+			char *balance_str = cJSON_Print(result);
+			if (balance_str != NULL) {
+				char *clean_str = unstringify(balance_str);
+				balance = atof(clean_str);
+				free(balance_str);
+			}
+		}
+		cJSON_Delete(result);
+	}
 	return balance;
 }
 

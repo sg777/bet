@@ -45,6 +45,24 @@ struct verus_ids_keys_config {
 
 extern struct verus_ids_keys_config verus_config;
 
+/* RPC Credentials Configuration Structure */
+struct rpc_credentials {
+	char url[256];
+	char user[128];
+	char password[256];
+	int use_rest_api;  /* 1 = use REST API, 0 = use CLI */
+	int initialized;
+};
+
+extern struct rpc_credentials rpc_config;
+
+/* RPC Credentials Functions */
+void bet_parse_rpc_credentials(void);
+const char *bet_get_rpc_url(void);
+const char *bet_get_rpc_user(void);
+const char *bet_get_rpc_password(void);
+int bet_use_rest_api(void);
+
 void bet_init_config_paths(void);
 cJSON *bet_read_json_file(char *file_name);
 
