@@ -178,7 +178,7 @@ int32_t dealer_table_init(struct table *t)
 		dlg_info("%s", cJSON_Print(out));
 		break;
 	default:
-		// Table is already started - load start_block from t_table_info
+		// Table is already started - load start_block and player_ids from chain
 		{
 			char *game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
 			if (game_id_str) {
@@ -187,6 +187,33 @@ int32_t dealer_table_init(struct table *t)
 				if (t_table_info) {
 					t->start_block = jint(t_table_info, "start_block");
 					dlg_info("Loaded start_block from chain: %d", t->start_block);
+				}
+				
+				// Load player_ids from t_player_info
+				cJSON *t_player_info = get_cJSON_from_id_key_vdxfid(t->table_id,
+					get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+				if (t_player_info) {
+					num_of_players = jint(t_player_info, "num_players");
+					cJSON *player_info_arr = cJSON_GetObjectItem(t_player_info, "player_info");
+					if (player_info_arr && player_info_arr->type == cJSON_Array) {
+						for (int32_t i = 0; i < num_of_players && i < CARDS_MAXPLAYERS; i++) {
+							cJSON *item = cJSON_GetArrayItem(player_info_arr, i);
+							if (item && item->valuestring) {
+								// Parse the player_id from format: "p1_<public_key>_<slot>"
+								char *player_info_str = item->valuestring;
+								// Extract player_id (part before the first underscore)
+								char *underscore = strchr(player_info_str, '_');
+								if (underscore) {
+									size_t id_len = underscore - player_info_str;
+									if (id_len < MAX_ID_LEN) {
+										strncpy(player_ids[i], player_info_str, id_len);
+										player_ids[i][id_len] = '\0';
+										dlg_info("Loaded player %d ID: %s", i, player_ids[i]);
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 		}
