@@ -46,8 +46,8 @@ The platform consists of three node types:
 Each node type uses configurable WebSocket ports for GUI communication:
 
 - **Dealer**: Default port `9000` (configurable via `dealer_config.ini`)
-- **Cashier**: Default port `9002` (configurable via `cashier_config.ini`)
 - **Player**: Default port `9001` (configurable via `player_config.ini`)
+- **Cashier**: Default port `9002` (configurable via `cashier_config.ini`)
 
 All ports are configurable in their respective configuration files. The GUI is served via HTTP on the same port as the WebSocket server.
 
