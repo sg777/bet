@@ -480,6 +480,53 @@ int32_t bet_parse_verus_dealer()
 	return retval;
 }
 
+int32_t bet_parse_verus_dealer_with_reset(bool reset)
+{
+	int32_t retval = OK;
+	dictionary *ini = NULL;
+	struct table t = { 0 };
+
+	ini = iniparser_load(verus_dealer_config);
+	if (!ini)
+		return ERR_INI_PARSING;
+
+	// Parse verus section
+	if (NULL != iniparser_getstring(ini, "verus:dealer_id", NULL)) {
+		strncpy(t.dealer_id, iniparser_getstring(ini, "verus:dealer_id", NULL), sizeof(t.dealer_id) - 1);
+	}
+	if (NULL != iniparser_getstring(ini, "verus:cashier_id", NULL)) {
+		strncpy(t.cashier_id, iniparser_getstring(ini, "verus:cashier_id", NULL), sizeof(t.cashier_id) - 1);
+	} else {
+		strncpy(t.cashier_id, "cashier", sizeof(t.cashier_id) - 1);
+	}
+
+	// Parse table section
+	if (-1 != iniparser_getint(ini, "table:max_players", -1)) {
+		t.max_players = (uint8_t)iniparser_getint(ini, "table:max_players", -1);
+	}
+	if (0 != iniparser_getdouble(ini, "table:big_blind", 0)) {
+		float_to_uint32_s(&t.big_blind, iniparser_getdouble(ini, "table:big_blind", 0));
+	}
+	if (0 != iniparser_getdouble(ini, "table:min_stake", 0)) {
+		float_to_uint32_s(&t.min_stake, iniparser_getdouble(ini, "table:min_stake", 0));
+	}
+	if (0 != iniparser_getdouble(ini, "table:max_stake", 0)) {
+		float_to_uint32_s(&t.max_stake, iniparser_getdouble(ini, "table:max_stake", 0));
+	}
+	if (NULL != iniparser_getstring(ini, "table:table_id", NULL)) {
+		strncpy(t.table_id, iniparser_getstring(ini, "table:table_id", NULL), sizeof(t.table_id) - 1);
+	}
+
+	iniparser_freedict(ini);
+	
+	if (reset) {
+		retval = dealer_init_with_reset(t);
+	} else {
+		retval = dealer_init(t);
+	}
+	return retval;
+}
+
 int32_t bet_parse_verus_player()
 {
 	int32_t retval = OK;

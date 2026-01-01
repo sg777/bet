@@ -80,6 +80,7 @@ int32_t bet_parse_bets();
 void bet_parse_blockchain_config_ini_file();
 bool bet_is_new_block_set();
 int32_t bet_parse_verus_dealer();
+int32_t bet_parse_verus_dealer_with_reset(bool reset);
 int32_t bet_parse_verus_player();
 void bet_parse_verus_ids_keys_config(void);
 const char *bet_get_cashiers_id_fqn(void);

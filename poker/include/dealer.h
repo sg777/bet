@@ -10,5 +10,7 @@ int32_t dealer_shuffle_deck(char *id);
 int32_t handle_game_state(struct table *t);
 int32_t register_table(struct table t);
 int32_t dealer_init(struct table t);
+int32_t dealer_init_with_reset(struct table t);
+int32_t dealer_reset_table(struct table *t);
 
 #endif /* DEALER_H */

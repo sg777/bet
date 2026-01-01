@@ -390,14 +390,22 @@ void bet_start(int argc, char **argv)
 		}
 	} else if (strcmp(cmd, "d") == 0 || strcmp(cmd, "dcv") == 0 || strcmp(cmd, "dealer") == 0) {
 		bet_node_type = dealer;
-		dlg_info("Starting dealer node");
+		
+		// Check for reset flag: ./bet dealer reset
+		bool reset_table = false;
+		if (argc >= 3 && strcmp(argv[2], "reset") == 0) {
+			reset_table = true;
+			dlg_info("Starting dealer node with TABLE RESET");
+		} else {
+			dlg_info("Starting dealer node");
+		}
 		
 		// GUI thread disabled - focusing on backend implementation
 		// TODO: Re-enable GUI thread when ready
 		
 		// Backend initialization
 		if (retval == OK) {
-			retval = bet_parse_verus_dealer();
+			retval = bet_parse_verus_dealer_with_reset(reset_table);
 			if (retval != OK) {
 				dlg_error("[Backend] Backend initialization failed: %s", bet_err_str(retval));
 			}

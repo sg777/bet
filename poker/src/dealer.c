@@ -349,6 +349,66 @@ int32_t register_table(struct table t)
 	return retval;
 }
 
+// Reset the table to start a fresh game
+// This generates a new game_id and sets start_block to current block
+int32_t dealer_reset_table(struct table *t)
+{
+	int32_t retval = OK;
+	char hexstr[65];
+	cJSON *t_game_info = NULL, *out = NULL;
+	char *game_id_vdxfid = NULL;
+
+	dlg_info("=== RESETTING TABLE FOR FRESH GAME ===");
+
+	// Generate new game_id
+	game_id = rand256(0);
+	bits256_str(hexstr, game_id);
+	dlg_info("New game_id: %s", hexstr);
+
+	// Update game_id on table
+	out = poker_append_key_hex(t->table_id, T_GAME_ID_KEY, hexstr, false);
+	if (!out) {
+		dlg_error("Failed to update game_id");
+		return ERR_TABLE_LAUNCH;
+	}
+
+	// Set new start_block
+	t->start_block = chips_get_block_count();
+	dlg_info("New start_block: %d", t->start_block);
+
+	// Get VDXF key for game info
+	game_id_vdxfid = get_key_data_vdxf_id(T_GAME_INFO_KEY, hexstr);
+	if (!game_id_vdxfid) {
+		return ERR_TABLE_LAUNCH;
+	}
+
+	// Update table info with new start_block
+	out = poker_append_key_json(t->table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, hexstr),
+		struct_table_to_cJSON(t), true);
+	if (!out) {
+		return ERR_TABLE_LAUNCH;
+	}
+
+	// Reset game state to TABLE_STARTED
+	t_game_info = cJSON_CreateObject();
+	cJSON_AddNumberToObject(t_game_info, "game_state", G_TABLE_STARTED);
+	out = poker_append_key_json(t->table_id, game_id_vdxfid, t_game_info, true);
+	if (!out) {
+		cJSON_Delete(t_game_info);
+		return ERR_GAME_STATE_UPDATE;
+	}
+
+	// Clear player_ids
+	for (int32_t i = 0; i < CARDS_MAXPLAYERS; i++) {
+		memset(player_ids[i], 0, MAX_ID_LEN);
+	}
+	num_of_players = 0;
+
+	dlg_info("Table reset complete. Waiting for players to join...");
+	cJSON_Delete(t_game_info);
+	return retval;
+}
+
 int32_t dealer_init(struct table t)
 {
 	int32_t retval = OK;
@@ -386,6 +446,52 @@ int32_t dealer_init(struct table t)
 	}
 
 	dlg_info("Dealer ready. Table: %s, Dealer: %s, Cashier: %s", t.table_id, t.dealer_id, t.cashier_id);
+	dlg_info("Waiting for players to join via cashier...");
+	
+	while (1) {
+		retval = handle_game_state(&t);
+		if (retval)
+			return retval;
+		sleep(2);
+	}
+	return retval;
+}
+
+// Dealer init with table reset - starts a fresh game
+int32_t dealer_init_with_reset(struct table t)
+{
+	int32_t retval = OK;
+	double balance = 0;
+
+	balance = chips_get_balance();
+	if (balance < RESERVE_AMOUNT) {
+		dlg_info("Wallet balance ::%f, Minimum funds needed to host a table :: %f", balance, RESERVE_AMOUNT);
+		return ERR_CHIPS_INSUFFICIENT_FUNDS;
+	}
+	if ((!id_cansignfor(t.dealer_id, 0, &retval)) || (!id_cansignfor(t.table_id, 0, &retval))) {
+		return retval;
+	}
+
+	if (!is_dealer_registered(t.dealer_id)) {
+		return ERR_DEALER_UNREGISTERED;
+	}
+
+	if (!is_table_registered(t.table_id, t.dealer_id)) {
+		retval = register_table(t);
+		if (retval) {
+			dlg_error("Table::%s, registration at dealer::%s is failed", t.table_id, t.dealer_id);
+			return retval;
+		}
+	}
+
+	// Reset the table for a fresh game
+	retval = dealer_reset_table(&t);
+	if (retval != OK) {
+		dlg_error("Table reset failed");
+		return retval;
+	}
+
+	dlg_info("Dealer ready (RESET). Table: %s, Dealer: %s, Cashier: %s", t.table_id, t.dealer_id, t.cashier_id);
 	dlg_info("Waiting for players to join via cashier...");
 	
 	while (1) {
