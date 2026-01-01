@@ -85,6 +85,40 @@ int32_t decode_card(bits256 b_blinded_card, bits256 blinded_value, cJSON *dealer
 	return card_value;
 }
 
+// Check if card_type is a community card (board card)
+static bool is_community_card(int32_t card_type)
+{
+	return (card_type == flop_card_1 || card_type == flop_card_2 || card_type == flop_card_3 ||
+		card_type == turn_card || card_type == river_card);
+}
+
+// Report decoded card to player's identity (for dealer verification of community cards)
+static int32_t report_decoded_card(int32_t card_id, int32_t card_type, int32_t card_value)
+{
+	char str[65];
+	cJSON *decoded_info = NULL, *out = NULL;
+
+	decoded_info = cJSON_CreateObject();
+	cJSON_AddNumberToObject(decoded_info, "card_id", card_id);
+	cJSON_AddNumberToObject(decoded_info, "card_type", card_type);
+	cJSON_AddNumberToObject(decoded_info, "card_value", card_value);
+
+	out = poker_append_key_json(player_config.verus_pid,
+		get_key_data_vdxf_id(P_DECODED_CARD_KEY, bits256_str(str, p_deck_info.game_id)),
+		decoded_info, true);
+
+	if (!out) {
+		dlg_error("Failed to report decoded card to player ID");
+		cJSON_Delete(decoded_info);
+		return ERR_UPDATEIDENTITY;
+	}
+
+	dlg_info("Reported decoded card to player ID: card_id=%d, card_type=%d, value=%d",
+		card_id, card_type, card_value);
+	cJSON_Delete(decoded_info);
+	return OK;
+}
+
 int32_t reveal_card(char *table_id)
 {
 	int32_t retval = OK, player_id, card_id, card_value = -1, card_type;
@@ -106,6 +140,41 @@ int32_t reveal_card(char *table_id)
 		}
 
 		game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+
+		// For community cards, first check if already revealed on table ID
+		if (is_community_card(card_type)) {
+			cJSON *board_cards = get_cJSON_from_id_key_vdxfid(table_id,
+				get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id_str));
+			if (board_cards) {
+				int32_t existing_value = -1;
+				switch (card_type) {
+				case flop_card_1:
+					existing_value = jinti(jobj(board_cards, "flop"), 0);
+					break;
+				case flop_card_2:
+					existing_value = jinti(jobj(board_cards, "flop"), 1);
+					break;
+				case flop_card_3:
+					existing_value = jinti(jobj(board_cards, "flop"), 2);
+					break;
+				case turn_card:
+					existing_value = jint(board_cards, "turn");
+					break;
+				case river_card:
+					existing_value = jint(board_cards, "river");
+					break;
+				}
+				if (existing_value >= 0) {
+					dlg_info("Board card already revealed on table: type=%d, value=%d",
+						card_type, existing_value);
+					// Save to local state
+					if (card_id < hand_size) {
+						update_player_decoded_card(card_id, existing_value);
+					}
+					return OK;
+				}
+			}
+		}
 
 		while (1) {
 			bv_info = get_cJSON_from_id_key_vdxfid(table_id,
@@ -150,6 +219,11 @@ int32_t reveal_card(char *table_id)
 				update_player_decoded_card(card_id, card_value);
 				dlg_info("Saved decoded card %d (type=%d) with value %d to local DB", 
 					card_id, card_type, card_value);
+			}
+
+			// For community cards, report to player ID for dealer verification
+			if (is_community_card(card_type)) {
+				report_decoded_card(card_id, card_type, card_value);
 			}
 		}
 	}

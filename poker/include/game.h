@@ -30,4 +30,7 @@ int32_t is_card_drawn(char *table_id);
 int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars);
 int32_t verus_small_blind(char *table_id, struct privatebet_vars *vars);
 
+// Board cards (community cards) - dealer polls players and updates table ID
+int32_t update_board_cards(char *table_id, int32_t card_type);
+
 #endif /* GAME_H */

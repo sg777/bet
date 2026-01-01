@@ -95,6 +95,29 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 #define T_CARD_BV_KEY "chips.vrsc::poker.sg777z.card_bv"
 
 /*
+* t_board_cards - Community cards revealed on the table (updated by dealer after confirming all players decoded)
+* {
+*   flop: [card1, card2, card3] or [-1, -1, -1] if not revealed
+*   turn: card4 or -1
+*   river: card5 or -1
+*   last_card_id: last board card_id processed
+* }
+* On rejoin, player reads this to get already-revealed community cards
+*/
+#define T_BOARD_CARDS_KEY "chips.vrsc::poker.sg777z.t_board_cards"
+
+/*
+* p_decoded_card - Player reports their decoded card to their ID (for dealer verification)
+* {
+*   card_id: which card was decoded
+*   card_type: hole_card, flop_card_1, etc.
+*   card_value: decoded card value
+* }
+* Dealer polls this to confirm all players decoded the same community card
+*/
+#define P_DECODED_CARD_KEY "chips.vrsc::poker.sg777z.p_decoded_card"
+
+/*
 * t_game_info {
 * t_game_ids : 256 bit unique string in hex
 * game_info : Holds the info of the gaming state

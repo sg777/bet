@@ -3,6 +3,10 @@
 #include "err.h"
 #include "poker_vdxf.h"
 
+// External references
+extern char player_ids[CARDS_MAXPLAYERS][MAX_ID_LEN];
+extern int32_t num_of_players;
+
 struct t_game_info_struct t_game_info;
 
 const char *game_state_str(int32_t game_state)
@@ -309,8 +313,13 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 				}
 			}
 		}
-		if (flag)
+		if (flag) {
 			flop_cards_drawn = 1;
+			// Update board cards on table ID for each flop card
+			update_board_cards(table_id, flop_card_1);
+			update_board_cards(table_id, flop_card_2);
+			update_board_cards(table_id, flop_card_3);
+		}
 
 	} else if (turn_card_drawn == 0) {
 		flag = 1;
@@ -322,8 +331,11 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 				}
 			}
 		}
-		if (flag)
+		if (flag) {
 			turn_card_drawn = 1;
+			// Update board cards on table ID
+			update_board_cards(table_id, turn_card);
+		}
 
 	} else if (river_card_drawn == 0) {
 		flag = 1;
@@ -335,8 +347,11 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 				}
 			}
 		}
-		if (flag)
+		if (flag) {
 			river_card_drawn = 1;
+			// Update board cards on table ID
+			update_board_cards(table_id, river_card);
+		}
 	}
 
 	if (flag) {
@@ -350,6 +365,92 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 	} else {
 		retval = deal_next_card(table_id);
 		//retval = bet_dcv_turn(player_card_info, vars);
+	}
+
+	return retval;
+}
+
+// Poll all players for their decoded community card value and update table's board cards
+int32_t update_board_cards(char *table_id, int32_t card_type)
+{
+	int32_t retval = OK, consensus_value = -1, confirmed_count = 0;
+	char *game_id_str = NULL;
+	cJSON *board_cards = NULL, *out = NULL, *flop_arr = NULL;
+
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	if (!game_id_str) {
+		return ERR_GAME_ID_NOT_FOUND;
+	}
+
+	// Poll each player for their decoded card value
+	for (int32_t i = 0; i < num_of_players; i++) {
+		cJSON *player_decoded = get_cJSON_from_id_key_vdxfid(player_ids[i],
+			get_key_data_vdxf_id(P_DECODED_CARD_KEY, game_id_str));
+		if (player_decoded) {
+			int32_t p_card_type = jint(player_decoded, "card_type");
+			int32_t p_card_value = jint(player_decoded, "card_value");
+			
+			if (p_card_type == card_type) {
+				if (consensus_value == -1) {
+					consensus_value = p_card_value;
+					confirmed_count = 1;
+				} else if (p_card_value == consensus_value) {
+					confirmed_count++;
+				} else {
+					dlg_error("Player %d reported different card value for type %d: %d vs %d",
+						i, card_type, p_card_value, consensus_value);
+					// TODO: Handle dispute
+				}
+			}
+		}
+	}
+
+	if (confirmed_count < num_of_players) {
+		dlg_info("Not all players confirmed community card yet: %d/%d", confirmed_count, num_of_players);
+		return OK; // Will retry on next poll
+	}
+
+	dlg_info("All players confirmed community card type %d with value %d", card_type, consensus_value);
+
+	// Get or create board_cards
+	board_cards = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id_str));
+	if (!board_cards) {
+		board_cards = cJSON_CreateObject();
+		flop_arr = cJSON_CreateArray();
+		cJSON_AddItemToArray(flop_arr, cJSON_CreateNumber(-1));
+		cJSON_AddItemToArray(flop_arr, cJSON_CreateNumber(-1));
+		cJSON_AddItemToArray(flop_arr, cJSON_CreateNumber(-1));
+		cJSON_AddItemToObject(board_cards, "flop", flop_arr);
+		cJSON_AddNumberToObject(board_cards, "turn", -1);
+		cJSON_AddNumberToObject(board_cards, "river", -1);
+	}
+
+	// Update the appropriate field
+	switch (card_type) {
+	case flop_card_1:
+		cJSON_ReplaceItemInArray(cJSON_GetObjectItem(board_cards, "flop"), 0, cJSON_CreateNumber(consensus_value));
+		break;
+	case flop_card_2:
+		cJSON_ReplaceItemInArray(cJSON_GetObjectItem(board_cards, "flop"), 1, cJSON_CreateNumber(consensus_value));
+		break;
+	case flop_card_3:
+		cJSON_ReplaceItemInArray(cJSON_GetObjectItem(board_cards, "flop"), 2, cJSON_CreateNumber(consensus_value));
+		break;
+	case turn_card:
+		cJSON_ReplaceItemInObject(board_cards, "turn", cJSON_CreateNumber(consensus_value));
+		break;
+	case river_card:
+		cJSON_ReplaceItemInObject(board_cards, "river", cJSON_CreateNumber(consensus_value));
+		break;
+	}
+
+	// Update table ID with board cards
+	out = poker_append_key_json(table_id, get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id_str), board_cards, true);
+	if (!out) {
+		dlg_error("Failed to update board cards on table ID");
+		retval = ERR_UPDATEIDENTITY;
+	} else {
+		dlg_info("Updated board cards on table ID: %s", cJSON_Print(board_cards));
 	}
 
 	return retval;
