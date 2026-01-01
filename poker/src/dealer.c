@@ -351,12 +351,15 @@ int32_t register_table(struct table t)
 
 // Reset the table to start a fresh game
 // This generates a new game_id and sets start_block to current block
+// All updates are done in a SINGLE transaction to avoid UTXO conflicts
 int32_t dealer_reset_table(struct table *t)
 {
 	int32_t retval = OK;
-	char hexstr[65];
-	cJSON *t_game_info = NULL, *out = NULL;
-	char *game_id_vdxfid = NULL;
+	char hexstr[65], *hex_data = NULL;
+	cJSON *cmm = NULL, *t_game_info = NULL, *t_table_info = NULL, *out = NULL;
+	cJSON *data_obj = NULL;
+	char *game_id_vdxfid = NULL, *table_info_vdxfid = NULL;
+	char *bytevector_vdxfid = NULL, *game_id_key_vdxfid = NULL;
 
 	dlg_info("=== RESETTING TABLE FOR FRESH GAME ===");
 
@@ -365,38 +368,52 @@ int32_t dealer_reset_table(struct table *t)
 	bits256_str(hexstr, game_id);
 	dlg_info("New game_id: %s", hexstr);
 
-	// Update game_id on table
-	out = poker_append_key_hex(t->table_id, T_GAME_ID_KEY, hexstr, false);
-	if (!out) {
-		dlg_error("Failed to update game_id");
-		return ERR_TABLE_LAUNCH;
-	}
-
 	// Set new start_block
 	t->start_block = chips_get_block_count();
 	dlg_info("New start_block: %d", t->start_block);
 
-	// Get VDXF key for game info
+	// Build a single CMM with all keys for atomic update
+	cmm = cJSON_CreateObject();
+	bytevector_vdxfid = get_vdxf_id(BYTEVECTOR_VDXF_ID);
+	
+	// Key 1: T_GAME_ID_KEY = hexstr (game_id)
+	game_id_key_vdxfid = get_vdxf_id(T_GAME_ID_KEY);
+	data_obj = cJSON_CreateObject();
+	cJSON_AddStringToObject(data_obj, bytevector_vdxfid, hexstr);
+	cJSON_AddItemToObject(cmm, game_id_key_vdxfid, data_obj);
+
+	// Key 2: T_TABLE_INFO_KEY.<game_id> = table info JSON
+	table_info_vdxfid = get_key_data_vdxf_id(T_TABLE_INFO_KEY, hexstr);
+	t_table_info = struct_table_to_cJSON(t);
+	cJSON_hex(t_table_info, &hex_data);
+	data_obj = cJSON_CreateObject();
+	cJSON_AddStringToObject(data_obj, bytevector_vdxfid, hex_data);
+	cJSON_AddItemToObject(cmm, table_info_vdxfid, data_obj);
+	free(hex_data);
+	hex_data = NULL;
+	cJSON_Delete(t_table_info);
+
+	// Key 3: T_GAME_INFO_KEY.<game_id> = {game_state: G_TABLE_STARTED}
 	game_id_vdxfid = get_key_data_vdxf_id(T_GAME_INFO_KEY, hexstr);
-	if (!game_id_vdxfid) {
-		return ERR_TABLE_LAUNCH;
-	}
-
-	// Update table info with new start_block
-	out = poker_append_key_json(t->table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, hexstr),
-		struct_table_to_cJSON(t), true);
-	if (!out) {
-		return ERR_TABLE_LAUNCH;
-	}
-
-	// Reset game state to TABLE_STARTED
 	t_game_info = cJSON_CreateObject();
 	cJSON_AddNumberToObject(t_game_info, "game_state", G_TABLE_STARTED);
-	out = poker_append_key_json(t->table_id, game_id_vdxfid, t_game_info, true);
+	cJSON_hex(t_game_info, &hex_data);
+	data_obj = cJSON_CreateObject();
+	cJSON_AddStringToObject(data_obj, bytevector_vdxfid, hex_data);
+	cJSON_AddItemToObject(cmm, game_id_vdxfid, data_obj);
+	free(hex_data);
+	cJSON_Delete(t_game_info);
+
+	// Single atomic update
+	dlg_info("Updating table with all reset data in single transaction...");
+	out = update_cmm(t->table_id, cmm);
+	cJSON_Delete(cmm);
+	
 	if (!out) {
-		cJSON_Delete(t_game_info);
-		return ERR_GAME_STATE_UPDATE;
+		dlg_error("Failed to update table CMM");
+		return ERR_TABLE_LAUNCH;
 	}
+	dlg_info("Table CMM updated successfully");
 
 	// Clear player_ids
 	for (int32_t i = 0; i < CARDS_MAXPLAYERS; i++) {
@@ -405,7 +422,6 @@ int32_t dealer_reset_table(struct table *t)
 	num_of_players = 0;
 
 	dlg_info("Table reset complete. Waiting for players to join...");
-	cJSON_Delete(t_game_info);
 	return retval;
 }
 

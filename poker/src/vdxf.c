@@ -141,6 +141,13 @@ cJSON *update_cmm(char *id, cJSON *cmm)
 	params = cJSON_CreateArray();
 	cJSON_AddItemToArray(params, id_info);
 
+	// Debug: print size of JSON being sent
+	char *params_str = cJSON_PrintUnformatted(params);
+	if (params_str) {
+		dlg_info("updateidentity params size: %zu bytes", strlen(params_str));
+		free(params_str);
+	}
+
 	result = update_with_retry("updateidentity", params);
 	cJSON_Delete(params);
 	return result;
@@ -1000,6 +1007,7 @@ cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid)
 	return hex_cJSON(hex_str);
 }
 
+// Add a single key to CMM - reads existing CMM and merges
 cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id)
 {
 	char *data_type = NULL, *data_key = NULL;
@@ -1024,6 +1032,30 @@ cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool
 
 	// Remove old key if exists, then add new
 	cJSON_DeleteItemFromObject(cmm_obj, data_key);
+	cJSON_AddItemToObject(cmm_obj, data_key, data_obj);
+
+	return update_cmm(id, cmm_obj);
+}
+
+// Replace CMM with just this key - does NOT read existing CMM (for fresh start)
+cJSON *replace_cmm_with_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id)
+{
+	char *data_type = NULL, *data_key = NULL;
+	cJSON *data_obj = NULL, *cmm_obj = NULL;
+
+	// Create fresh CMM - don't read old data
+	cmm_obj = cJSON_CreateObject();
+
+	if (is_key_vdxf_id) {
+		data_type = get_vdxf_id(BYTEVECTOR_VDXF_ID);
+		data_key = key;
+	} else {
+		data_type = get_vdxf_id(get_key_data_type(key));
+		data_key = get_vdxf_id(key);
+	}
+
+	data_obj = cJSON_CreateObject();
+	jaddstr(data_obj, data_type, hex_data);
 	cJSON_AddItemToObject(cmm_obj, data_key, data_obj);
 
 	return update_cmm(id, cmm_obj);
