@@ -140,8 +140,8 @@ void cJSON_hex(cJSON *argjson, char **hexstr)
 	if (!argjson)
 		return;
 
-	/* cJSON_Print() allocates; don't leak it. */
-	char *printed = cJSON_Print(argjson);
+	/* Use PrintUnformatted for compact output (no whitespace) */
+	char *printed = cJSON_PrintUnformatted(argjson);
 	if (!printed)
 		return;
 

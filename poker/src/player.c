@@ -220,7 +220,18 @@ int32_t handle_verus_player()
 	}
 	dlg_info("Player ID: %d", p_deck_info.player_id);
 
-	// Initialize player deck
+	// Check if game is already past deck shuffling phase
+	int32_t current_game_state = get_game_state(player_config.table_id);
+	if (current_game_state > G_DECK_SHUFFLING_B) {
+		// Game is already in progress - player can't rejoin mid-game because
+		// their deck private keys were lost on restart
+		dlg_error("Game is already in progress (state: %s). Cannot rejoin - deck keys lost on restart.",
+			  game_state_str(current_game_state));
+		dlg_error("TODO: Implement deck key persistence to allow mid-game rejoin.");
+		return ERR_GAME_ALREADY_STARTED;
+	}
+
+	// Initialize player deck (only if game is in deck shuffling phase or earlier)
 	if ((retval = player_init_deck()) != OK) {
 		dlg_error("Failed to initialize player deck: %s", bet_err_str(retval));
 		return retval;

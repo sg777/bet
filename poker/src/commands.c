@@ -77,9 +77,17 @@ static int32_t chips_rpc_rest(const char *method, const char *params_str, cJSON 
 		return ERR_CHIPS_RPC;
 	}
 
-	// Build JSON-RPC request payload
-	char json_payload[8192];
-	snprintf(json_payload, sizeof(json_payload),
+	// Build JSON-RPC request payload - large buffer for deck data
+	size_t params_len = params_str ? strlen(params_str) : 2;
+	size_t payload_size = params_len + 256;  // Extra space for JSON wrapper
+	char *json_payload = malloc(payload_size);
+	if (!json_payload) {
+		dlg_error("Failed to allocate memory for JSON payload");
+		free(chunk.data);
+		curl_easy_cleanup(curl);
+		return ERR_MEMORY_ALLOC;
+	}
+	snprintf(json_payload, payload_size,
 		"{\"jsonrpc\":\"1.0\",\"id\":\"bet\",\"method\":\"%s\",\"params\":%s}",
 		method, params_str ? params_str : "[]");
 
@@ -102,6 +110,7 @@ static int32_t chips_rpc_rest(const char *method, const char *params_str, cJSON 
 	// Perform the request
 	res = curl_easy_perform(curl);
 	curl_slist_free_all(headers);
+	free(json_payload);  // Free payload after request
 
 	if (res != CURLE_OK) {
 		dlg_error("curl_easy_perform() failed: %s", curl_easy_strerror(res));
