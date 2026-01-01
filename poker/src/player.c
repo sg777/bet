@@ -8,13 +8,14 @@
 #include "config.h"
 #include "print.h"
 #include "poker_vdxf.h"
+#include "storage.h"
 
 struct p_deck_info_struct p_deck_info;
 
 int32_t player_init_deck()
 {
 	int32_t retval = OK;
-	char str[65];
+	char str[65], game_id_str[65];
 	cJSON *cjson_player_cards = NULL, *player_deck = NULL;
 
 	// Player ID numbering range from [0...8]
@@ -24,6 +25,14 @@ int32_t player_init_deck()
 	p_deck_info.p_kp = gen_keypair();
 
 	gen_deck(p_deck_info.player_r, CARDS_MAXCARDS);
+
+	// Save deck info to local DB immediately after generation (for rejoin support)
+	bits256_str(game_id_str, p_deck_info.game_id);
+	retval = save_player_deck_info(game_id_str, player_config.table_id, p_deck_info.player_id);
+	if (retval != OK) {
+		dlg_error("Failed to save player deck info to local DB");
+		// Continue anyway - this is non-fatal for first run
+	}
 
 	player_deck = cJSON_CreateObject();
 	jaddnum(player_deck, "id", p_deck_info.player_id);
@@ -49,7 +58,7 @@ int32_t player_init_deck()
 		return ERR_GAME_STATE_UPDATE;
 	dlg_info("%s", cJSON_Print(out));
 
-	return retval;
+	return OK;
 }
 
 int32_t decode_card(bits256 b_blinded_card, bits256 blinded_value, cJSON *dealer_blind_info)
@@ -176,6 +185,7 @@ int32_t handle_game_state_player(char *table_id)
 int32_t handle_verus_player()
 {
 	int32_t retval = OK;
+	char game_id_str[65];
 
 	// Check if poker is ready
 	if ((retval = verify_poker_setup()) != OK) {
@@ -220,23 +230,71 @@ int32_t handle_verus_player()
 	}
 	dlg_info("Player ID: %d", p_deck_info.player_id);
 
+	// Get the current game_id from the table
+	char *game_id_from_table = poker_get_key_str(player_config.table_id, T_GAME_ID_KEY);
+	if (game_id_from_table) {
+		p_deck_info.game_id = bits256_conv(game_id_from_table);
+		strncpy(game_id_str, game_id_from_table, sizeof(game_id_str) - 1);
+		game_id_str[sizeof(game_id_str) - 1] = '\0';
+		dlg_info("Game ID from table: %s", game_id_str);
+	} else {
+		// No game_id yet - will be set during deck init
+		memset(game_id_str, 0, sizeof(game_id_str));
+	}
+
 	// Check if game is already past deck shuffling phase
 	int32_t current_game_state = get_game_state(player_config.table_id);
 	if (current_game_state > G_DECK_SHUFFLING_B) {
-		// Game is already in progress - player can't rejoin mid-game because
-		// their deck private keys were lost on restart
-		dlg_error("Game is already in progress (state: %s). Cannot rejoin - deck keys lost on restart.",
-			  game_state_str(current_game_state));
-		dlg_error("TODO: Implement deck key persistence to allow mid-game rejoin.");
-		return ERR_GAME_ALREADY_STARTED;
+		// Game is already in progress - try to load deck info from local DB
+		dlg_info("Game is in progress (state: %s). Attempting to load deck info from local DB...",
+			 game_state_str(current_game_state));
+		
+		if (strlen(game_id_str) > 0) {
+			retval = load_player_deck_info(game_id_str);
+			if (retval == OK) {
+				dlg_info("Successfully loaded player deck info from local DB!");
+				dlg_info("Rejoining game with player_id=%d", p_deck_info.player_id);
+			} else {
+				dlg_error("Failed to load deck info from local DB: %s", bet_err_str(retval));
+				dlg_error("Cannot rejoin - deck keys not found. Please wait for a new game.");
+				return ERR_GAME_ALREADY_STARTED;
+			}
+		} else {
+			dlg_error("No game_id found on table. Cannot rejoin.");
+			return ERR_GAME_ALREADY_STARTED;
+		}
+	} else if (current_game_state >= G_PLAYERS_JOINED && current_game_state <= G_DECK_SHUFFLING_B) {
+		// Game is in deck shuffling phase - check if we have local deck info
+		if (already_joined && strlen(game_id_str) > 0) {
+			retval = load_player_deck_info(game_id_str);
+			if (retval == OK) {
+				dlg_info("Loaded existing deck info for this game from local DB");
+				// Skip deck init since we already have our deck
+			} else {
+				// No local deck info - need to initialize
+				dlg_info("No saved deck info found, initializing new deck...");
+				if ((retval = player_init_deck()) != OK) {
+					dlg_error("Failed to initialize player deck: %s", bet_err_str(retval));
+					return retval;
+				}
+				dlg_info("Player deck shuffling info updated to table");
+			}
+		} else {
+			// First join - initialize deck
+			if ((retval = player_init_deck()) != OK) {
+				dlg_error("Failed to initialize player deck: %s", bet_err_str(retval));
+				return retval;
+			}
+			dlg_info("Player deck shuffling info updated to table");
+		}
+	} else {
+		// Game not started yet or waiting for players
+		if ((retval = player_init_deck()) != OK) {
+			dlg_error("Failed to initialize player deck: %s", bet_err_str(retval));
+			return retval;
+		}
+		dlg_info("Player deck shuffling info updated to table");
 	}
-
-	// Initialize player deck (only if game is in deck shuffling phase or earlier)
-	if ((retval = player_init_deck()) != OK) {
-		dlg_error("Failed to initialize player deck: %s", bet_err_str(retval));
-		return retval;
-	}
-	dlg_info("Player deck shuffling info updated to table");
 
 	// Main game loop
 	while (1) {

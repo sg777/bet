@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "commands.h"
 #include "storage.h"
 #include "misc.h"
@@ -527,7 +528,7 @@ int32_t update_player_deck_info_a_rG(char *tx_id)
 	cJSON_hex(cardinfo, &player_deck_priv);
 
 	sql_query = calloc(sql_query_size, sizeof(char));
-	sprintf(sql_query, "update player_deck_info set player_priv = \'%s\', deck_priv = \'%s\' where tx_id = \'%s\'",
+	sprintf(sql_query, "update player_deck_info set player_priv = \'%s\', player_deck_priv = \'%s\' where tx_id = \'%s\'",
 		player_priv, player_deck_priv, tx_id);
 	retval = bet_run_query(sql_query);
 	if (sql_query)
@@ -586,6 +587,145 @@ int32_t insert_dealer_deck_info()
 		cJSON_Delete(d_perm);
 	if (d_blindinfo)
 		cJSON_Delete(d_blindinfo);
+	return retval;
+}
+
+int32_t save_player_deck_info(const char *game_id_str, const char *table_id, int32_t player_id)
+{
+	int32_t retval = OK;
+	char player_priv[65], str[65], *player_deck_priv = NULL, *sql_query = NULL;
+	cJSON *cardinfo = NULL;
+
+	bits256_str(player_priv, p_deck_info.p_kp.priv);
+
+	cardinfo = cJSON_CreateArray();
+	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
+		jaddistr(cardinfo, bits256_str(str, p_deck_info.player_r[i].priv));
+	}
+	cJSON_hex(cardinfo, &player_deck_priv);
+
+	// Use REPLACE to handle both insert and update
+	sql_query = calloc(sql_query_size * 4, sizeof(char));  // Need more space for the deck priv data
+	sprintf(sql_query,
+		"INSERT OR REPLACE INTO player_deck_info(game_id, table_id, player_id, player_priv, player_deck_priv) "
+		"VALUES(\'%s\', \'%s\', %d, \'%s\', \'%s\')",
+		game_id_str, table_id, player_id, player_priv, player_deck_priv);
+	
+	dlg_info("Saving player deck info to local DB for game_id: %s", game_id_str);
+	retval = bet_run_query(sql_query);
+	if (retval != OK) {
+		dlg_error("Failed to save player deck info: %s", bet_err_str(retval));
+	} else {
+		dlg_info("Player deck info saved successfully");
+	}
+	
+	if (sql_query)
+		free(sql_query);
+	if (player_deck_priv)
+		free(player_deck_priv);
+	if (cardinfo)
+		cJSON_Delete(cardinfo);
+	return retval;
+}
+
+int32_t load_player_deck_info(const char *game_id_str)
+{
+	sqlite3_stmt *stmt = NULL;
+	sqlite3 *db = NULL;
+	char *sql_query = NULL, *game_id_copy = NULL, *player_priv_copy = NULL;
+	int32_t rc, retval = ERR_ID_NOT_FOUND;
+	const char *player_priv_str = NULL, *player_deck_priv_hex = NULL;
+	char *player_deck_priv_json = NULL;
+	cJSON *deck_priv_array = NULL;
+
+	db = bet_get_db_instance();
+	sql_query = calloc(sql_query_size, sizeof(char));
+	sprintf(sql_query, "SELECT player_id, player_priv, player_deck_priv FROM player_deck_info WHERE game_id = \'%s\'",
+		game_id_str);
+
+	rc = sqlite3_prepare_v2(db, sql_query, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		dlg_error("error_code :: %d, error msg ::%s, \n query ::%s", rc, sqlite3_errmsg(db), sql_query);
+		goto end;
+	}
+
+	if ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+		// Found saved deck info
+		p_deck_info.player_id = sqlite3_column_int(stmt, 0);
+		player_priv_str = (const char *)sqlite3_column_text(stmt, 1);
+		player_deck_priv_hex = (const char *)sqlite3_column_text(stmt, 2);
+
+		if (player_priv_str == NULL || player_deck_priv_hex == NULL) {
+			dlg_error("Player deck info incomplete in DB");
+			retval = ERR_TABLE_DECODING_FAILED;
+			goto end;
+		}
+
+		// Make copies for bits256_conv (which takes non-const char*)
+		player_priv_copy = strdup(player_priv_str);
+		game_id_copy = strdup(game_id_str);
+
+		// Restore player keypair private key
+		p_deck_info.p_kp.priv = bits256_conv(player_priv_copy);
+		// Regenerate public key from private key
+		p_deck_info.p_kp.prod = curve25519(p_deck_info.p_kp.priv, curve25519_basepoint9());
+
+		// Restore game_id
+		p_deck_info.game_id = bits256_conv(game_id_copy);
+
+		// Decode the hex-encoded JSON array of deck private keys
+		size_t hex_len = strlen(player_deck_priv_hex);
+		player_deck_priv_json = calloc(hex_len / 2 + 1, sizeof(char));
+		hexstr_to_str(player_deck_priv_hex, player_deck_priv_json);
+
+		deck_priv_array = cJSON_Parse(player_deck_priv_json);
+		if (deck_priv_array == NULL || deck_priv_array->type != cJSON_Array) {
+			dlg_error("Failed to parse player_deck_priv JSON");
+			retval = ERR_JSON_PARSING;
+			goto end;
+		}
+
+		int32_t deck_size = cJSON_GetArraySize(deck_priv_array);
+		if (deck_size != CARDS_MAXCARDS) {
+			dlg_error("Deck size mismatch: expected %d, got %d", CARDS_MAXCARDS, deck_size);
+			retval = ERR_TABLE_DECODING_FAILED;
+			goto end;
+		}
+
+		// Restore player_r array (private keys and regenerate public keys)
+		for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
+			cJSON *item = cJSON_GetArrayItem(deck_priv_array, i);
+			if (item && item->type == cJSON_String && item->valuestring) {
+				char *item_copy = strdup(item->valuestring);
+				p_deck_info.player_r[i].priv = bits256_conv(item_copy);
+				free(item_copy);
+				// Regenerate public key from private key
+				p_deck_info.player_r[i].prod = curve25519(p_deck_info.player_r[i].priv, curve25519_basepoint9());
+			}
+		}
+
+		dlg_info("Player deck info loaded from DB: player_id=%d", p_deck_info.player_id);
+		retval = OK;
+	} else {
+		dlg_info("No saved deck info found for game_id: %s", game_id_str);
+		retval = ERR_ID_NOT_FOUND;
+	}
+
+end:
+	if (stmt)
+		sqlite3_finalize(stmt);
+	if (db)
+		sqlite3_close(db);
+	if (sql_query)
+		free(sql_query);
+	if (player_deck_priv_json)
+		free(player_deck_priv_json);
+	if (deck_priv_array)
+		cJSON_Delete(deck_priv_array);
+	if (player_priv_copy)
+		free(player_priv_copy);
+	if (game_id_copy)
+		free(game_id_copy);
 	return retval;
 }
 

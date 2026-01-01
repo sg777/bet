@@ -28,4 +28,8 @@ int32_t update_player_deck_info_game_id_p_id(char *tx_id);
 int32_t insert_dealer_deck_info();
 int32_t insert_cashier_deck_info(char *table_id);
 
+// Player deck info persistence for rejoin
+int32_t save_player_deck_info(const char *game_id_str, const char *table_id, int32_t player_id);
+int32_t load_player_deck_info(const char *game_id_str);
+
 #endif /* STORAGE_H */
