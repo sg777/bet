@@ -70,6 +70,7 @@ cJSON *bet_read_json_file(char *file_name);
 extern char *dealer_config_ini_file;
 extern char *player_config_ini_file;
 extern char *cashier_config_ini_file;
+extern char *verus_player_config_file;
 
 void bet_parse_dealer_config_ini_file();
 void bet_parse_player_config_ini_file();

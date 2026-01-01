@@ -707,7 +707,8 @@ static bool is_playerid_added(char *table_id)
 	cJSON *t_player_info = NULL, *player_info = NULL;
 
 	game_state = get_game_state(table_id);
-	if (game_state == G_TABLE_STARTED) {
+	// Check for any game state where players could be in the table
+	if (game_state >= G_TABLE_STARTED) {
 		game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
 		t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
 		player_info = jobj(t_player_info, "player_info");

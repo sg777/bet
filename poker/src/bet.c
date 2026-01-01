@@ -383,7 +383,10 @@ void bet_start(int argc, char **argv)
 		
 		// Backend initialization
 		if (retval == OK) {
-			cashier_game_init("sg777_t");
+			// Use table from command line or default to t1
+			const char *table = (argc >= 3) ? argv[2] : "t1";
+			dlg_info("Cashier watching table: %s", table);
+			cashier_game_init((char *)table);
 		}
 	} else if (strcmp(cmd, "d") == 0 || strcmp(cmd, "dcv") == 0 || strcmp(cmd, "dealer") == 0) {
 		bet_node_type = dealer;
@@ -401,6 +404,16 @@ void bet_start(int argc, char **argv)
 		}
 	} else if (strcmp(cmd, "p") == 0 || strcmp(cmd, "player") == 0) {
 		bet_node_type = player;
+		
+		// Optional: player config file path as second argument
+		// Usage: ./bet p [config_file]
+		if (argc >= 3) {
+			// Use provided config file path
+			strncpy(verus_player_config_file, argv[2], PATH_MAX - 1);
+			verus_player_config_file[PATH_MAX - 1] = '\0';
+			dlg_info("Using player config: %s", verus_player_config_file);
+		}
+		
 		dlg_info("Starting player node");
 		
 		// GUI thread disabled - focusing on backend implementation

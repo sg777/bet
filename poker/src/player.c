@@ -190,10 +190,12 @@ int32_t handle_verus_player()
 	}
 
 	// Find a table
+	bool already_joined = false;
 	if ((retval = poker_find_table()) != OK) {
-		if (retval == ERR_PA_EXISTS) {
-			dlg_info("Player already exists in the table. Attempting to rejoin.");
-			// TODO: Implement rejoin logic here
+		if (retval == ERR_DUPLICATE_PLAYERID) {
+			dlg_info("Player already exists in the table. Skipping join, proceeding to deck shuffling.");
+			already_joined = true;
+			retval = OK;  // Clear the error since we're handling it
 		} else {
 			dlg_error("Failed to find table: %s", bet_err_str(retval));
 			return retval;
@@ -202,12 +204,14 @@ int32_t handle_verus_player()
 	dlg_info("Table found");
 	print_struct_table(&player_t);
 
-	// Join the table
-	if ((retval = poker_join_table()) != OK) {
-		dlg_error("Failed to join table: %s", bet_err_str(retval));
-		return retval;
+	// Join the table (skip if already joined)
+	if (!already_joined) {
+		if ((retval = poker_join_table()) != OK) {
+			dlg_error("Failed to join table: %s", bet_err_str(retval));
+			return retval;
+		}
+		dlg_info("Table Joined");
 	}
-	dlg_info("Table Joined");
 
 	// Get player ID
 	if ((retval = get_player_id(&p_deck_info.player_id)) != OK) {
