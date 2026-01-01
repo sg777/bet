@@ -6,9 +6,9 @@ Decentralized poker platform built on the CHIPS blockchain using Verus IDs for n
 
 ### Node Types
 
-1. **Dealer**: Manages tables and coordinates gameplay
-2. **Player**: Joins tables and plays games
-3. **Cashier**: Validates transactions and processes payouts
+1. **Dealer**: Manages tables
+2. **Player**: Joins tables
+3. **Cashier**: Validates transactions
 
 ### Ports
 
@@ -86,7 +86,7 @@ chips-cli getnewaddress
 cd poker && ./bin/bet withdraw <amount> <destination_address>
 ```
 
-**Note**: Ensure sufficient CHIPS for stake size + transaction fees (~0.0001 CHIPS per action).
+**Note**: Ensure sufficient CHIPS for stake size + transaction fees.
 
 ## Documentation
 
