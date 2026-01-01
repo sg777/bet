@@ -34,14 +34,24 @@ int32_t cashier_sb_deck(char *id, bits256 *d_blinded_deck, int32_t player_id)
 		dlg_info("%d::%s", i, bits256_str(str, d_blinded_deck[i]));
 		jaddibits256(b_blinded_deck, d_blinded_deck[i]);
 	}
-	dlg_info("b_blinded_deck::%s", cJSON_Print(b_blinded_deck));
+	char *b_blinded_deck_str = cJSON_PrintUnformatted(b_blinded_deck);
+	if (b_blinded_deck_str) {
+		dlg_info("b_blinded_deck::%s", b_blinded_deck_str);
+		free(b_blinded_deck_str);
+	}
 	cJSON *out = poker_append_key_json(id, get_key_data_vdxf_id(all_t_b_p_keys[player_id], game_id_str),
 						       b_blinded_deck, true);
 
 	if (!out)
 		retval = ERR_DECK_BLINDING_CASHIER;
 
-	dlg_info("%s", cJSON_Print(out));
+	if (out) {
+		char *out_str = cJSON_PrintUnformatted(out);
+		if (out_str) {
+			dlg_info("%s", out_str);
+			free(out_str);
+		}
+	}
 
 	return retval;
 }
@@ -77,7 +87,11 @@ int32_t cashier_shuffle_deck(char *id)
 	for (int32_t i = 0; i < num_players; i++) {
 		t_d_p_deck_info =
 			get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(all_t_d_p_keys[(i + 1)], game_id_str));
-		for (int32_t j = 0; j < cJSON_GetArraySize(t_d_p_deck_info); j++) {
+		int32_t deck_size = cJSON_GetArraySize(t_d_p_deck_info);
+		if (deck_size > CARDS_MAXCARDS) {
+			deck_size = CARDS_MAXCARDS;
+		}
+		for (int32_t j = 0; j < deck_size; j++) {
 			t_d_p_deck[j] = jbits256i(t_d_p_deck_info, j);
 		}
 		retval = cashier_sb_deck(id, t_d_p_deck, i);
@@ -117,9 +131,15 @@ int32_t reveal_bv(char *table_id)
 	jaddnum(card_bv, "card_id", card_id);
 	jadd(card_bv, "bv", bv_info);
 
-	dlg_info("bv_info::%s", cJSON_Print(card_bv));
+	{
+		char *card_bv_str = cJSON_PrintUnformatted(card_bv);
+		if (card_bv_str) {
+			dlg_info("bv_info::%s", card_bv_str);
+			free(card_bv_str);
+		}
+	}
 	out = poker_append_key_json(table_id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str), card_bv,
-						true);
+					true);
 
 	if (!out) {
 		retval = ERR_BV_UPDATE;
