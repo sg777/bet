@@ -94,57 +94,10 @@ cd poker && ./bin/bet withdraw <amount> <destination_address>
 
 ## Documentation
 
-- [Verus Migration Guide](./docs/verus_migration/verus_migration.md) - Comprehensive guide to Verus ID architecture
-- [ID Creation Process](./docs/verus_migration/id_creation_process.md) - How to create and manage Verus IDs
-- [Keys and Data Management](./docs/verus_migration/ids_keys_data.md) - VDXF key structure and data storage
-- [GUI Message Formats](./docs/protocol/GUI_MESSAGE_FORMATS.md) - WebSocket API documentation
-- [Protocol Documentation](./docs/protocol/) - Detailed protocol specifications
-- [Glossary](./docs/protocol/glossary.md) - Terminology and abbreviations
-
-## Technical Details
-
-### Underlying Blockchain
-
-Pangea-Bet runs on [CHIPS](https://github.com/chips-blockchain/chips), a Public Blockchain as a Service (PBaaS) chain on the Verus network. CHIPS features:
-
-- **10-second block time** for fast transaction confirmations
-- **Notarization** to Bitcoin blockchain for security
-- **Verus ID integration** for identity-based operations
-- **Low transaction fees** (~0.0001 CHIPS per transaction)
-
-### Security Model
-
-- **Mental Poker**: Cryptographic protocols ensure card shuffling is verifiable and secure
-- **Multi-Signature Wallets**: Player funds are held in multi-sig addresses
-- **On-Chain Verification**: All game actions are recorded on-chain for auditability
-- **Dispute Resolution**: Transaction history enables transparent dispute resolution
-
-### Performance Considerations
-
-- **Block Latency**: Game actions are recorded on-chain, introducing ~10-20 second latency per action
-- **Transaction Costs**: Each game action costs ~0.0001 CHIPS in transaction fees
-- **State Polling**: Nodes poll Verus IDs to retrieve game state updates
-- **Scalability**: Multiple tables can run simultaneously, each using separate Verus IDs
-
-## Contributing
-
-Contributions are welcome! Please ensure:
-
-1. Code follows existing style and patterns
-2. All compiler warnings are addressed (`-Werror` is enabled)
-3. Memory safety is maintained (no leaks, no buffer overflows)
-4. Documentation is updated for significant changes
+- [Verus Migration Guide](./docs/verus_migration/verus_migration.md)
+- [Configuration Documentation](./docs/protocol/)
+- [Protocol Specifications](./docs/protocol/)
 
 ## License
 
 See LICENSE file for details.
-
-## Support
-
-For issues, questions, or contributions:
-- **GitHub Issues**: [Report issues](https://github.com/sg777/bet/issues)
-- **Documentation**: See `docs/` directory for detailed documentation
-
----
-
-**Note**: This is active development software. Always test thoroughly before using with real funds.
