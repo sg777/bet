@@ -89,4 +89,9 @@ int32_t scan_games_info();
 void wait_for_a_blocktime();
 bool check_if_tx_exists(const char *tx_id);
 
+/* Identity helper functions */
+char *get_identity_address(const char *verus_id);
+cJSON *get_address_txids(const char *address);
+cJSON *decode_tx_data(const char *txid);
+
 #endif /* COMMANDS_H */

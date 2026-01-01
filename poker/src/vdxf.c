@@ -80,8 +80,8 @@ char *get_key_data_vdxf_id(char *key_name, char *data)
 	if ((!key_name) || (!data))
 		return NULL;
 
-	strcpy(full_key, key_name);
-	strncat(full_key, data, strlen(data));
+	// Concatenate key_name.data to form the full key
+	snprintf(full_key, sizeof(full_key), "%s.%s", key_name, data);
 
 	return get_vdxf_id(full_key);
 }
@@ -868,12 +868,35 @@ cJSON *get_cJSON_from_table_id_key(char *table_id, char *key)
 cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid)
 {
 	cJSON *cmm = NULL;
+	cJSON *first_item = NULL;
+	const char *hex_str = NULL;
 
 	cmm = get_cmm_key_data(id, 0, key_vdxfid);
-	if (cmm) {
-		return hex_cJSON(jstr(cJSON_GetArrayItem(cmm, 0), get_vdxf_id(get_key_data_type(key_vdxfid))));
+	if (!cmm) {
+		return NULL;
 	}
-	return NULL;
+
+	first_item = cJSON_GetArrayItem(cmm, 0);
+	if (!first_item) {
+		return NULL;
+	}
+
+	// VDXF data can be stored in two formats:
+	// 1. Simple array of hex strings: ["hexdata"]
+	// 2. Nested object format: [{"bytevector_vdxfid": "hexdata"}]
+	if (first_item->type == cJSON_String) {
+		// Simple format: array contains hex string directly
+		hex_str = first_item->valuestring;
+	} else if (first_item->type == cJSON_Object) {
+		// Nested format: array contains object with bytevector key
+		hex_str = jstr(first_item, get_vdxf_id(get_key_data_type(key_vdxfid)));
+	}
+
+	if (!hex_str) {
+		return NULL;
+	}
+
+	return hex_cJSON(hex_str);
 }
 
 cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id)

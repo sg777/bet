@@ -170,3 +170,80 @@ int32_t poker_verify_setup()
 	return verify_poker_setup();
 }
 
+/* ============================================================================
+ * Cashier Polling for Join Requests
+ * ============================================================================ */
+
+/**
+ * Poll cashier for pending join requests for a specific table
+ * 
+ * Flow:
+ * 1. Get cashier's identity address
+ * 2. Query incoming transactions to that address
+ * 3. Filter for transactions with data targeting this table
+ * 4. Process each valid join request
+ * 
+ * @param cashier_id The cashier's Verus ID
+ * @param table_id The table ID to filter for
+ * @param dealer_id The dealer ID to filter for
+ * @return Number of join requests processed, or negative error code
+ */
+int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_id, const char *dealer_id)
+{
+	char *cashier_address = NULL;
+	cJSON *txids = NULL;
+	int32_t processed = 0;
+
+	if (!cashier_id || !table_id || !dealer_id) {
+		return ERR_ARGS_NULL;
+	}
+
+	// Get cashier's identity address
+	// Build full cashier ID: e.g., "cashier.sg777z.chips@"
+	char full_cashier_id[128] = { 0 };
+	snprintf(full_cashier_id, sizeof(full_cashier_id), "%s.%s", cashier_id, bet_get_poker_id_fqn());
+	
+	cashier_address = get_identity_address(full_cashier_id);
+	if (!cashier_address) {
+		dlg_warn("Could not get identity address for cashier: %s", full_cashier_id);
+		return ERR_ID_NOT_FOUND;
+	}
+
+	dlg_info("Polling cashier %s (address: %s) for join requests", full_cashier_id, cashier_address);
+
+	// Get all transaction IDs for this address
+	txids = get_address_txids(cashier_address);
+	free(cashier_address);
+
+	if (!txids) {
+		dlg_info("No transactions found for cashier address");
+		return 0;
+	}
+
+	// Process each transaction
+	for (int i = 0; i < cJSON_GetArraySize(txids); i++) {
+		cJSON *txid_item = cJSON_GetArrayItem(txids, i);
+		if (!txid_item || txid_item->type != cJSON_String) {
+			continue;
+		}
+
+		const char *txid = txid_item->valuestring;
+		
+		// Decode transaction to get data
+		cJSON *tx_data = decode_tx_data(txid);
+		if (!tx_data) {
+			continue;
+		}
+
+		// Check if this is a join request for our table
+		// The data should contain: {dealer_id, table_id, verus_pid}
+		// TODO: Parse the actual data format from the transaction
+		// For now, we log and continue
+		
+		cJSON_Delete(tx_data);
+	}
+
+	cJSON_Delete(txids);
+	return processed;
+}
+

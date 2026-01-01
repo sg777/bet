@@ -64,14 +64,20 @@ int32_t get_game_state(char *table_id)
 		/*
 			Game ID is NULL, it probably mean the table hasn't been started yet, so game state is in zeroized state.
 		*/
+		dlg_warn("get_game_state: game_id_str is NULL for table %s", table_id);
 		return game_state;
 	}
 
+	dlg_info("get_game_state: game_id_str=%s for table %s", game_id_str, table_id);
+
 	t_game_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str));
-	if (!t_game_info)
+	if (!t_game_info) {
+		dlg_warn("get_game_state: t_game_info is NULL");
 		return game_state;
+	}
 
 	game_state = jint(t_game_info, "game_state");
+	dlg_info("get_game_state: game_state=%d", game_state);
 	return game_state;
 }
 

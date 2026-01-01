@@ -106,7 +106,8 @@ int32_t dealer_table_init(struct table t)
 {
 	int32_t game_state = G_ZEROIZED_STATE, retval = OK;
 	char hexstr[65];
-	cJSON *out = NULL;
+	cJSON *out = NULL, *t_game_info = NULL;
+	char *game_id_vdxfid = NULL;
 
 	if (!is_id_exists(t.table_id, 0))
 		return ERR_ID_NOT_FOUND;
@@ -115,30 +116,59 @@ int32_t dealer_table_init(struct table t)
 
 	switch (game_state) {
 	case G_ZEROIZED_STATE:
+		// Generate new game ID
 		game_id = rand256(0);
+		bits256_str(hexstr, game_id);
+		dlg_info("Generated new game_id: %s", hexstr);
+		
+		// Store game_id
 		dlg_info("Updating %s key...", T_GAME_ID_KEY);
-		out = poker_append_key_hex(t.table_id, T_GAME_ID_KEY, bits256_str(hexstr, game_id), false);
+		out = poker_append_key_hex(t.table_id, T_GAME_ID_KEY, hexstr, false);
 		if (!out)
 			return ERR_TABLE_LAUNCH;
 		dlg_info("%s", cJSON_Print(out));
 
-		dlg_info("Updating Game state to %s...", game_state_str(G_TABLE_ACTIVE));
-		out = append_game_state(t.table_id, G_TABLE_ACTIVE, NULL);
+		// Get VDXF key for game info using the in-memory game_id
+		game_id_vdxfid = get_key_data_vdxf_id(T_GAME_INFO_KEY, hexstr);
+		if (!game_id_vdxfid) {
+			dlg_error("Failed to get game_info vdxfid");
+			return ERR_TABLE_LAUNCH;
+		}
+		
+		// Set game state to TABLE_ACTIVE using the correct key
+		dlg_info("Updating Game state to %s with key %s...", game_state_str(G_TABLE_ACTIVE), game_id_vdxfid);
+		t_game_info = cJSON_CreateObject();
+		cJSON_AddNumberToObject(t_game_info, "game_state", G_TABLE_ACTIVE);
+		out = poker_append_key_json(t.table_id, game_id_vdxfid, t_game_info, true);
 		if (!out)
 			return ERR_GAME_STATE_UPDATE;
 		dlg_info("%s", cJSON_Print(out));
 		// No break is intentional
 	case G_TABLE_ACTIVE:
+		// Get game_id from chain if we're resuming
+		if (game_state == G_TABLE_ACTIVE) {
+			char *game_id_str = poker_get_key_str(t.table_id, T_GAME_ID_KEY);
+			if (!game_id_str) {
+				dlg_error("Failed to get game_id from chain");
+				return ERR_GAME_ID_NOT_FOUND;
+			}
+			strncpy(hexstr, game_id_str, sizeof(hexstr) - 1);
+			game_id_vdxfid = get_key_data_vdxf_id(T_GAME_INFO_KEY, hexstr);
+		}
+		
 		dlg_info("Updating %s key...", T_TABLE_INFO_KEY);
 		out = poker_append_key_json(
-			t.table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, bits256_str(hexstr, game_id)),
+			t.table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, hexstr),
 			struct_table_to_cJSON(&t), true);
 		if (!out)
 			return ERR_TABLE_LAUNCH;
 		dlg_info("%s", cJSON_Print(out));
 
+		// Set game state to TABLE_STARTED using the correct key
 		dlg_info("Updating Game state to %s...", game_state_str(G_TABLE_STARTED));
-		out = append_game_state(t.table_id, G_TABLE_STARTED, NULL);
+		t_game_info = cJSON_CreateObject();
+		cJSON_AddNumberToObject(t_game_info, "game_state", G_TABLE_STARTED);
+		out = poker_append_key_json(t.table_id, game_id_vdxfid, t_game_info, true);
 		if (!out)
 			return ERR_GAME_STATE_UPDATE;
 		dlg_info("%s", cJSON_Print(out));
@@ -211,34 +241,47 @@ int32_t dealer_shuffle_deck(char *id)
 	return retval;
 }
 
-int32_t handle_game_state(char *table_id)
+int32_t handle_game_state(struct table *t)
 {
 	int32_t game_state, retval = OK;
 
-	game_state = get_game_state(table_id);
+	if (!t) {
+		return ERR_ARGS_NULL;
+	}
+
+	game_state = get_game_state(t->table_id);
 	dlg_info("%s", game_state_str(game_state));
 	switch (game_state) {
 	case G_TABLE_STARTED:
-		if (poker_is_table_full(table_id))
-			append_game_state(table_id, G_PLAYERS_JOINED, NULL);
+		// Poll cashier for pending join requests
+		if (t->cashier_id[0] != '\0') {
+			int32_t joins = poker_poll_cashier_for_joins(t->cashier_id, t->table_id, t->dealer_id);
+			if (joins > 0) {
+				dlg_info("Processed %d join requests from cashier", joins);
+			}
+		}
+		// Check if enough players have joined
+		if (poker_is_table_full(t->table_id)) {
+			append_game_state(t->table_id, G_PLAYERS_JOINED, NULL);
+		}
 		break;
 	case G_PLAYERS_JOINED:
-		if (is_players_shuffled_deck(table_id))
-			append_game_state(table_id, G_DECK_SHUFFLING_P, NULL);
+		if (is_players_shuffled_deck(t->table_id))
+			append_game_state(t->table_id, G_DECK_SHUFFLING_P, NULL);
 		break;
 	case G_DECK_SHUFFLING_P:
-		retval = dealer_shuffle_deck(table_id);
+		retval = dealer_shuffle_deck(t->table_id);
 		if (!retval)
-			append_game_state(table_id, G_DECK_SHUFFLING_D, NULL);
+			append_game_state(t->table_id, G_DECK_SHUFFLING_D, NULL);
 		break;
 	case G_DECK_SHUFFLING_B:
 		dlg_info("Its time for game");
-		retval = init_game_state(table_id);
+		retval = init_game_state(t->table_id);
 		break;
 	case G_REVEAL_CARD:
-		if (is_card_drawn(table_id) == OK) {
+		if (is_card_drawn(t->table_id) == OK) {
 			dlg_info("Card is drawn");
-			retval = verus_receive_card(table_id, dcv_vars);
+			retval = verus_receive_card(t->table_id, dcv_vars);
 		}
 		break;
 	}
@@ -296,8 +339,11 @@ int32_t dealer_init(struct table t)
 		return retval;
 	}
 
+	dlg_info("Dealer ready. Table: %s, Dealer: %s, Cashier: %s", t.table_id, t.dealer_id, t.cashier_id);
+	dlg_info("Waiting for players to join via cashier...");
+	
 	while (1) {
-		retval = handle_game_state(t.table_id);
+		retval = handle_game_state(&t);
 		if (retval)
 			return retval;
 		sleep(2);

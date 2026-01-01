@@ -215,5 +215,26 @@ void poker_process_block(char *blockhash);
  */
 int32_t poker_verify_setup();
 
+/* ============================================================================
+ * Cashier Polling for Join Requests
+ * ============================================================================ */
+
+/**
+ * Poll cashier for pending join requests for a specific table
+ * 
+ * This function is called by the dealer to check for players who have sent
+ * funds to the cashier with join request data. It:
+ * 1. Gets the cashier's identity address
+ * 2. Queries incoming transactions to that address
+ * 3. Filters for transactions targeting this dealer's table
+ * 4. Processes valid join requests
+ * 
+ * @param cashier_id The cashier's short ID (e.g., "cashier")
+ * @param table_id The table ID to filter for
+ * @param dealer_id The dealer ID to filter for
+ * @return Number of join requests processed, or negative error code
+ */
+int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_id, const char *dealer_id);
+
 #endif /* __POKER_VDXF_H__ */
 

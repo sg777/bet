@@ -2146,3 +2146,125 @@ bool check_if_tx_exists(const char *tx_id)
 	else
 		return false;
 }
+
+/**
+ * Get the identity address from a Verus ID
+ * @param verus_id Full Verus ID (e.g., "cashier.sg777z.chips@")
+ * @return Identity address string or NULL on failure
+ */
+char *get_identity_address(const char *verus_id)
+{
+	int32_t retval = OK;
+	cJSON *params = NULL, *result = NULL;
+	char *identity_address = NULL;
+
+	if (!verus_id) {
+		return NULL;
+	}
+
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(verus_id));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(-1));
+
+	retval = chips_rpc("getidentity", params, &result);
+	cJSON_Delete(params);
+
+	if (retval != OK || !result) {
+		return NULL;
+	}
+
+	cJSON *identity = cJSON_GetObjectItem(result, "identity");
+	if (identity) {
+		const char *addr = jstr(identity, "identityaddress");
+		if (addr) {
+			identity_address = strdup(addr);
+		}
+	}
+
+	cJSON_Delete(result);
+	return identity_address;
+}
+
+/**
+ * Get all transaction IDs for an address
+ * @param address Identity address to query
+ * @return cJSON array of txids or NULL on failure
+ */
+cJSON *get_address_txids(const char *address)
+{
+	int32_t retval = OK;
+	cJSON *params = NULL, *result = NULL, *addresses = NULL, *addr_obj = NULL;
+
+	if (!address) {
+		return NULL;
+	}
+
+	// Build params: [{"addresses": ["<address>"]}]
+	addresses = cJSON_CreateArray();
+	cJSON_AddItemToArray(addresses, cJSON_CreateString(address));
+	
+	addr_obj = cJSON_CreateObject();
+	cJSON_AddItemToObject(addr_obj, "addresses", addresses);
+	
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, addr_obj);
+
+	retval = chips_rpc("getaddresstxids", params, &result);
+	cJSON_Delete(params);
+
+	if (retval != OK) {
+		return NULL;
+	}
+
+	return result;
+}
+
+/**
+ * Decode transaction and extract data field
+ * @param txid Transaction ID
+ * @return cJSON object with decoded data or NULL
+ */
+cJSON *decode_tx_data(const char *txid)
+{
+	int32_t retval = OK;
+	cJSON *params = NULL, *result = NULL;
+
+	if (!txid) {
+		return NULL;
+	}
+
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(txid));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(1)); // verbose = true
+
+	retval = chips_rpc("getrawtransaction", params, &result);
+	cJSON_Delete(params);
+
+	if (retval != OK || !result) {
+		return NULL;
+	}
+
+	// Look for vout with data in OP_RETURN or identity output
+	cJSON *vout = cJSON_GetObjectItem(result, "vout");
+	if (vout) {
+		for (int i = 0; i < cJSON_GetArraySize(vout); i++) {
+			cJSON *output = cJSON_GetArrayItem(vout, i);
+			cJSON *scriptPubKey = cJSON_GetObjectItem(output, "scriptPubKey");
+			if (scriptPubKey) {
+				// Check for identity output with data
+				cJSON *identityprimary = cJSON_GetObjectItem(scriptPubKey, "identityprimary");
+				if (identityprimary) {
+					// This is an identity output - check for data
+					const char *hex = jstr(scriptPubKey, "hex");
+					if (hex) {
+						// The data is embedded in the transaction
+						// For now, return the whole result for further processing
+						return result;
+					}
+				}
+			}
+		}
+	}
+
+	return result;
+}
