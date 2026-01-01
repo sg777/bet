@@ -87,7 +87,7 @@ int32_t decode_card(bits256 b_blinded_card, bits256 blinded_value, cJSON *dealer
 
 int32_t reveal_card(char *table_id)
 {
-	int32_t retval = OK, player_id, card_id, card_value = -1;
+	int32_t retval = OK, player_id, card_id, card_value = -1, card_type;
 	char *game_id_str = NULL, str[65];
 	cJSON *game_state_info = NULL, *bv_info = NULL, *b_blinded_deck = NULL, *dealer_blind_info = NULL, *bv = NULL;
 	bits256 b_blinded_card, blinded_value;
@@ -95,8 +95,16 @@ int32_t reveal_card(char *table_id)
 	game_state_info = get_game_state_info(table_id);
 	player_id = jint(game_state_info, "player_id");
 	card_id = jint(game_state_info, "card_id");
+	card_type = jint(game_state_info, "card_type");
 
 	if ((player_id == p_deck_info.player_id) || (player_id == -1)) {
+		// Check if we already decoded this card (from local state)
+		if (card_id < hand_size && p_local_state.decoded_cards[card_id] >= 0) {
+			dlg_info("Card %d already decoded from local state: value=%d", 
+				card_id, p_local_state.decoded_cards[card_id]);
+			return OK;
+		}
+
 		game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 
 		while (1) {
@@ -136,6 +144,13 @@ int32_t reveal_card(char *table_id)
 		dlg_info("card_value ::%d", card_value);
 		if (card_value == -1) {
 			retval = ERR_CARD_DECODING_FAILED;
+		} else {
+			// Save decoded card to local state
+			if (card_id < hand_size) {
+				update_player_decoded_card(card_id, card_value);
+				dlg_info("Saved decoded card %d (type=%d) with value %d to local DB", 
+					card_id, card_type, card_value);
+			}
 		}
 	}
 	return retval;
@@ -186,6 +201,9 @@ int32_t handle_verus_player()
 {
 	int32_t retval = OK;
 	char game_id_str[65];
+
+	// Initialize local state
+	init_p_local_state();
 
 	// Check if poker is ready
 	if ((retval = verify_poker_setup()) != OK) {
@@ -245,20 +263,39 @@ int32_t handle_verus_player()
 	// Check if game is already past deck shuffling phase
 	int32_t current_game_state = get_game_state(player_config.table_id);
 	if (current_game_state > G_DECK_SHUFFLING_B) {
-		// Game is already in progress - try to load deck info from local DB
-		dlg_info("Game is in progress (state: %s). Attempting to load deck info from local DB...",
+		// Game is already in progress - try to load state from local DB
+		dlg_info("Game is in progress (state: %s). Attempting to load from local DB...",
 			 game_state_str(current_game_state));
 		
 		if (strlen(game_id_str) > 0) {
+			// Load deck info
 			retval = load_player_deck_info(game_id_str);
-			if (retval == OK) {
-				dlg_info("Successfully loaded player deck info from local DB!");
-				dlg_info("Rejoining game with player_id=%d", p_deck_info.player_id);
-			} else {
+			if (retval != OK) {
 				dlg_error("Failed to load deck info from local DB: %s", bet_err_str(retval));
 				dlg_error("Cannot rejoin - deck keys not found. Please wait for a new game.");
 				return ERR_GAME_ALREADY_STARTED;
 			}
+			dlg_info("Successfully loaded player deck info from local DB!");
+
+			// Load local state (payin_tx, decoded cards)
+			retval = load_player_local_state(game_id_str);
+			if (retval == OK) {
+				dlg_info("Loaded local state: payin_tx=%s, cards_decoded=%d", 
+					p_local_state.payin_tx, p_local_state.cards_decoded_count);
+				
+				// Check if payin_tx is still unspent (game still active)
+				if (strlen(p_local_state.payin_tx) > 0) {
+					dlg_info("Payin TX: %s - can be used for dispute if needed", p_local_state.payin_tx);
+				}
+			} else {
+				dlg_info("No local state found, starting fresh tracking");
+				// Initialize local state for this game
+				strncpy(p_local_state.game_id, game_id_str, sizeof(p_local_state.game_id) - 1);
+				strncpy(p_local_state.table_id, player_config.table_id, sizeof(p_local_state.table_id) - 1);
+				p_local_state.player_id = p_deck_info.player_id;
+			}
+
+			dlg_info("Rejoining game with player_id=%d", p_deck_info.player_id);
 		} else {
 			dlg_error("No game_id found on table. Cannot rejoin.");
 			return ERR_GAME_ALREADY_STARTED;
@@ -269,6 +306,8 @@ int32_t handle_verus_player()
 			retval = load_player_deck_info(game_id_str);
 			if (retval == OK) {
 				dlg_info("Loaded existing deck info for this game from local DB");
+				// Also load local state
+				load_player_local_state(game_id_str);
 				// Skip deck init since we already have our deck
 			} else {
 				// No local deck info - need to initialize
@@ -277,6 +316,11 @@ int32_t handle_verus_player()
 					dlg_error("Failed to initialize player deck: %s", bet_err_str(retval));
 					return retval;
 				}
+				// Initialize and save local state
+				strncpy(p_local_state.game_id, game_id_str, sizeof(p_local_state.game_id) - 1);
+				strncpy(p_local_state.table_id, player_config.table_id, sizeof(p_local_state.table_id) - 1);
+				p_local_state.player_id = p_deck_info.player_id;
+				save_player_local_state(player_config.txid);  // Save with payin_tx
 				dlg_info("Player deck shuffling info updated to table");
 			}
 		} else {
@@ -285,6 +329,11 @@ int32_t handle_verus_player()
 				dlg_error("Failed to initialize player deck: %s", bet_err_str(retval));
 				return retval;
 			}
+			// Initialize and save local state with payin_tx
+			strncpy(p_local_state.game_id, game_id_str, sizeof(p_local_state.game_id) - 1);
+			strncpy(p_local_state.table_id, player_config.table_id, sizeof(p_local_state.table_id) - 1);
+			p_local_state.player_id = p_deck_info.player_id;
+			save_player_local_state(player_config.txid);
 			dlg_info("Player deck shuffling info updated to table");
 		}
 	} else {
@@ -293,6 +342,12 @@ int32_t handle_verus_player()
 			dlg_error("Failed to initialize player deck: %s", bet_err_str(retval));
 			return retval;
 		}
+		// Initialize and save local state with payin_tx
+		bits256_str(game_id_str, p_deck_info.game_id);
+		strncpy(p_local_state.game_id, game_id_str, sizeof(p_local_state.game_id) - 1);
+		strncpy(p_local_state.table_id, player_config.table_id, sizeof(p_local_state.table_id) - 1);
+		p_local_state.player_id = p_deck_info.player_id;
+		save_player_local_state(player_config.txid);
 		dlg_info("Player deck shuffling info updated to table");
 	}
 

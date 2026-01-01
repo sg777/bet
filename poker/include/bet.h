@@ -165,6 +165,19 @@ struct p_deck_info_struct {
 };
 extern struct p_deck_info_struct p_deck_info;
 
+// Player's local game state - persisted to local DB for rejoin
+struct p_local_state_struct {
+	char game_id[65];              // Current game ID
+	char table_id[64];             // Table we're playing at
+	char payin_tx[128];            // TX where player sent funds to cashier
+	int32_t player_id;             // Our position at the table (0-8)
+	int32_t decoded_cards[hand_size];  // Card values we've decoded (-1 = not decoded)
+	int32_t cards_decoded_count;   // How many cards we've decoded
+	int32_t last_card_id;          // Last card_id we processed
+	int32_t last_game_state;       // Last known game state
+};
+extern struct p_local_state_struct p_local_state;
+
 struct p_game_info_struct {
 	int32_t card_state;
 	int32_t cards[hand_size];

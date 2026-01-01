@@ -9,7 +9,7 @@
 #include <string.h>
 #include <pwd.h>
 
-#define no_of_tables 13
+#define no_of_tables 14
 
 char *db_name = NULL;
 
@@ -17,7 +17,7 @@ const char *table_names[no_of_tables] = { "dcv_tx_mapping",     "player_tx_mappi
 					  "c_tx_addr_mapping",  "dcv_game_state",    "player_game_state",
 					  "cashier_game_state", "dealers_info",      "game_info",
 					  "sc_games_info",      "player_deck_info",  "dealer_deck_info",
-					  "cashier_deck_info" };
+					  "cashier_deck_info",  "player_local_state" };
 
 const char *schemas[no_of_tables] = {
 	"(tx_id varchar(100) primary key,table_id varchar(100), player_id varchar(100), msig_addr varchar(100), status bool, min_cashiers int)",
@@ -32,7 +32,9 @@ const char *schemas[no_of_tables] = {
 	"(tx_id varchar(100) primary key,table_id varchar(100), bh int, tx_type varchar(20))",
 	"(game_id varchar(100) primary key, tx_id varchar(100), pa varchar(100), table_id varchar(100), dealer_id varchar(100), player_id int, player_priv varchar(100), player_deck_priv varchar(4000))",
 	"(game_id varchar(100) primary key, perm varchar(100), dealer_deck_priv varchar(4000))",
-	"(game_id varchar(100), player_id int, perm varchar(100), cashier_deck_priv varchar(4000), CONSTRAINT game_id PRIMARY KEY(game_id, player_id))"
+	"(game_id varchar(100), player_id int, perm varchar(100), cashier_deck_priv varchar(4000), CONSTRAINT game_id PRIMARY KEY(game_id, player_id))",
+	// player_local_state: stores payin_tx, decoded cards, and game progress for rejoin
+	"(game_id varchar(100) primary key, table_id varchar(100), payin_tx varchar(128), player_id int, decoded_cards varchar(200), cards_decoded_count int, last_card_id int, last_game_state int)"
 };
 
 void sqlite3_init_db_name()
@@ -590,6 +592,20 @@ int32_t insert_dealer_deck_info()
 	return retval;
 }
 
+// Global instance of player's local state
+struct p_local_state_struct p_local_state;
+
+void init_p_local_state()
+{
+	memset(&p_local_state, 0, sizeof(p_local_state));
+	for (int32_t i = 0; i < hand_size; i++) {
+		p_local_state.decoded_cards[i] = -1;  // -1 = not decoded
+	}
+	p_local_state.player_id = -1;
+	p_local_state.last_card_id = -1;
+	p_local_state.last_game_state = 0;
+}
+
 int32_t save_player_deck_info(const char *game_id_str, const char *table_id, int32_t player_id)
 {
 	int32_t retval = OK;
@@ -727,6 +743,185 @@ end:
 	if (game_id_copy)
 		free(game_id_copy);
 	return retval;
+}
+
+int32_t save_player_local_state(const char *payin_tx)
+{
+	int32_t retval = OK;
+	char *sql_query = NULL, decoded_cards_str[200];
+
+	// Serialize decoded_cards array as comma-separated values
+	snprintf(decoded_cards_str, sizeof(decoded_cards_str), "%d,%d,%d,%d,%d,%d,%d",
+		p_local_state.decoded_cards[0], p_local_state.decoded_cards[1],
+		p_local_state.decoded_cards[2], p_local_state.decoded_cards[3],
+		p_local_state.decoded_cards[4], p_local_state.decoded_cards[5],
+		p_local_state.decoded_cards[6]);
+
+	sql_query = calloc(sql_query_size, sizeof(char));
+	sprintf(sql_query,
+		"INSERT OR REPLACE INTO player_local_state(game_id, table_id, payin_tx, player_id, "
+		"decoded_cards, cards_decoded_count, last_card_id, last_game_state) "
+		"VALUES(\'%s\', \'%s\', \'%s\', %d, \'%s\', %d, %d, %d)",
+		p_local_state.game_id, p_local_state.table_id, payin_tx,
+		p_local_state.player_id, decoded_cards_str, p_local_state.cards_decoded_count,
+		p_local_state.last_card_id, p_local_state.last_game_state);
+
+	dlg_info("Saving player local state to DB: game_id=%s, payin_tx=%s", 
+		p_local_state.game_id, payin_tx);
+	retval = bet_run_query(sql_query);
+	if (retval != OK) {
+		dlg_error("Failed to save player local state: %s", bet_err_str(retval));
+	}
+
+	if (sql_query)
+		free(sql_query);
+	return retval;
+}
+
+int32_t update_player_decoded_card(int32_t card_index, int32_t card_value)
+{
+	int32_t retval = OK;
+	char *sql_query = NULL, decoded_cards_str[200];
+
+	if (card_index < 0 || card_index >= hand_size) {
+		return ERR_INVALID_POS;
+	}
+
+	// Update in-memory state
+	p_local_state.decoded_cards[card_index] = card_value;
+	if (card_value >= 0) {
+		p_local_state.cards_decoded_count++;
+	}
+	p_local_state.last_card_id = card_index;
+
+	// Serialize decoded_cards array
+	snprintf(decoded_cards_str, sizeof(decoded_cards_str), "%d,%d,%d,%d,%d,%d,%d",
+		p_local_state.decoded_cards[0], p_local_state.decoded_cards[1],
+		p_local_state.decoded_cards[2], p_local_state.decoded_cards[3],
+		p_local_state.decoded_cards[4], p_local_state.decoded_cards[5],
+		p_local_state.decoded_cards[6]);
+
+	sql_query = calloc(sql_query_size, sizeof(char));
+	sprintf(sql_query,
+		"UPDATE player_local_state SET decoded_cards = \'%s\', cards_decoded_count = %d, "
+		"last_card_id = %d WHERE game_id = \'%s\'",
+		decoded_cards_str, p_local_state.cards_decoded_count, 
+		p_local_state.last_card_id, p_local_state.game_id);
+
+	retval = bet_run_query(sql_query);
+	if (sql_query)
+		free(sql_query);
+	return retval;
+}
+
+int32_t load_player_local_state(const char *game_id_str)
+{
+	sqlite3_stmt *stmt = NULL;
+	sqlite3 *db = NULL;
+	char *sql_query = NULL;
+	int32_t rc, retval = ERR_ID_NOT_FOUND;
+	const char *table_id_str = NULL, *payin_tx_str = NULL, *decoded_cards_str = NULL;
+
+	init_p_local_state();
+
+	db = bet_get_db_instance();
+	sql_query = calloc(sql_query_size, sizeof(char));
+	sprintf(sql_query, 
+		"SELECT table_id, payin_tx, player_id, decoded_cards, cards_decoded_count, "
+		"last_card_id, last_game_state FROM player_local_state WHERE game_id = \'%s\'",
+		game_id_str);
+
+	rc = sqlite3_prepare_v2(db, sql_query, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		dlg_error("error_code :: %d, error msg ::%s, \n query ::%s", rc, sqlite3_errmsg(db), sql_query);
+		goto end;
+	}
+
+	if ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+		// Restore game_id
+		strncpy(p_local_state.game_id, game_id_str, sizeof(p_local_state.game_id) - 1);
+
+		// Restore table_id
+		table_id_str = (const char *)sqlite3_column_text(stmt, 0);
+		if (table_id_str) {
+			strncpy(p_local_state.table_id, table_id_str, sizeof(p_local_state.table_id) - 1);
+		}
+
+		// Restore payin_tx
+		payin_tx_str = (const char *)sqlite3_column_text(stmt, 1);
+		if (payin_tx_str) {
+			strncpy(p_local_state.payin_tx, payin_tx_str, sizeof(p_local_state.payin_tx) - 1);
+		}
+
+		// Restore player_id
+		p_local_state.player_id = sqlite3_column_int(stmt, 2);
+
+		// Restore decoded_cards (comma-separated)
+		decoded_cards_str = (const char *)sqlite3_column_text(stmt, 3);
+		if (decoded_cards_str) {
+			sscanf(decoded_cards_str, "%d,%d,%d,%d,%d,%d,%d",
+				&p_local_state.decoded_cards[0], &p_local_state.decoded_cards[1],
+				&p_local_state.decoded_cards[2], &p_local_state.decoded_cards[3],
+				&p_local_state.decoded_cards[4], &p_local_state.decoded_cards[5],
+				&p_local_state.decoded_cards[6]);
+		}
+
+		// Restore counts and state
+		p_local_state.cards_decoded_count = sqlite3_column_int(stmt, 4);
+		p_local_state.last_card_id = sqlite3_column_int(stmt, 5);
+		p_local_state.last_game_state = sqlite3_column_int(stmt, 6);
+
+		dlg_info("Player local state loaded: game_id=%s, table_id=%s, payin_tx=%s, player_id=%d, cards_decoded=%d",
+			p_local_state.game_id, p_local_state.table_id, p_local_state.payin_tx,
+			p_local_state.player_id, p_local_state.cards_decoded_count);
+		retval = OK;
+	} else {
+		dlg_info("No saved local state found for game_id: %s", game_id_str);
+		retval = ERR_ID_NOT_FOUND;
+	}
+
+end:
+	if (stmt)
+		sqlite3_finalize(stmt);
+	if (db)
+		sqlite3_close(db);
+	if (sql_query)
+		free(sql_query);
+	return retval;
+}
+
+char *get_player_payin_tx(const char *game_id_str)
+{
+	sqlite3_stmt *stmt = NULL;
+	sqlite3 *db = NULL;
+	char *sql_query = NULL, *payin_tx = NULL;
+	int32_t rc;
+
+	db = bet_get_db_instance();
+	sql_query = calloc(sql_query_size, sizeof(char));
+	sprintf(sql_query, "SELECT payin_tx FROM player_local_state WHERE game_id = \'%s\'", game_id_str);
+
+	rc = sqlite3_prepare_v2(db, sql_query, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		dlg_error("error_code :: %d, error msg ::%s", rc, sqlite3_errmsg(db));
+		goto end;
+	}
+
+	if ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+		const char *tx = (const char *)sqlite3_column_text(stmt, 0);
+		if (tx) {
+			payin_tx = strdup(tx);
+		}
+	}
+
+end:
+	if (stmt)
+		sqlite3_finalize(stmt);
+	if (db)
+		sqlite3_close(db);
+	if (sql_query)
+		free(sql_query);
+	return payin_tx;
 }
 
 int32_t insert_cashier_deck_info(char *table_id)

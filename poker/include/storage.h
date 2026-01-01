@@ -32,4 +32,11 @@ int32_t insert_cashier_deck_info(char *table_id);
 int32_t save_player_deck_info(const char *game_id_str, const char *table_id, int32_t player_id);
 int32_t load_player_deck_info(const char *game_id_str);
 
+// Player local state persistence (payin_tx, decoded cards, game progress)
+void init_p_local_state(void);
+int32_t save_player_local_state(const char *payin_tx);
+int32_t update_player_decoded_card(int32_t card_index, int32_t card_value);
+int32_t load_player_local_state(const char *game_id_str);
+char *get_player_payin_tx(const char *game_id_str);
+
 #endif /* STORAGE_H */
