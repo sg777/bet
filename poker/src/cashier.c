@@ -825,16 +825,11 @@ static int32_t bet_process_find_bvv(cJSON *argjson, struct cashier *cashier_info
 
 static void bet_process_add_bvv(cJSON *argjson, struct cashier *cashier_info)
 {
-	if (bvv_state == 0) {
-		bvv_state = 1;
-		memset(dealer_ip_for_bvv, 0x00, sizeof(dealer_ip_for_bvv));
-		const char *dealer_ip_str = jstr(argjson, "dealer_ip");
-		if (dealer_ip_str != NULL) {
-			strncpy(dealer_ip_for_bvv, dealer_ip_str, sizeof(dealer_ip_for_bvv) - 1);
-			dealer_ip_for_bvv[sizeof(dealer_ip_for_bvv) - 1] = '\0';
-		}
-		bet_bvv_thrd(jstr(argjson, "dealer_ip"), dealer_bvv_pub_sub_port);
-	}
+	// Legacy nanomsg/pub-sub BVV flow removed - BVV is now handled through Verus ID updates
+	// This method is kept for API compatibility but does nothing
+	(void)argjson;
+	(void)cashier_info;
+	dlg_warn("add_bvv method called but nanomsg/pub-sub flow is no longer used");
 }
 
 void bet_cashier_backend_thrd(void *_ptr)
@@ -1310,6 +1305,13 @@ void bet_cashier_frontend_loop(void *_ptr)
 	cashier_info.mounts = &cashier_mount;
 	cashier_info.protocols = cashier_protocols;
 	cashier_info.options = LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
+	cashier_info.uid = -1;  /* Don't drop privileges */
+	cashier_info.gid = -1;  /* Don't drop privileges */
+
+	if (cashier_info.port <= 0 || cashier_info.port > 65535) {
+		dlg_error("[GUI] Invalid port %d, using default %d", cashier_info.port, DEFAULT_CASHIER_WS_PORT);
+		cashier_info.port = DEFAULT_CASHIER_WS_PORT;
+	}
 
 	cashier_context = lws_create_context(&cashier_info);
 	if (!cashier_context) {

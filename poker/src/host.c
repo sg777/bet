@@ -15,6 +15,7 @@
 #include "host.h"
 #include "macrologger.h"
 #include "bet.h"
+#include "config.h"
 #include "cards.h"
 #include "client.h"
 #include "commands.h"
@@ -1672,17 +1673,35 @@ void bet_dcv_frontend_loop(void *_ptr)
 {
 	struct lws_context_creation_info dcv_info;
 	struct lws_context *dcv_context = NULL;
+	dictionary *ini = NULL;
 	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
 
+	// Read gui_ws_port from dealer config, use default if not configured
+	ini = iniparser_load(dealer_config_ini_file);
+	if (ini != NULL) {
+		int port = iniparser_getint(ini, "dealer:gui_ws_port", DEFAULT_DEALER_WS_PORT);
+		if (port > 0 && port <= 65535) {
+			gui_ws_port = port;
+		} else {
+			gui_ws_port = DEFAULT_DEALER_WS_PORT;
+		}
+		iniparser_freedict(ini);
+	} else {
+		// Config file not found, use default
+		gui_ws_port = DEFAULT_DEALER_WS_PORT;
+	}
+
 	lws_set_log_level(logs, NULL);
-	dlg_info("[GUI] Dealer WebSocket server starting on port %d | visit http://localhost:1234", gui_ws_port);
-	lwsl_user("[GUI] LWS minimal ws broker | visit http://localhost:1234");
+	dlg_info("[GUI] Dealer WebSocket server starting on port %d | visit http://localhost:%d", gui_ws_port, gui_ws_port);
+	lwsl_user("[GUI] LWS minimal ws broker | visit http://localhost:%d", gui_ws_port);
 
 	memset(&dcv_info, 0, sizeof dcv_info); /* otherwise uninitialized garbage */
 	dcv_info.port = gui_ws_port;
 	dcv_info.mounts = &mount;
 	dcv_info.protocols = protocols;
 	dcv_info.options = LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
+	dcv_info.uid = -1;  /* Don't drop privileges */
+	dcv_info.gid = -1;  /* Don't drop privileges */
 
 	dcv_context = lws_create_context(&dcv_info);
 	if (!dcv_context) {

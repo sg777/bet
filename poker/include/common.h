@@ -51,13 +51,11 @@ enum bet_dcv_state {
 #define tx_spent    0
 #define tx_unspent 	1
 
-#define dealer_pub_sub_port         7797
-#define dealer_push_pull_port       7798
-#define cashier_pub_sub_port        7901
-#define cashier_push_pull_port      7902
-#define dealer_bvv_pub_sub_port     7903
-#define dealer_bvv_push_pull_port   7904
-#define gui_ws_port                 9000
+#define DEFAULT_GUI_WS_PORT        9000  // Legacy default, use node-specific defaults below
+#define DEFAULT_DEALER_WS_PORT     9000
+#define DEFAULT_PLAYER_WS_PORT     9001
+#define DEFAULT_CASHIER_WS_PORT    9002
+extern int gui_ws_port;
 
 #define default_chips_tx_fee        0.0001
 #define default_bb_in_chips         0.01

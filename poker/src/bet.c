@@ -136,41 +136,7 @@ static void bet_player_thrd(char *dcv_ip)
 	bet_player_deinitialize();
 }
 
-static void bet_bvv_initialize(char *dcv_ip, const int32_t port)
-{
-	// Nanomsg sockets removed - no longer used
-	bvv_vars = calloc(1, sizeof(struct privatebet_vars));
-	bet_bvv = calloc(1, sizeof(struct privatebet_info));
-	bet_bvv->maxplayers = (max_players < CARDS_MAXPLAYERS) ? max_players : CARDS_MAXPLAYERS;
-	bet_bvv->maxchips = CARDS_MAXCHIPS;
-	bet_bvv->chipsize = CARDS_CHIPSIZE;
-	bet_bvv->numplayers = max_players;
-	bet_bvv->myplayerid = -1;
-	bet_info_set(bet_bvv, "demo", poker_deck_size, 0, max_players);
-}
-
-static void bet_bvv_deinitialize()
-{
-	if (bet_bvv)
-		free(bet_bvv);
-	if (bvv_vars)
-		free(bvv_vars);
-}
-
-void bet_bvv_thrd(char *dcv_ip, const int32_t port)
-{
-	pthread_t bvv_backend /*, bvv_frontend*/;
-
-	bet_bvv_initialize(dcv_ip, port);
-	if (OS_thread_create(&bvv_backend, NULL, (void *)bet_bvv_backend_loop, (void *)bet_bvv) != 0) {
-		dlg_error("%s", bet_err_str(ERR_PTHREAD_LAUNCHING));
-		exit(-1);
-	}
-	if (pthread_join(bvv_backend, NULL)) {
-		dlg_error("%s", bet_err_str(ERR_PTHREAD_JOINING));
-	}
-	bet_bvv_deinitialize();
-}
+// bet_bvv_thrd, bet_bvv_initialize, bet_bvv_deinitialize removed - nanomsg/pub-sub communication no longer used
 
 // bet_dcv_bvv_initialize removed - dcv_bvv_sock_info struct removed, nanomsg no longer used
 
@@ -387,6 +353,7 @@ void bet_start(int argc, char **argv)
 
 	// Initialize common components for other commands
 	bet_init_config_paths(); // Initialize config paths relative to executable
+	bet_parse_verus_ids_keys_config(); // Load Verus IDs and Keys configuration
 	bet_set_unique_id();
 	bet_parse_blockchain_config_ini_file();
 
@@ -460,22 +427,18 @@ void bet_start(int argc, char **argv)
 			}
 		}
 	} else if (strcmp(cmd, "p") == 0 || strcmp(cmd, "player") == 0) {
-		pthread_t player_frontend_read_thrd, player_frontend_write_thrd;
+		pthread_t player_frontend_thrd;
 		bet_node_type = player;
 		
-		// Start GUI backend threads for player FIRST - they must run regardless of backend errors
-		if (OS_thread_create(&player_frontend_read_thrd, NULL, (void *)bet_player_frontend_read_loop, NULL) != 0) {
-			dlg_error("[GUI] Failed to start player read thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
-			retval = ERR_PTHREAD_LAUNCHING;
-		} else if (OS_thread_create(&player_frontend_write_thrd, NULL, (void *)bet_player_frontend_write_loop, NULL) != 0) {
-			dlg_error("[GUI] Failed to start player write thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
+		// Start GUI backend thread for player FIRST - it must run regardless of backend errors
+		if (OS_thread_create(&player_frontend_thrd, NULL, (void *)bet_player_frontend_loop, NULL) != 0) {
+			dlg_error("[GUI] Failed to start player frontend thread: %s", bet_err_str(ERR_PTHREAD_LAUNCHING));
 			retval = ERR_PTHREAD_LAUNCHING;
 		} else {
-			dlg_info("[GUI] GUI backend threads started for player on ports %d and 9001", gui_ws_port);
-			// Detach the threads so they run in background independently
-			pthread_detach(player_frontend_read_thrd);
-			pthread_detach(player_frontend_write_thrd);
-			// Give GUI threads a moment to start
+			dlg_info("[GUI] GUI backend thread started for player on port %d", gui_ws_port);
+			// Detach the thread so it runs in background independently
+			pthread_detach(player_frontend_thrd);
+			// Give GUI thread a moment to start
 			sleep(1);
 		}
 		
@@ -484,8 +447,8 @@ void bet_start(int argc, char **argv)
 			retval = handle_verus_player();
 			if (retval != OK) {
 				dlg_warn("[Backend] Backend initialization failed: %s", bet_err_str(retval));
-				dlg_info("[GUI] GUI threads continue running on ports %d and 9001 despite backend error", gui_ws_port);
-				// Keep process alive so GUI threads continue
+				dlg_info("[GUI] GUI thread continues running on port %d despite backend error", gui_ws_port);
+				// Keep process alive so GUI thread continues
 				while (1) {
 					sleep(60);
 				}

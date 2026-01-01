@@ -112,8 +112,10 @@ void write_to_GUI(void *ptr)
 void player_lws_write(cJSON *data)
 {
 	if (backend_status == backend_ready) {
-		if (ws_connection_status_write == 1) {
+		if (ws_connection_status == 1) {
+			// Wait for previous write to complete (same pattern as dealer)
 			if (data_exists == 1) {
+				dlg_info("Waiting for previous write to complete...");
 				while (data_exists == 1) {
 					sleep(1);
 				}
@@ -121,7 +123,7 @@ void player_lws_write(cJSON *data)
 			memset(player_gui_data, 0, sizeof(player_gui_data));
 			strncpy(player_gui_data, cJSON_Print(data), strlen(cJSON_Print(data)));
 			data_exists = 1;
-			lws_callback_on_writable(wsi_global_client_write);
+			lws_callback_on_writable(wsi_global_client);
 		} else {
 			dlg_warn("Backend is ready, but GUI is not started yet...");
 		}
@@ -246,25 +248,8 @@ void bet_bvv_reset(struct privatebet_info *bet, struct privatebet_vars *vars)
 		free(g_shares);
 }
 
-void bet_bvv_backend_loop(void *_ptr)
-{
-	struct privatebet_info *bet = _ptr;
-	(void)_ptr; /* unused parameters */
-	struct privatebet_vars *VARS = NULL;
-
-	VARS = calloc(1, sizeof(*VARS));
-	if (VARS == NULL) {
-		dlg_error("Memory allocation failed for VARS");
-		return;
-	}
-	bet_permutation(bvv_info.permis, bet->range);
-	for (int i = 0; i < bet->range; i++) {
-		permis_b[i] = bvv_info.permis[i];
-	}
-	bet_bvv_join_init(bet);
-	// Nanomsg removed - communication now via websockets only
-	// The BVV backend loop is handled through websocket callbacks
-}
+// bet_bvv_backend_loop removed - nanomsg/pub-sub communication no longer used
+// BVV functionality is now handled through Verus ID updates and websocket callbacks
 
 int32_t bet_bvv_backend(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
 {
@@ -1138,6 +1123,8 @@ void bet_player_frontend_read_loop(void *_ptr)
 	lws_player_info_read.mounts = &lws_http_mount_player;
 	lws_player_info_read.protocols = player_http_protocol_read;
 	lws_player_info_read.options = LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
+	lws_player_info_read.uid = -1;  /* Don't drop privileges */
+	lws_player_info_read.gid = -1;  /* Don't drop privileges */
 
 	player_context_read = lws_create_context(&lws_player_info_read);
 	if (!player_context_read) {
@@ -1171,6 +1158,13 @@ void bet_player_frontend_write_loop(void *_ptr)
 	lws_player_info_write.mounts = &lws_http_mount_player;
 	lws_player_info_write.protocols = player_http_protocol_write;
 	lws_player_info_write.options = LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
+	lws_player_info_write.uid = -1;  /* Don't drop privileges */
+	lws_player_info_write.gid = -1;  /* Don't drop privileges */
+
+	if (lws_player_info_write.port <= 0 || lws_player_info_write.port > 65535) {
+		dlg_error("[GUI] Invalid port %d, using default %d", lws_player_info_write.port, DEFAULT_GUI_WS_PORT);
+		lws_player_info_write.port = DEFAULT_GUI_WS_PORT;
+	}
 
 	player_context_write = lws_create_context(&lws_player_info_write);
 	if (!player_context_write) {
@@ -1202,24 +1196,32 @@ void bet_player_frontend_loop(void *_ptr)
 	lws_player_info.mounts = &lws_http_mount_player;
 	lws_player_info.protocols = player_http_protocol;
 	lws_player_info.options = LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
+	lws_player_info.uid = -1;  /* Don't drop privileges */
+	lws_player_info.gid = -1;  /* Don't drop privileges */
+	// vhost_name is optional - leave it NULL to use default
 
-	if (lws_player_info.vhost_name == NULL) {
-		dlg_info("vhost is NULL");
-		lws_player_info.vhost_name = (char *)malloc(100 * sizeof(char));
-		if (lws_player_info.vhost_name == NULL) {
-			dlg_error("Memory allocation failed for vhost_name");
-			return;
-		}
-	} else {
-		dlg_info("vhost::%s\n", lws_player_info.vhost_name);
+	if (lws_player_info.port <= 0 || lws_player_info.port > 65535) {
+		dlg_error("[GUI] Invalid port %d, using default %d", lws_player_info.port, DEFAULT_PLAYER_WS_PORT);
+		lws_player_info.port = DEFAULT_PLAYER_WS_PORT;
 	}
 
 	player_context = lws_create_context(&lws_player_info);
 	if (!player_context) {
-		dlg_error("lws init failed\n");
+		dlg_error("[GUI] Player lws init failed");
+		return;
 	}
-	while (n >= 0 && !interrupted1) {
+	
+	dlg_info("[GUI] Player WebSocket server started successfully on port %d", gui_ws_port);
+	
+	// Keep running even if main thread exits
+	while (n >= 0) {
 		n = lws_service(player_context, 1000);
+	}
+	
+	dlg_info("[GUI] Player WebSocket server shutting down");
+	if (player_context) {
+		lws_context_destroy(player_context);
+		player_context = NULL;
 	}
 }
 
@@ -1807,7 +1809,7 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 				cJSON_AddStringToObject(seats_info, "method", "seats");
 				cJSON_AddItemToObject(seats_info, "seats", cJSON_GetObjectItem(argjson, "seats"));
 				player_lws_write(seats_info);
-				if ((backend_status == backend_ready) && (ws_connection_status_write == 0)) {
+				if ((backend_status == backend_ready) && (ws_connection_status == 0)) {
 					dlg_info("Backend is ready, from GUI you can connect to backend and play...");
 				}
 			}
