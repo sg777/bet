@@ -296,39 +296,97 @@ int32_t get_player_id(int *player_id)
 int32_t join_table()
 {
 	int32_t retval = OK;
-	cJSON *data = NULL, *op_id = NULL, *op_id_info = NULL;
+	cJSON *join_request = NULL, *op_id = NULL, *op_id_info = NULL, *update_result = NULL;
+	char *txid = NULL;
 
-	data = cJSON_CreateObject();
-	jaddstr(data, "dealer_id", player_config.dealer_id);
-	jaddstr(data, "table_id", player_config.table_id);
-	jaddstr(data, "verus_pid", player_config.verus_pid);
-
-	op_id = verus_sendcurrency_data(bet_get_cashiers_id_fqn(), default_chips_tx_fee, data);
+	// Step 1: Send funds to cashier address
+	dlg_info("Sending payin to cashier: %s", bet_get_cashiers_id_fqn());
+	op_id = verus_sendcurrency_data(bet_get_cashiers_id_fqn(), default_chips_tx_fee, NULL);
 	if (op_id == NULL)
 		return ERR_SENDCURRENCY;
+	
+	dlg_info("sendcurrency result: %s", cJSON_Print(op_id));
 
-	op_id_info = get_z_getoperationstatus(jstr(op_id, "op_id"));
+	// sendcurrency returns opid as a string directly or {"opid": "..."} 
+	const char *op_id_str = NULL;
+	if (op_id->type == cJSON_String) {
+		op_id_str = op_id->valuestring;
+	} else {
+		op_id_str = jstr(op_id, "opid");
+		if (!op_id_str) op_id_str = jstr(op_id, "op_id");
+	}
+	
+	if (!op_id_str) {
+		dlg_error("No operation ID returned from sendcurrency");
+		return ERR_SENDCURRENCY;
+	}
+
+	// Wait for operation to complete
+	dlg_info("Waiting for operation: %s", op_id_str);
+	op_id_info = get_z_getoperationstatus((char *)op_id_str);
 	if (op_id_info) {
-		while (0 == strcmp(jstr(jitem(op_id_info, 0), "status"), "executing")) {
+		dlg_info("Operation status: %s", cJSON_Print(op_id_info));
+		while (jitem(op_id_info, 0) && 
+		       jstr(jitem(op_id_info, 0), "status") &&
+		       0 == strcmp(jstr(jitem(op_id_info, 0), "status"), "executing")) {
 			sleep(1);
-			op_id_info = get_z_getoperationstatus(jstr(op_id, "op_id"));
+			op_id_info = get_z_getoperationstatus((char *)op_id_str);
 		}
-		if (0 != strcmp(jstr(jitem(op_id_info, 0), "status"), "success")) {
+		
+		if (!jitem(op_id_info, 0) || 
+		    !jstr(jitem(op_id_info, 0), "status") ||
+		    0 != strcmp(jstr(jitem(op_id_info, 0), "status"), "success")) {
+			dlg_error("sendcurrency operation failed");
 			return ERR_SENDCURRENCY;
 		}
 
-		char *txid = jstr(jobj(jitem(op_id_info, 0), "result"), "txid");
-		strcpy(player_config.txid, txid);
-		dlg_info("payin_tx::%s", txid);
-		retval = check_player_join_status(player_config.table_id, player_config.verus_pid);
-		if (retval) {
-			/*
-			 TODO::This is where TX is success verus_pid is not added to the table, in such scenarios if the tx is not reversed, 
-			 then using dispute resolution protocol the player need to get the funds back.
-			*/
-			return retval;
+		txid = jstr(jobj(jitem(op_id_info, 0), "result"), "txid");
+		if (!txid) {
+			dlg_error("Failed to get txid from operation result");
+			return ERR_SENDCURRENCY;
 		}
+		strncpy(player_config.txid, txid, sizeof(player_config.txid) - 1);
+		dlg_info("payin_tx: %s", player_config.txid);
+	} else {
+		dlg_error("Failed to get operation status");
+		return ERR_SENDCURRENCY;
 	}
+
+	// Step 2: Update player identity with join request info
+	// This allows dealer to know which player wants to join which table
+	join_request = cJSON_CreateObject();
+	cJSON_AddStringToObject(join_request, "dealer_id", player_config.dealer_id);
+	cJSON_AddStringToObject(join_request, "table_id", player_config.table_id);
+	cJSON_AddStringToObject(join_request, "cashier_id", bet_get_cashiers_id_fqn());
+	cJSON_AddStringToObject(join_request, "payin_tx", player_config.txid);
+	cJSON_AddStringToObject(join_request, "status", "pending");
+
+	dlg_info("Updating player identity with join request: %s", cJSON_Print(join_request));
+	update_result = append_cmm_from_id_key_data_cJSON(
+		player_config.verus_pid, 
+		"chips.vrsc::poker.sg777z.p_join_request",
+		join_request, 
+		false
+	);
+
+	cJSON_Delete(join_request);
+
+	if (!update_result) {
+		dlg_error("Failed to update player identity with join request");
+		return ERR_UPDATEIDENTITY;
+	}
+	dlg_info("Join request stored on player identity");
+
+	// Step 3: Wait for dealer to add player to table
+	retval = check_player_join_status(player_config.table_id, player_config.verus_pid);
+	if (retval) {
+		/*
+		 TODO::This is where TX is success but verus_pid is not added to the table.
+		 In such scenarios, using dispute resolution protocol the player can get funds back.
+		*/
+		return retval;
+	}
+
 	return retval;
 }
 
@@ -451,10 +509,11 @@ int32_t check_player_join_status(char *table_id, char *verus_pid)
 
 cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 {
-	int32_t hex_data_len, retval, minconf = 1;
+	int32_t retval, minconf = 1;
 	double fee = 0.0001;
-	char *hex_data = NULL;
 	cJSON *currency_detail = NULL, *result = NULL, *tx_params = NULL, *params = NULL;
+
+	(void)data; // Data parameter currently unused - join info stored on player identity instead
 
 	if (amount < 0) {
 		dlg_error("Amount cannot be negative");
@@ -470,29 +529,23 @@ cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 		return NULL;
 	}
 
+	tx_params = cJSON_CreateArray();
+
+	// Output: currency to identity address
 	currency_detail = cJSON_CreateObject();
 	cJSON_AddStringToObject(currency_detail, "currency", CHIPS);
 	cJSON_AddNumberToObject(currency_detail, "amount", amount);
 	cJSON_AddStringToObject(currency_detail, "address", id);
-
-	tx_params = cJSON_CreateArray();
 	cJSON_AddItemToArray(tx_params, currency_detail);
 
-	// Build params array: [source, destinations, minconf, fee, returntx, data]
+	// Build params array: [source, destinations, minconf, fee]
 	params = cJSON_CreateArray();
 	cJSON_AddItemToArray(params, cJSON_CreateString("*"));
 	cJSON_AddItemToArray(params, cJSON_Duplicate(tx_params, 1));
 	cJSON_AddItemToArray(params, cJSON_CreateNumber(minconf));
 	cJSON_AddItemToArray(params, cJSON_CreateNumber(fee));
-	cJSON_AddItemToArray(params, cJSON_CreateBool(0)); // returntx = false
 
-	if (data != NULL) {
-		hex_data_len = 2 * strlen(cJSON_Print(data)) + 1;
-		hex_data = calloc(hex_data_len, sizeof(char));
-		str_to_hexstr(cJSON_Print(data), hex_data);
-		cJSON_AddItemToArray(params, cJSON_CreateString(hex_data));
-		free(hex_data);
-	}
+	dlg_info("sendcurrency params: %s", cJSON_Print(params));
 
 	retval = chips_rpc("sendcurrency", params, &result);
 	cJSON_Delete(params);

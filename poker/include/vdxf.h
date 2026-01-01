@@ -51,6 +51,18 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 */
 #define T_PLAYER_INFO_KEY "chips.vrsc::poker.sg777z.t_player_info"
 
+/*
+* p_join_request - Stored on player identity when requesting to join a table
+* {
+*   dealer_id: dealer the player wants to join
+*   table_id: table to join
+*   cashier_id: cashier where payin was sent
+*   payin_tx: transaction ID of payin
+*   status: "pending", "accepted", "rejected", "refunded"
+* }
+*/
+#define P_JOIN_REQUEST_KEY "chips.vrsc::poker.sg777z.p_join_request"
+
 #define T_D_DECK_KEY "chips.vrsc::poker.sg777z.t_d_deck"
 #define T_D_P1_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p1_deck"
 #define T_D_P2_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p2_deck"
