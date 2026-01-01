@@ -1671,8 +1671,8 @@ void bet_dcv_backend_loop(void *_ptr)
 // bet_dcv_bvv_backend_loop removed - dcv_bvv_sock_info struct removed, nanomsg no longer used
 void bet_dcv_frontend_loop(void *_ptr)
 {
-	struct lws_context_creation_info dcv_info;
-	struct lws_context *dcv_context = NULL;
+	struct lws_context_creation_info lws_info;
+	struct lws_context *lws_context = NULL;
 	dictionary *ini = NULL;
 	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
 
@@ -1695,16 +1695,16 @@ void bet_dcv_frontend_loop(void *_ptr)
 	dlg_info("[GUI] Dealer WebSocket server starting on port %d | visit http://localhost:%d", gui_ws_port, gui_ws_port);
 	lwsl_user("[GUI] LWS minimal ws broker | visit http://localhost:%d", gui_ws_port);
 
-	memset(&dcv_info, 0, sizeof dcv_info); /* otherwise uninitialized garbage */
-	dcv_info.port = gui_ws_port;
-	dcv_info.mounts = &mount;
-	dcv_info.protocols = protocols;
-	dcv_info.options = LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
-	dcv_info.uid = -1;  /* Don't drop privileges */
-	dcv_info.gid = -1;  /* Don't drop privileges */
+	memset(&lws_info, 0, sizeof lws_info); /* otherwise uninitialized garbage */
+	lws_info.port = gui_ws_port;
+	lws_info.mounts = &mount;
+	lws_info.protocols = protocols;
+	lws_info.options = LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
+	lws_info.uid = -1;  /* Don't drop privileges */
+	lws_info.gid = -1;  /* Don't drop privileges */
 
-	dcv_context = lws_create_context(&dcv_info);
-	if (!dcv_context) {
+	lws_context = lws_create_context(&lws_info);
+	if (!lws_context) {
 		lwsl_err("[GUI] lws init failed");
 		dlg_error("[GUI] lws_context error");
 		return;
@@ -1714,11 +1714,11 @@ void bet_dcv_frontend_loop(void *_ptr)
 	
 	// Keep running even if main thread exits
 	while (n >= 0) {
-		n = lws_service(dcv_context, 1000);
+		n = lws_service(lws_context, 1000);
 	}
 	
 	dlg_info("[GUI] Dealer WebSocket server shutting down");
-	if (dcv_context) {
-		lws_context_destroy(dcv_context);
+	if (lws_context) {
+		lws_context_destroy(lws_context);
 	}
 }

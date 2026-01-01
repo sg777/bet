@@ -44,7 +44,7 @@ CFLAGS := -g -fPIC -std=c11 $(WARNINGS) -pthread \
           -I$(EXTERNAL_DIR)/dlg/include \
           -I$(EXTERNAL_DIR)/iniparser/src \
           -I$(EXTERNAL_DIR)/jsmn \
-          -I$(EXTERNAL_DIR)/libwebsockets/include \
+          -I/usr/local/include \
           $(CPPFLAGS)
 
 .PHONY: all clean test
