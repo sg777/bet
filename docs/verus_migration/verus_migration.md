@@ -29,7 +29,7 @@ In BET, data is represented in JSON format and exchanged over sockets. With VDXF
 
 ### ID Creation and Management
 
-BET aims to support various card games and betting activities. Game-specific IDs are created to group related data. For example, `poker.chips@` for poker, `blackjack.chips@` for blackjack, and `bet.chips@` for betting. Sub-IDs under these main IDs organize data, such as `dealer.poker.chips` for dealer information and `cashier.poker.chips` for cashier information.
+BET aims to support various card games and betting activities. Game-specific IDs are created to group related data. For example, `sg777z.chips.vrsc@` for poker, `blackjack.chips@` for blackjack, and `bet.chips@` for betting. Sub-IDs under these main IDs organize data, such as `dealer.sg777z.chips.vrsc@` for dealer information and `cashier.sg777z.chips.vrsc@` for cashier information.
 
 #### ID Creation and Key Management
 

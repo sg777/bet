@@ -15,14 +15,14 @@ Our aim is to define as minimum identifiers as possible and as minimum keys as p
 
 We define every keys under the namespace chips.vrsc::
 As we know that bet aim to support multiple games, so under the namespace chips.vrsc:: we group the keys based on the game 
-in which they used for. For example chips.vrsc::poker is the prefix to all the keys that are used in playing the poker game.
+in which they used for. For example chips.vrsc::poker.sg777z is the prefix to all the keys that are used in playing the poker game.
 Likewise if any keys are common across the games then those are defined with the prefix chips.vrsc::bet.
 
-Lets say the cashiers are specific to the context of poker, so we defined them with the prefix chips.vrsc::poker and the final
-key is represented as chips.vrsc::poker.cashiers.
+Lets say the cashiers are specific to the context of poker, so we defined them with the prefix chips.vrsc::poker.sg777z and the final
+key is represented as chips.vrsc::poker.sg777z.cashiers.
 */
 
-#define CASHIERS_KEY "chips.vrsc::poker.cashiers"
+#define CASHIERS_KEY "chips.vrsc::poker.sg777z.cashiers"
 /*
 * The DEALERS_KEY holds information about registered dealers in the poker system.
 * It stores an array of dealer identities (IDs) that are authorized to run poker tables.
@@ -39,39 +39,39 @@ key is represented as chips.vrsc::poker.cashiers.
 * Where each "dealer_id_x" is a unique identifier (likely a VerusID) for a registered dealer.
 * This allows the system to maintain a list of approved dealers that can host poker games.
 */
-#define DEALERS_KEY "chips.vrsc::poker.dealers"
+#define DEALERS_KEY "chips.vrsc::poker.sg777z.dealers"
 
-#define T_GAME_ID_KEY "chips.vrsc::poker.t_game_ids"
-#define T_TABLE_INFO_KEY "chips.vrsc::poker.t_table_info"
+#define T_GAME_ID_KEY "chips.vrsc::poker.sg777z.t_game_ids"
+#define T_TABLE_INFO_KEY "chips.vrsc::poker.sg777z.t_table_info"
 /*
 * t_player_info {
 * num_players : 
 * player_info : [veruspid_txid_playerid]
 * }
 */
-#define T_PLAYER_INFO_KEY "chips.vrsc::poker.t_player_info"
+#define T_PLAYER_INFO_KEY "chips.vrsc::poker.sg777z.t_player_info"
 
-#define T_D_DECK_KEY "chips.vrsc::poker.t_d_deck"
-#define T_D_P1_DECK_KEY "chips.vrsc::poker.t_d_p1_deck"
-#define T_D_P2_DECK_KEY "chips.vrsc::poker.t_d_p2_deck"
-#define T_D_P3_DECK_KEY "chips.vrsc::poker.t_d_p3_deck"
-#define T_D_P4_DECK_KEY "chips.vrsc::poker.t_d_p4_deck"
-#define T_D_P5_DECK_KEY "chips.vrsc::poker.t_d_p5_deck"
-#define T_D_P6_DECK_KEY "chips.vrsc::poker.t_d_p6_deck"
-#define T_D_P7_DECK_KEY "chips.vrsc::poker.t_d_p7_deck"
-#define T_D_P8_DECK_KEY "chips.vrsc::poker.t_d_p8_deck"
-#define T_D_P9_DECK_KEY "chips.vrsc::poker.t_d_p9_deck"
+#define T_D_DECK_KEY "chips.vrsc::poker.sg777z.t_d_deck"
+#define T_D_P1_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p1_deck"
+#define T_D_P2_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p2_deck"
+#define T_D_P3_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p3_deck"
+#define T_D_P4_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p4_deck"
+#define T_D_P5_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p5_deck"
+#define T_D_P6_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p6_deck"
+#define T_D_P7_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p7_deck"
+#define T_D_P8_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p8_deck"
+#define T_D_P9_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p9_deck"
 
-#define T_B_DECK_KEY "chips.vrsc::poker.t_b_deck"
-#define T_B_P1_DECK_KEY "chips.vrsc::poker.t_b_p1_deck"
-#define T_B_P2_DECK_KEY "chips.vrsc::poker.t_b_p2_deck"
-#define T_B_P3_DECK_KEY "chips.vrsc::poker.t_b_p3_deck"
-#define T_B_P4_DECK_KEY "chips.vrsc::poker.t_b_p4_deck"
-#define T_B_P5_DECK_KEY "chips.vrsc::poker.t_b_p5_deck"
-#define T_B_P6_DECK_KEY "chips.vrsc::poker.t_b_p6_deck"
-#define T_B_P7_DECK_KEY "chips.vrsc::poker.t_b_p7_deck"
-#define T_B_P8_DECK_KEY "chips.vrsc::poker.t_b_p8_deck"
-#define T_B_P9_DECK_KEY "chips.vrsc::poker.t_b_p9_deck"
+#define T_B_DECK_KEY "chips.vrsc::poker.sg777z.t_b_deck"
+#define T_B_P1_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p1_deck"
+#define T_B_P2_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p2_deck"
+#define T_B_P3_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p3_deck"
+#define T_B_P4_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p4_deck"
+#define T_B_P5_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p5_deck"
+#define T_B_P6_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p6_deck"
+#define T_B_P7_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p7_deck"
+#define T_B_P8_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p8_deck"
+#define T_B_P9_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p9_deck"
 
 /*
 * card_bv {
@@ -80,7 +80,7 @@ key is represented as chips.vrsc::poker.cashiers.
 * bv or bv[] : blinding value(s)
 * }
 */
-#define T_CARD_BV_KEY "chips.vrsc::poker.card_bv"
+#define T_CARD_BV_KEY "chips.vrsc::poker.sg777z.card_bv"
 
 /*
 * t_game_info {
@@ -88,7 +88,7 @@ key is represented as chips.vrsc::poker.cashiers.
 * game_info : Holds the info of the gaming state
 * }
 */
-#define T_GAME_INFO_KEY "chips.vrsc::poker.t_game_info"
+#define T_GAME_INFO_KEY "chips.vrsc::poker.sg777z.t_game_info"
 
 /*
 * player_deck {
@@ -97,7 +97,7 @@ key is represented as chips.vrsc::poker.cashiers.
 * cardinfo:Array of card pubkeys r1G, r2G, ..., r52G
 * }
 */
-#define PLAYER_DECK_KEY "chips.vrsc::poker.player_deck"
+#define PLAYER_DECK_KEY "chips.vrsc::poker.sg777z.player_deck"
 
 /*
 Datatypes used
@@ -115,7 +115,7 @@ Identitites
 We limit ourself to two levels of nesting under chips. At first level we mostly define identities are of game_types or any 
 such things which are common across all the game types. For each game_type identity we generate a token which is used to register 
 sub identities and is needed to play that specific game. 
-For example we registered the identity poker under chips as poker.chips@, and we generate a token named poker which is basically be
+For example we registered the identity sg777z under chips as sg777z.chips.vrsc@, and we generate a token named sg777z which is basically be
 used to play the poker game.
 At the second level we register sun identities under the game_type identity which are very specific to the game.
 
@@ -124,9 +124,9 @@ Any entity in the bet ecosystem can register the identities under chips, like fo
 under chips as sg777.chips@ which basically been used to hold the tokens. 
 */
 
-#define CASHIERS_ID_FQN "cashiers.poker.chips@"
-#define DEALERS_ID_FQN "dealers.poker.chips@"
-#define POKER_ID_FQN "poker.chips@"
+#define CASHIERS_ID_FQN "cashier.sg777z.chips.vrsc@"
+#define DEALERS_ID_FQN "dealer.sg777z.chips.vrsc@"
+#define POKER_ID_FQN "sg777z.chips.vrsc@"
 
 #define DEALERS_ID "dealers"
 #define CASHIERS_ID "cashiers"
@@ -159,18 +159,18 @@ extern char all_game_key_names[all_game_keys_no][128];
 
 #define MAX_ID_LEN 128
 
-char *get_vdxf_id(char *key_name);
+char *get_vdxf_id(const char *key_name);
 char *get_key_vdxf_id(char *key_name);
 char *get_full_key(char *key_name);
-char *get_key_data_type(char *key_name);
+char *get_key_data_type(const char *key_name);
 char *get_key_data_vdxf_id(char *key_name, char *data);
 cJSON *update_with_retry(int argc, char **argv);
 cJSON *update_cmm(char *id, cJSON *cmm);
 cJSON *append_pa_to_cmm(char *id, char *pa);
-cJSON *get_cmm(char *id, int16_t full_id);
+cJSON *get_cmm(const char *id, int16_t full_id);
 cJSON *update_primaryaddresses(char *id, cJSON *primaryaddress);
 cJSON *get_primaryaddresses(char *id, int16_t full_id);
-cJSON *get_cmm_key_data(char *id, int16_t full_id, char *key);
+cJSON *get_cmm_key_data(const char *id, int16_t full_id, const char *key);
 cJSON *get_id_key_data(char *id, int16_t full_id, char *key);
 cJSON *update_t_game_ids(char *id);
 cJSON *get_cashiers_info(char *cashier_id);
@@ -178,10 +178,10 @@ cJSON *update_cashiers(char *ip);
 int32_t get_player_id(int *player_id);
 int32_t join_table();
 int32_t find_table();
-bool is_id_exists(char *id, int16_t full_id);
+bool is_id_exists(const char *id, int16_t full_id);
 int32_t check_player_join_status(char *table_id, char *pa);
 cJSON *get_z_getoperationstatus(char *op_id);
-cJSON *verus_sendcurrency_data(char *id, double amount, cJSON *data);
+cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data);
 cJSON *getaddressutxos(char verus_addresses[][100], int n);
 struct table *decode_table_info_from_str(char *str);
 struct table *decode_table_info(cJSON *dealer_cmm_data);
@@ -192,7 +192,7 @@ bool check_if_enough_funds_avail(char *table_id);
 int32_t check_if_d_t_available(char *dealer_id, char *table_id, cJSON **t_table_info);
 char *get_str_from_id_key(char *id, char *key);
 char *get_str_from_id_key_vdxfid(char *id, char *key_vdxfid);
-cJSON *get_cJSON_from_id_key(char *id, char *key, int32_t is_full_id);
+cJSON *get_cJSON_from_id_key(const char *id, const char *key, int32_t is_full_id);
 cJSON *get_cJSON_from_table_id_key(char *table_id, char *key);
 cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid);
 cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id);

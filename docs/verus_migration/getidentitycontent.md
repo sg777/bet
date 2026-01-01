@@ -4,10 +4,10 @@ The Verus API `getidentitycontent` was introduced to address the needs of BET. I
 
 Initially, for incremental updates of the same key, we read the existing info from `contentmultimap`, append our data, and publish the whole data again. However, those incremental updates are not efficient. There will be tens of updates among tens of keys, and these updates might happen in the same block when the support to spend transactions from the mempool is available. For these reasons, we need an API to read a specific key of an ID that is not the latest. There is an API like `getaddresstxids`, which lists all the transactions associated with a specific ID. We need to do some workaround by parsing all these transactions associated with an ID to get the value of a specific key of a given ID.
 
-Here is an example of what we are looking to achieve. Let's say I have the table ID `sg777_t`, and using four keys, I am storing the data as shown below. The key names used in this example are `player_info`, `cashier_id`, `player_1`, and `player_2`. All these keys are updated by different entities either at the same time or at different times. If I use `getidentity`, I can only retrieve the last updated key value. However, what I'm looking for is to get the last updated value of all these keys or for any specific key.
+Here is an example of what we are looking to achieve. Let's say I have the table ID `t1.sg777z.chips.vrsc@`, and using four keys, I am storing the data as shown below. The key names used in this example are `player_info`, `cashier_id`, `player_1`, and `player_2`. All these keys are updated by different entities either at the same time or at different times. If I use `getidentity`, I can only retrieve the last updated key value. However, what I'm looking for is to get the last updated value of all these keys or for any specific key.
 
 ```json
-verus -chain=chips10sec updateidentity '{"name": "sg777_t", "parent":"i6gViGxt7YinkJZoubKdbWBrqdRCb1Rkvs", "contentmultimap":{
+verus -chain=chips updateidentity '{"name": "t1", "parent":"sg777z.chips.vrsc@", "contentmultimap":{
   "player_info": [
     {
       "num_players": 2,

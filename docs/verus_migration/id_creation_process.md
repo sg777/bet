@@ -100,7 +100,7 @@ Example of updating dealer names:
 verus -chain=chips10sec updateidentity '{"name": "dealers", "parent":"i6gViGxt7YinkJZoubKdbWBrqdRCb1Rkvs", "contentmultimap":{
       "iSgEvATbNF3ZR6Kyj6nn8zVp3adPQxPnFJ": [
         {
-          "iK7a5JNJnbeuYWVHCDRpJosj3irGJ5Qa8c": "sg777_d"
+          "iK7a5JNJnbeuYWVHCDRpJosj3irGJ5Qa8c": "d1.sg777z.chips.vrsc@"
         },
         {
           "iK7a5JNJnbeuYWVHCDRpJosj3irGJ5Qa8c": "biz_d"
@@ -129,7 +129,7 @@ After updating, the dealer names in the `contentmultimap` of dealers look as fol
     "contentmultimap": {
       "iSgEvATbNF3ZR6Kyj6nn8zVp3adPQxPnFJ": [
         {
-          "iK7a5JNJnbeuYWVHCDRpJosj3irGJ5Qa8c": "sg777_d"
+          "iK7a5JNJnbeuYWVHCDRpJosj3irGJ5Qa8c": "d1.sg777z.chips.vrsc@"
         },
         {
           "iK7a5JNJnbeuYWVHCDRpJosj3irGJ5Qa8c": "biz_d"
@@ -159,7 +159,7 @@ Upon a dealer's registration request, the Registration Authority (RA) verifies t
 
 A sample dealer ID is shown below. It resembles a standard ID but includes keys in the `contentmultimap` to store dealer-specific information.
 ```
-# verus -chain=chips10sec getidentity sg777_d.poker.chips10sec@
+# verus -chain=chips getidentity d1.sg777z.chips.vrsc@
 {
   "identity": {
     "version": 3,
@@ -168,7 +168,7 @@ A sample dealer ID is shown below. It resembles a standard ID but includes keys 
       "RGgmpgoQcnptWEshhuhg3jGkYiotvLnswN"
     ],
     "minimumsignatures": 1,
-    "name": "sg777_d",
+    "name": "d1",
     "identityaddress": "iHChMSKzFU7TcvURCjFwGzkBYLQ1MvrkYL",
     "parent": "i6gViGxt7YinkJZoubKdbWBrqdRCb1Rkvs",
     "systemid": "iLThsqsgwFRKzRG11j7QaYgNQJ9q16VGpg",
@@ -187,9 +187,9 @@ A sample dealer ID is shown below. It resembles a standard ID but includes keys 
 }
 ```
 
-In this example, the primary address `RGgmpgoQcnptWEshhuhg3jGkYiotvLnswN` belongs to the dealer `sg777_d`. After the dealer ID is created, the dealer can update it with specific information.
+In this example, the primary address belongs to the dealer `d1.sg777z.chips.vrsc@`. After the dealer ID is created, the dealer can update it with specific information.
 
-Once registered, a dealer can request to register table names, which should end with `_t`. Each table name registration incurs a nominal fee. When RA creates the table IDs, it grants the dealer revocation/recovery authority over the tables. Players send join requests to the table, and the dealer processes these requests, adding player addresses to the table's primary addresses. During the game, players update the table with game information.
+Once registered, a dealer can request to register table names. Each table name registration incurs a nominal fee. When RA creates the table IDs, it grants the dealer revocation/recovery authority over the tables. Players send join requests to the table, and the dealer processes these requests, adding player addresses to the table's primary addresses. During the game, players update the table with game information.
 
 ### Dealer Contentmultimap Update
 
@@ -198,14 +198,14 @@ When a bet node starts as a dealer, it reads information from `verus_dealer.ini`
 Sample `verus_dealer.ini`:
 ```
 [verus]
-id = sg777_d   # Dealer's ID
+id = d1.sg777z.chips.vrsc@   # Dealer's ID
 
 [table]
 max_players          = 2               # Maximum number of players allowed to join the table
 big_blind            = 0.001           # Table stake size based on this value (200BB)
 min_stake            = 20              # Minimum table stake size (20BB)
 max_stake            = 100             # Maximum table stake size (100BB)
-table_id             = sg777_t         # Table ID for game info
+table_id             = t1.sg777z.chips.vrsc@         # Table ID for game info
 ```
 
 The configuration data is stored in a `struct` named `table`:
@@ -228,9 +228,9 @@ struct float_num {
 };
 ```
 
-The struct data is converted to hex and stored in the dealer ID. After storing the information, the dealer ID `sg777_d` looks as follows:
+The struct data is converted to hex and stored in the dealer ID. After storing the information, the dealer ID `d1.sg777z.chips.vrsc@` looks as follows:
 ```
-# verus -chain=chips10sec getidentity sg777_d.poker.chips10sec@
+# verus -chain=chips getidentity d1.sg777z.chips.vrsc@
 {
   "identity": {
     "version": 3,
@@ -239,7 +239,7 @@ The struct data is converted to hex and stored in the dealer ID. After storing t
       "RGgmpgoQcnptWEshhuhg3jGkYiotvLnswN"
     ],
     "minimumsignatures": 1,
-    "name": "sg777_d",
+    "name": "d1",
     "identityaddress": "iHChMSKzFU7TcvURCjFwGzkBYLQ1MvrkYL",
     "parent": "i6gViGxt7YinkJZoubKdbWBrqdRCb1Rkvs",
     "systemid": "iLThsqsgwFRKzRG11j7QaYgNQJ9q16VGpg",

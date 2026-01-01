@@ -9,7 +9,7 @@
 
 struct table player_t = { 0 };
 
-char *get_vdxf_id(char *key_name)
+char *get_vdxf_id(const char *key_name)
 {
 	int argc = 3;
 	char **argv = NULL;
@@ -38,18 +38,21 @@ char *get_key_vdxf_id(char *key_name)
 char *get_full_key(char *key_name)
 {
 	char *full_key = NULL;
+	const char *prefix = NULL;
 
 	if (!key_name)
 		return NULL;
 
-	full_key = calloc(1, 128);
-	strcpy(full_key, "chips.vrsc::poker.");
-	strncat(full_key, key_name, strlen(key_name));
+	prefix = bet_get_key_prefix();
+	full_key = calloc(1, 256);
+	strncpy(full_key, prefix, 128);
+	strncat(full_key, key_name, 128 - strlen(prefix) - 1);
+	full_key[255] = '\0';
 
 	return full_key;
 }
 
-char *get_key_data_type(char *key_name)
+char *get_key_data_type(const char *key_name)
 {
 	if (!key_name) {
 		dlg_error("%s: Null key name provided", __func__);
@@ -111,7 +114,7 @@ cJSON *update_cmm(char *id, cJSON *cmm)
 
 	id_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(id_info, "name", id);
-	cJSON_AddStringToObject(id_info, "parent", get_vdxf_id(POKER_ID_FQN));
+	cJSON_AddStringToObject(id_info, "parent", get_vdxf_id(bet_get_poker_id_fqn()));
 	cJSON_AddItemToObject(id_info, "contentmultimap", cmm);
 
 	argc = 3;
@@ -136,7 +139,7 @@ cJSON *append_pa_to_cmm(char *id, char *pa)
 
 	id_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(id_info, "name", id);
-	cJSON_AddStringToObject(id_info, "parent", get_vdxf_id(POKER_ID_FQN));
+	cJSON_AddStringToObject(id_info, "parent", get_vdxf_id(bet_get_poker_id_fqn()));
 
 	cmm = get_cmm(id, 0);
 	cJSON_AddItemToObject(id_info, "contentmultimap", cmm);
@@ -164,7 +167,7 @@ end:
 	return argjson;
 }
 
-cJSON *get_cmm(char *id, int16_t full_id)
+cJSON *get_cmm(const char *id, int16_t full_id)
 {
 	int32_t retval = OK, argc;
 	char **argv = NULL, params[128] = { 0 };
@@ -176,7 +179,7 @@ cJSON *get_cmm(char *id, int16_t full_id)
 
 	strncpy(params, id, strlen(id));
 	if (0 == full_id) {
-		sprintf(params + strlen(params), ".%s", POKER_ID_FQN);
+		sprintf(params + strlen(params), ".%s", bet_get_poker_id_fqn());
 	}
 	argc = 4;
 	bet_alloc_args(argc, &argv);
@@ -213,7 +216,7 @@ cJSON *update_primaryaddresses(char *id, cJSON *primaryaddress)
 
 	id_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(id_info, "name", id);
-	cJSON_AddStringToObject(id_info, "parent", get_vdxf_id(POKER_ID_FQN));
+	cJSON_AddStringToObject(id_info, "parent", get_vdxf_id(bet_get_poker_id_fqn()));
 	cJSON_AddItemToObject(id_info, "primaryaddresses", primaryaddress);
 
 	argc = 3;
@@ -240,7 +243,7 @@ cJSON *get_primaryaddresses(char *id, int16_t full_id)
 	}
 	strncpy(params, id, strlen(id));
 	if (0 == full_id) {
-		sprintf(params + strlen(params), ".%s", POKER_ID_FQN);
+		sprintf(params + strlen(params), ".%s", bet_get_poker_id_fqn());
 	}
 	argc = 4;
 	bet_alloc_args(argc, &argv);
@@ -264,7 +267,7 @@ end:
 	return pa;
 }
 
-cJSON *get_cmm_key_data(char *id, int16_t full_id, char *key)
+cJSON *get_cmm_key_data(const char *id, int16_t full_id, const char *key)
 {
 	cJSON *cmm = NULL, *cmm_key_data = NULL;
 
@@ -353,7 +356,7 @@ cJSON *get_cashiers_info(char *cashier_id)
 	cJSON *cashier_cmm_data = NULL;
 
 	cashier_cmm_data = cJSON_CreateObject();
-	cashier_cmm_data = get_cmm_key_data(cashier_id, 0, get_vdxf_id(CASHIERS_KEY));
+	cashier_cmm_data = get_cmm_key_data(cashier_id, 0, get_vdxf_id(verus_config.initialized ? verus_config.cashiers_key : CASHIERS_KEY));
 
 end:
 	return cashier_cmm_data;
@@ -382,7 +385,7 @@ cJSON *update_cashiers(char *ip)
 	}
 
 	cJSON_AddItemToArray(cashier_ips, ip_obj);
-	cJSON_AddItemToObject(cashiers_info, get_vdxf_id(CASHIERS_KEY), cashier_ips);
+	cJSON_AddItemToObject(cashiers_info, get_vdxf_id(verus_config.initialized ? verus_config.cashiers_key : CASHIERS_KEY), cashier_ips);
 	out = update_cmm("cashiers", cashiers_info);
 
 end:
@@ -435,7 +438,7 @@ int32_t join_table()
 	jaddstr(data, "table_id", player_config.table_id);
 	jaddstr(data, "verus_pid", player_config.verus_pid);
 
-	op_id = verus_sendcurrency_data(CASHIERS_ID_FQN, default_chips_tx_fee, data);
+	op_id = verus_sendcurrency_data(bet_get_cashiers_id_fqn(), default_chips_tx_fee, data);
 	if (op_id == NULL)
 		return ERR_SENDCURRENCY;
 
@@ -494,7 +497,7 @@ int32_t chose_table()
 		 bet_err_str(retval));
 
 	dealer_ids = cJSON_CreateArray();
-	dealer_ids = get_cJSON_from_id_key(DEALERS_ID_FQN, DEALERS_KEY, 1);
+	dealer_ids = get_cJSON_from_id_key(bet_get_dealers_id_fqn(), verus_config.initialized ? verus_config.dealers_key : DEALERS_KEY, 1);
 	if (!dealer_ids) {
 		return ERR_NO_DEALERS_FOUND;
 	}
@@ -531,7 +534,7 @@ int32_t find_table()
 	return retval;
 }
 
-bool is_id_exists(char *id, int16_t full_id)
+bool is_id_exists(const char *id, int16_t full_id)
 {
 	int32_t argc, retval = OK, id_exists = false;
 	char **argv = NULL;
@@ -540,7 +543,7 @@ bool is_id_exists(char *id, int16_t full_id)
 
 	strncpy(params, id, strlen(id));
 	if (0 == full_id) {
-		sprintf(params + strlen(params), ".%s", POKER_ID_FQN);
+		sprintf(params + strlen(params), ".%s", bet_get_poker_id_fqn());
 	}
 	argc = 4;
 	bet_alloc_args(argc, &argv);
@@ -599,7 +602,7 @@ cJSON *get_z_getoperationstatus(char *op_id)
 	return argjson;
 }
 
-cJSON *verus_sendcurrency_data(char *id, double amount, cJSON *data)
+cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 {
 	int32_t hex_data_len, argc, minconf = 1;
 	double fee = 0.0001;
@@ -940,7 +943,7 @@ char *get_str_from_id_key_vdxfid(char *id, char *key_vdxfid)
 	return NULL;
 }
 
-cJSON *get_cJSON_from_id_key(char *id, char *key, int32_t is_full_id)
+cJSON *get_cJSON_from_id_key(const char *id, const char *key, int32_t is_full_id)
 {
 	cJSON *cmm = NULL;
 
@@ -1137,7 +1140,7 @@ int32_t do_payin_tx_checks(char *txid, cJSON *payin_tx_data)
 	t_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
 
 	//Check the amount of funds that the player deposited at Cashier and see if these funds are with in the range of [min-max] stake.
-	amount = chips_get_balance_on_address_from_tx(get_vdxf_id(CASHIERS_ID_FQN), txid);
+	amount = chips_get_balance_on_address_from_tx(get_vdxf_id(bet_get_cashiers_id_fqn()), txid);
 	if ((amount < jdouble(t_table_info, "min_stake")) && (amount > jdouble(t_table_info, "max_stake"))) {
 		dlg_error("funds deposited ::%f should be in the range %f::%f\n", amount,
 			  jdouble(t_table_info, "min_stake"), jdouble(t_table_info, "max_stake"));
@@ -1246,7 +1249,9 @@ int32_t process_payin_tx_data(char *txid, cJSON *payin_tx_data)
 void process_block(char *blockhash)
 {
 	int32_t blockcount = 0, retval = OK;
-	char verus_addr[1][100] = { CASHIERS_ID_FQN };
+	char verus_addr[1][100];
+	strncpy(verus_addr[0], bet_get_cashiers_id_fqn(), sizeof(verus_addr[0]) - 1);
+	verus_addr[0][sizeof(verus_addr[0]) - 1] = '\0';
 	cJSON *blockjson = NULL, *payin_tx_data = NULL;
 
 	if (!bet_is_new_block_set()) {
@@ -1268,13 +1273,13 @@ void process_block(char *blockhash)
 	}
 	dlg_info("received blockhash of block height = %d", blockcount);
 
-	if (!is_id_exists(CASHIERS_ID_FQN, 1)) {
-		dlg_error("Cashiers ID ::%s doesn't exists", CASHIERS_ID_FQN);
+	if (!is_id_exists(bet_get_cashiers_id_fqn(), 1)) {
+		dlg_error("Cashiers ID ::%s doesn't exists", bet_get_cashiers_id_fqn());
 		return;
 	}
 
 	/*
-	* List all the utxos attached to the registered cashiers, like cashiers.poker.chips10sec@
+	* List all the utxos attached to the registered cashiers, like cashier.sg777z.chips.vrsc@
 	* Look for the utxos that matches to the current processing block height
 	* Extract the tx data 
 	* Process the tx data to see if this tx is intended and related to poker
@@ -1301,7 +1306,7 @@ end:
 }
 
 /*
-* The list_dealers() function fetches data from the DEALERS_KEY in DEALERS_ID_FQN identity
+* The list_dealers() function fetches data from the dealers_key in dealer_id identity
 * The data is stored in the following JSON format:
 * {
 *   "dealers": [
@@ -1317,10 +1322,10 @@ cJSON *list_dealers()
 	cJSON *dealers = NULL, *dealers_arr = NULL;
 
 	dealers = cJSON_CreateObject();
-	dealers = get_cJSON_from_id_key(DEALERS_ID_FQN, DEALERS_KEY, 1);
+	dealers = get_cJSON_from_id_key(bet_get_dealers_id_fqn(), verus_config.initialized ? verus_config.dealers_key : DEALERS_KEY, 1);
 
 	if (!dealers) {
-		dlg_info("No dealers has been added to dealers.poker.chips10sec@ yet.");
+		dlg_info("No dealers has been added to dealer.sg777z.chips.vrsc@ yet.");
 		return NULL;
 	}
 	dealers_arr = cJSON_GetObjectItem(dealers, "dealers");
@@ -1354,19 +1359,19 @@ void list_tables()
 
 int32_t verify_poker_setup()
 {
-	if (!is_id_exists(CASHIERS_ID_FQN, 1)) {
-		dlg_error("Cashiers ID %s does not exist", CASHIERS_ID_FQN);
+	if (!is_id_exists(bet_get_cashiers_id_fqn(), 1)) {
+		dlg_error("Cashiers ID %s does not exist", bet_get_cashiers_id_fqn());
 		return ERR_CASHIERS_ID_NOT_FOUND;
 	}
 
-	if (!is_id_exists(DEALERS_ID_FQN, 1)) {
-		dlg_error("Dealers ID %s does not exist", DEALERS_ID_FQN);
+	if (!is_id_exists(bet_get_dealers_id_fqn(), 1)) {
+		dlg_error("Dealers ID %s does not exist", bet_get_dealers_id_fqn());
 		return ERR_DEALERS_ID_NOT_FOUND;
 	}
 
-	cJSON *dealers = get_cJSON_from_id_key(DEALERS_ID_FQN, DEALERS_KEY, 1);
-	if (!dealers) {
-		dlg_error("No dealers found in %s", DEALERS_ID_FQN);
+	cJSON *dealers = get_cJSON_from_id_key(bet_get_dealers_id_fqn(), verus_config.initialized ? verus_config.dealers_key : DEALERS_KEY, 1);
+		if (!dealers) {
+			dlg_error("No dealers found in %s", bet_get_dealers_id_fqn());
 		return ERR_NO_DEALERS_FOUND;
 	}
 
@@ -1400,7 +1405,7 @@ int32_t add_dealer_to_dealers(char *dealer_id)
 			dealers = cJSON_CreateArray();
 		}
 		cJSON_AddItemToArray(dealers, cJSON_CreateString(dealer_id));
-		out = append_cmm_from_id_key_data_cJSON("dealers", DEALERS_KEY, dealers, false);
+		out = append_cmm_from_id_key_data_cJSON(verus_config.initialized ? verus_config.dealers_short : "dealers", verus_config.initialized ? verus_config.dealers_key : DEALERS_KEY, dealers, false);
 		if (!out) {
 			return ERR_UPDATEIDENTITY;
 		}
@@ -1422,7 +1427,7 @@ int32_t id_canspendfor(char *id, int32_t full_id, int32_t *err_no)
 
 	strncpy(params, id, strlen(id));
 	if (0 == full_id) {
-		sprintf(params + strlen(params), ".%s", POKER_ID_FQN);
+		sprintf(params + strlen(params), ".%s", bet_get_poker_id_fqn());
 	}
 	argc = 4;
 	bet_alloc_args(argc, &argv);
@@ -1461,7 +1466,7 @@ int32_t id_cansignfor(char *id, int32_t full_id, int32_t *err_no)
 
 	strncpy(params, id, strlen(id));
 	if (0 == full_id) {
-		sprintf(params + strlen(params), ".%s", POKER_ID_FQN);
+		sprintf(params + strlen(params), ".%s", bet_get_poker_id_fqn());
 	}
 	bet_alloc_args(argc, &argv);
 	argv = bet_copy_args(argc, verus_chips_cli, "getidentity", params, "-1");

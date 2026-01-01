@@ -51,7 +51,7 @@ All the steps mentioned above can be accomplished using the `list_tables` comman
 
 You can view the contents of a specific table using the `print_id` command:
 	```sh
-	./bet print_id sg777_t table
+	./bet print_id t1.sg777z.chips.vrsc@ table
 	```
 
 ## Table Content

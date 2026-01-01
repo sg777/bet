@@ -177,7 +177,7 @@ const char *bet_err_str(int32_t err_no)
 	case ERR_ADDR_AUTH:
 		return "Address/PrimaryAddress is not authorized, the wallet doesn't have private keys to spend or sign";
 	case ERR_DEALER_UNREGISTERED:
-		return "Dealer hasn't been registered with dealers.poker.chips10sec";
+		return "Dealer hasn't been registered with dealer.sg777z.chips.vrsc@";
 	case ERR_NULL_KEY:
 		return "Data Key of contentmultimap is NULL, key must be a valid name";
 	case ERR_NULL_ID:

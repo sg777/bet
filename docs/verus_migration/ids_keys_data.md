@@ -85,7 +85,7 @@ Dealers info is a JSON object converted to hex and mapped to `chips.vrsc::poker.
 Example:
 ```
 {
-  "dealers": ["sg777_d"]
+  "dealers": ["d1.sg777z.chips.vrsc@"]
 }
 ```
 Hex string: `7b0a09226465616c657273223a095b2273673737375f64225d0a7d`
@@ -116,8 +116,8 @@ Example:
   "big_blind": 0.001,
   "min_stake": 0.2,
   "max_stake": 1,
-  "table_id": "sg777_t",
-  "dealer_id": "sg777_d"
+  "table_id": "t1.sg777z.chips.vrsc@",
+  "dealer_id": "d1.sg777z.chips.vrsc@"
 }
 ```
 
@@ -152,8 +152,8 @@ Example table info:
   "big_blind": 0.001,
   "min_stake": 0.2,
   "max_stake": 1,
-  "table_id": "sg777_t",
-  "dealer_id": "sg777_d"
+  "table_id": "t1.sg777z.chips.vrsc@",
+  "dealer_id": "d1.sg777z.chips.vrsc@"
 }
 ```
 
@@ -269,7 +269,7 @@ Here is step by step explanation of it.
 1. For example, lets we have the following dealers info
 ```
 {
-        "dealers":      ["sg777_d"]
+        "dealers":      ["d1.sg777z.chips.vrsc@"]
 }
 ```
 2. Converting this to hex string `7b0a09226465616c657273223a095b2273673737375f64225d0a7d`
@@ -292,7 +292,7 @@ Following are the parsing commands that displays dealers info of dealers ID:
 ```
 
 ### Dealer ID
-ID --> `<dealer_name>.poker.chips10sec@` //Dealer provides this name at the time of registration and all dealer names end with `_d` to avoid naming conflicts, e.g `sg777_d.poker.chips@`
+ID --> `<dealer_name>.sg777z.chips.vrsc@` //Dealer provides this name at the time of registration, e.g `d1.sg777z.chips.vrsc@`
 The keys that updates the data to this ID are
 ```
 1. chips.vrsc::poker.t_player_info
@@ -306,13 +306,13 @@ The value mapped to this key is the table info, dealer updates this info from th
         "big_blind":    0.00100000,
         "min_stake":    0.20000000,
         "max_stake":    1,
-        "table_id":     "sg777_t",
-        "dealer_id":    "sg777_d"
+        "table_id":     "t1.sg777z.chips.vrsc@",
+        "dealer_id":    "d1.sg777z.chips.vrsc@"
 }
 ```
 
 ### Table ID
-ID --> `<table_name>.poker.chips10sec@` // Dealers can register upto any number of table names and all table names ends with `_t` to avoid naming conflicts, e.g `sg777_t.poker.chips@`
+ID --> `<table_name>.sg777z.chips.vrsc@` // Dealers can register upto any number of table names, e.g `t1.sg777z.chips.vrsc@`
 
 The keys that updates the data to this ID are
 ```
@@ -351,8 +351,8 @@ Contains the talbe info.
         "big_blind":    0.00100000,
         "min_stake":    0.20000000,
         "max_stake":    1,
-        "table_id":     "sg777_t",
-        "dealer_id":    "sg777_d"
+        "table_id":     "t1.sg777z.chips.vrsc@",
+        "dealer_id":    "d1.sg777z.chips.vrsc@"
 }
 ```
 #### 2. chips.vrsc::poker.t_player_info.game_id1

@@ -9,9 +9,9 @@ To print the complete ID, use the following command:
 - `id_name`: A valid ID name.
 - `id_type`: The high-level functionality of the ID, such as table, dealer, dealers, etc.
 
-For example, to print the information of a table named `sg777_t`, use the following command:
+For example, to print the information of a table named `t1.sg777z.chips.vrsc@`, use the following command:
 ```
-./bet print_id sg777_t table
+./bet print_id t1.sg777z.chips.vrsc@ table
 ```
 
 #### Printing Specific Key Data of a Table
@@ -19,9 +19,9 @@ To print specific key data of a table, use the following command:
 ```
 ./bet print_table_key <table_id> <table_key_name>
 ```
-For example, to print the table information of the table `sg777_t`, use the following command:
+For example, to print the table information of the table `t1.sg777z.chips.vrsc@`, use the following command:
 ```
-./bet print_table_key sg777_t t_table_info
+./bet print_table_key t1.sg777z.chips.vrsc@ t_table_info
 ```
 
 #### Printing Specific Key Data of a Specific ID

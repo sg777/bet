@@ -7,6 +7,7 @@
 #include "misc.h"
 #include "commands.h"
 #include "dealer_registration.h"
+#include "config.h"
 
 struct d_deck_info_struct d_deck_info;
 struct game_meta_info_struct game_meta_info;
@@ -49,7 +50,7 @@ int32_t add_dealer(char *dealer_id)
 	}
 	jaddistr(dealers, dealer_id);
 	cJSON_AddItemToObject(dealers_info, "dealers", dealers);
-	out = update_cmm_from_id_key_data_cJSON(DEALERS_ID, DEALERS_KEY, dealers_info, false);
+		out = update_cmm_from_id_key_data_cJSON(verus_config.initialized ? verus_config.dealers_short : DEALERS_ID, verus_config.initialized ? verus_config.dealers_key : DEALERS_KEY, dealers_info, false);
 
 	if (!out) {
 		return ERR_UPDATEIDENTITY;
@@ -273,7 +274,7 @@ int32_t dealer_init(struct table t)
 	}
 
 	if (!is_dealer_registered(t.dealer_id)) {
-		// TODO:: An automated mechanism to register the dealer with dealers.poker.chips10sec need to be worked out
+		// TODO:: An automated mechanism to register the dealer with dealer.sg777z.chips.vrsc@ need to be worked out
 		return ERR_DEALER_UNREGISTERED;
 	}
 

@@ -12,7 +12,7 @@ The `verus_test` branch is a **migration branch** that transitions Pangea-Bet fr
    - Core VDXF functions implemented in `poker/src/vdxf.c`
    - Functions for reading/writing game state to Verus IDs
    - Key-value storage system using Verus contentmultimap (CMM)
-   - ID creation and management (`poker.chips@`, `dealers.poker.chips@`, `cashiers.poker.chips@`)
+   - ID creation and management (`sg777z.chips.vrsc@`, `dealer.sg777z.chips.vrsc@`, `cashier.sg777z.chips.vrsc@`)
 
 2. **Code Refactoring & Cleanup**
    - Removed unused directories (basilisk, datachain, gecko, logos, assets, ccan)
@@ -87,13 +87,13 @@ The `verus_test` branch is a **migration branch** that transitions Pangea-Bet fr
 
 ### ID Hierarchy
 ```
-poker.chips@ (root)
-├── dealers.poker.chips@
-│   └── <dealer_name>.poker.chips@
+sg777z.chips.vrsc@ (root)
+├── dealer.sg777z.chips.vrsc@
+│   └── <dealer_name>.sg777z.chips.vrsc@
 │       └── Keys: t_table_info, t_player_info, t_game_info, etc.
-├── cashiers.poker.chips@
+├── cashier.sg777z.chips.vrsc@
 │   └── Keys: chips.vrsc::poker.cashiers
-└── <player_name>.poker.chips@
+└── <player_name>.sg777z.chips.vrsc@
     └── Keys: player_deck, etc.
 ```
 
