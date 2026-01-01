@@ -87,6 +87,6 @@ int32_t ln_establish_channel(char *uri);
 char *bet_git_version();
 int32_t scan_games_info();
 void wait_for_a_blocktime();
-bool check_if_tx_exists(char *tx_id);
+bool check_if_tx_exists(const char *tx_id);
 
 #endif /* COMMANDS_H */

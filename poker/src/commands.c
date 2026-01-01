@@ -2131,7 +2131,7 @@ void wait_for_a_blocktime()
 	} while (bh == chips_get_block_count());
 }
 
-bool check_if_tx_exists(char *tx_id)
+bool check_if_tx_exists(const char *tx_id)
 {
 	int32_t argc = 3, retval = OK;
 	char **argv = NULL;

@@ -2,7 +2,7 @@
 #include "../../includes/curl/curl.h"
 #include "../../includes/curl/easy.h"
 
-int32_t hexstr_to_str(char *input, char *output)
+int32_t hexstr_to_str(const char *input, char *output)
 {
 	char code[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
 	int32_t loop, flag;
@@ -152,7 +152,7 @@ void cJSON_hex(cJSON *argjson, char **hexstr)
 	free(printed);
 }
 
-cJSON *hex_cJSON(char *hex_data)
+cJSON *hex_cJSON(const char *hex_data)
 {
 	char *data = NULL;
 	cJSON *out = NULL;
