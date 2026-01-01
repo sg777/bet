@@ -2,11 +2,7 @@
 
 # Pangea-Bet
 
-**Pangea-Bet** is a decentralized poker platform built on the CHIPS blockchain. It implements secure, trustless mental poker using cryptographic techniques, with all game state and transactions recorded on-chain.
-
-## Overview
-
-Pangea-Bet is a decentralized poker platform built on the CHIPS blockchain. It uses Verus IDs for node communication and game state storage, with all transactions recorded on-chain.
+Decentralized poker platform built on the CHIPS blockchain using Verus IDs for node communication.
 
 ### Node Types
 
