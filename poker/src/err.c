@@ -200,6 +200,8 @@ const char *bet_err_str(int32_t err_no)
 		return "Command execution failed";
 	case ERR_GAME_ALREADY_STARTED:
 		return "Game already in progress - cannot rejoin mid-game (deck keys lost on restart)";
+	case ERR_PLAYER_TIMEOUT:
+		return "Player timed out - auto-folded";
 	default:
 		dlg_error("err_no::%d", err_no);
 		return "This error is not handled yet...";

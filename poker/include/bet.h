@@ -117,6 +117,8 @@ struct privatebet_vars {
 	int32_t bet_actions[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
 	int32_t dealer, last_turn;
 	double last_raise;
+	int64_t turn_start_time;    // Unix timestamp when current turn started
+	int32_t turn_start_block;   // Block height when current turn started
 	double pot;
 	double player_funds;
 	double funds[CARDS_MAXPLAYERS];       // Available funds in CHIPS

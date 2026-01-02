@@ -4,6 +4,7 @@
 #include "poker_vdxf.h"
 #include "commands.h"
 #include "vdxf.h"
+#include <time.h>
 
 // External references
 extern char player_ids[CARDS_MAXPLAYERS][MAX_ID_LEN];
@@ -142,6 +143,8 @@ void init_struct_vars()
 	dcv_vars->small_blind = 0.01;  // 0.01 CHIPS
 	dcv_vars->big_blind = 0.02;    // 0.02 CHIPS
 	dcv_vars->dealer = 0;  // Player 0 is dealer (SB), Player 1 is BB
+	dcv_vars->turn_start_time = 0;
+	dcv_vars->turn_start_block = 0;
 	for (int i = 0; i < CARDS_MAXPLAYERS; i++) {
 		dcv_vars->funds[i] = 0.0;  // Will be set from payin amounts
 		dcv_vars->ini_funds[i] = 0.0;
@@ -214,11 +217,14 @@ int32_t is_card_drawn(char *table_id)
 	int32_t retval = OK;
 	cJSON *game_state_info = NULL, *player_game_state_info = NULL;
 
-	// TODO:: Need to add block wait time and based on whcih dealer can take action on player
 	game_state_info = get_game_state_info(table_id);
 	int32_t target_player = jint(game_state_info, "player_id");
 	int32_t target_card = jint(game_state_info, "card_id");
 	int32_t card_type = jint(game_state_info, "card_type");
+	
+	// Record start time for timeout
+	int64_t start_time = (int64_t)time(NULL);
+	int32_t start_block = chips_get_block_count();
 	
 	dlg_info("╔═══════════════════════════════════════════════════════╗");
 	dlg_info("║  Waiting for player %s to reveal card...    ║", player_ids[target_player]);
@@ -226,6 +232,23 @@ int32_t is_card_drawn(char *table_id)
 	dlg_info("╚═══════════════════════════════════════════════════════╝");
 	
 	while (1) {
+		// Check for timeout
+		int64_t elapsed_secs = (int64_t)time(NULL) - start_time;
+		int32_t elapsed_blocks = chips_get_block_count() - start_block;
+		
+		if (elapsed_secs >= BET_TURN_TIMEOUT_SECS && elapsed_blocks >= BET_TURN_TIMEOUT_BLOCKS) {
+			dlg_warn("═══════════════════════════════════════════");
+			dlg_warn("  ⏰ TIMEOUT - Player %s didn't reveal card!", player_ids[target_player]);
+			dlg_warn("  Elapsed: %lld secs, %d blocks", (long long)elapsed_secs, elapsed_blocks);
+			dlg_warn("  Treating as FOLD - player removed from game");
+			dlg_warn("═══════════════════════════════════════════");
+			// Mark player as folded for all rounds
+			for (int r = 0; r < CARDS_MAXROUNDS; r++) {
+				dcv_vars->bet_actions[target_player][r] = fold;
+			}
+			return ERR_PLAYER_TIMEOUT;
+		}
+		
 		player_game_state_info = get_game_state_info(player_ids[target_player]);
 		if (!player_game_state_info) {
 			sleep(2);
@@ -608,6 +631,14 @@ int32_t verus_write_betting_state(char *table_id, struct privatebet_vars *vars, 
 	cJSON_AddStringToObject(betting_state, "action", action);
 	cJSON_AddNumberToObject(betting_state, "last_turn", vars->last_turn);
 	
+	// Record turn start time for timeout tracking
+	vars->turn_start_time = (int64_t)time(NULL);
+	vars->turn_start_block = chips_get_block_count();
+	cJSON_AddNumberToObject(betting_state, "turn_start_time", (double)vars->turn_start_time);
+	cJSON_AddNumberToObject(betting_state, "turn_start_block", vars->turn_start_block);
+	cJSON_AddNumberToObject(betting_state, "timeout_secs", BET_TURN_TIMEOUT_SECS);
+	cJSON_AddNumberToObject(betting_state, "timeout_blocks", BET_TURN_TIMEOUT_BLOCKS);
+	
 	// Calculate max bet and min amount (in CHIPS)
 	double maxbet = 0.0;
 	for (int i = 0; i < num_of_players; i++) {
@@ -825,6 +856,26 @@ int32_t verus_next_turn(struct privatebet_vars *vars)
 }
 
 /**
+ * Check if current player's turn has timed out
+ * Returns: 1 if timed out, 0 if still within time limit
+ */
+int32_t verus_check_turn_timeout(struct privatebet_vars *vars)
+{
+	int64_t current_time = (int64_t)time(NULL);
+	int32_t current_block = chips_get_block_count();
+	
+	int64_t elapsed_secs = current_time - vars->turn_start_time;
+	int32_t elapsed_blocks = current_block - vars->turn_start_block;
+	
+	// Timeout if BOTH conditions met (whichever is higher)
+	// This means we wait for at least 60 secs AND at least 6 blocks
+	if (elapsed_secs >= BET_TURN_TIMEOUT_SECS && elapsed_blocks >= BET_TURN_TIMEOUT_BLOCKS) {
+		return 1;
+	}
+	return 0;
+}
+
+/**
  * Dealer handles round betting - called from handle_game_state
  */
 int32_t verus_handle_round_betting(char *table_id, struct privatebet_vars *vars)
@@ -836,8 +887,27 @@ int32_t verus_handle_round_betting(char *table_id, struct privatebet_vars *vars)
 	player_action = verus_poll_player_action(table_id, vars->turni, vars->round);
 	
 	if (!player_action) {
-		// Player hasn't acted yet, keep waiting
-		return OK;
+		// Player hasn't acted yet - check for timeout
+		if (verus_check_turn_timeout(vars)) {
+			// TIMEOUT - Auto-fold the player
+			int64_t elapsed = (int64_t)time(NULL) - vars->turn_start_time;
+			int32_t blocks_elapsed = chips_get_block_count() - vars->turn_start_block;
+			
+			dlg_warn("═══════════════════════════════════════════");
+			dlg_warn("  ⏰ TIMEOUT - Player %d (%s) auto-folded!", vars->turni, player_ids[vars->turni]);
+			dlg_warn("  Elapsed: %lld secs, %d blocks", (long long)elapsed, blocks_elapsed);
+			dlg_warn("═══════════════════════════════════════════");
+			
+			// Create auto-fold action
+			player_action = cJSON_CreateObject();
+			cJSON_AddStringToObject(player_action, "action", "fold");
+			cJSON_AddNumberToObject(player_action, "amount", 0);
+			cJSON_AddNumberToObject(player_action, "round", vars->round);
+			cJSON_AddBoolToObject(player_action, "auto_fold", cJSON_True);
+		} else {
+			// Still waiting
+			return OK;
+		}
 	}
 	
 	// Process the action

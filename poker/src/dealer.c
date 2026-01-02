@@ -430,9 +430,26 @@ int32_t handle_game_state(struct table *t)
 		retval = init_game_state(t->table_id);
 		break;
 	case G_REVEAL_CARD:
-		if (is_card_drawn(t->table_id) == OK) {
+		retval = is_card_drawn(t->table_id);
+		if (retval == OK) {
 			dlg_info("Card is drawn");
 			retval = verus_receive_card(t->table_id, dcv_vars);
+		} else if (retval == ERR_PLAYER_TIMEOUT) {
+			// Player timed out - continue game with remaining players
+			dlg_warn("Player timed out during card reveal - continuing with remaining players");
+			// Check if enough players remain
+			int32_t players_left = 0;
+			for (int i = 0; i < num_of_players; i++) {
+				if (dcv_vars->bet_actions[i][0] != fold) players_left++;
+			}
+			if (players_left < 2) {
+				dlg_info("Only 1 player remaining - they win by default");
+				append_game_state(t->table_id, G_SHOWDOWN, NULL);
+			} else {
+				// Continue dealing to next player
+				retval = verus_receive_card(t->table_id, dcv_vars);
+			}
+			retval = OK;  // Don't propagate timeout as error - game continues
 		}
 		break;
 	case G_ROUND_BETTING:

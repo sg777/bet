@@ -42,6 +42,7 @@ int32_t verus_write_betting_state(char *table_id, struct privatebet_vars *vars, 
 cJSON *verus_poll_player_action(char *table_id, int32_t player_idx, int32_t expected_round);
 int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *vars, cJSON *action_info);
 int32_t verus_next_turn(struct privatebet_vars *vars);
+int32_t verus_check_turn_timeout(struct privatebet_vars *vars);
 int32_t verus_handle_round_betting(char *table_id, struct privatebet_vars *vars);
 
 // Board cards (community cards) - dealer polls players and updates table ID

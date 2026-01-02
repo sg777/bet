@@ -45,6 +45,8 @@ enum bet_dcv_state {
 #define CARDS_CHIPSIZE       (SATOSHIDEN / CARDS_MAXCHIPS)
 #define BET_PLAYERTIMEOUT       15
 #define BET_GAMESTART_DELAY     10
+#define BET_TURN_TIMEOUT_SECS   60      // Seconds before auto-fold
+#define BET_TURN_TIMEOUT_BLOCKS 6       // Blocks before auto-fold (whichever is higher)
 #define BET_RESERVERATE         1.025
 #define LN_FUNDINGERROR         "\"Cannot afford funding transaction\""
 

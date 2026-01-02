@@ -10,6 +10,7 @@
 #include "poker_vdxf.h"
 #include "storage.h"
 #include "vdxf.h"
+#include <time.h>
 
 extern int32_t g_start_block;
 struct p_deck_info_struct p_deck_info;
@@ -362,9 +363,18 @@ int32_t player_handle_betting(char *table_id)
 		return OK;
 	}
 	
+	// Calculate remaining time
+	int64_t turn_start_time = (int64_t)jdouble(betting_state, "turn_start_time");
+	int32_t timeout_secs = jint(betting_state, "timeout_secs");
+	int64_t current_time = (int64_t)time(NULL);
+	int64_t elapsed = current_time - turn_start_time;
+	int64_t remaining = timeout_secs - elapsed;
+	if (remaining < 0) remaining = 0;
+	
 	// It's our turn!
 	dlg_info("═══════════════════════════════════════════");
 	dlg_info("  🎯 YOUR TURN - Player %d (%s)             ", p_deck_info.player_id, player_config.verus_pid);
+	dlg_info("  ⏰ Time remaining: %lld seconds           ", (long long)remaining);
 	dlg_info("═══════════════════════════════════════════");
 	dlg_info("  Action: %s", action);
 	dlg_info("  Round: %d, Pot: %.4f CHIPS", round, pot);
