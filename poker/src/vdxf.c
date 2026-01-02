@@ -1342,6 +1342,7 @@ static int32_t do_payin_tx_checks(char *txid, cJSON *payin_tx_data)
 /*
 * Reads the key T_PLAYER_INFO_KEY
 * Increment num_players and append player data to player_info array.
+* Now also stores payin_amounts array for tracking betting funds.
 */
 static cJSON *compute_updated_t_player_info(char *txid, cJSON *payin_tx_data)
 {
@@ -1350,29 +1351,48 @@ static cJSON *compute_updated_t_player_info(char *txid, cJSON *payin_tx_data)
 	int32_t num_players = 0;
 	char *game_id_str = NULL, pa_tx_id[256] = { 0 };
 	cJSON *t_player_info = NULL, *player_info = NULL, *updated_t_player_info = NULL;
+	cJSON *payin_amounts = NULL;
+	double payin_amount = 0;
 
 	game_id_str = get_str_from_id_key_from_height(jstr(payin_tx_data, "table_id"), T_GAME_ID_KEY, height_start);
 	if (!game_id_str)
 		return NULL;
 
+	// Get the actual payin amount from the transaction
+	payin_amount = chips_get_balance_on_address_from_tx(get_vdxf_id(bet_get_cashiers_id_fqn()), txid);
+	dlg_info("Player %s payin amount: %.8f CHIPS", jstr(payin_tx_data, "verus_pid"), payin_amount);
+
 	t_player_info = get_cJSON_from_id_key_vdxfid_from_height(jstr(payin_tx_data, "table_id"),
-						     get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), height_start);
+					     get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), height_start);
 	player_info = cJSON_CreateArray();
+	payin_amounts = cJSON_CreateArray();
+	
 	if (t_player_info) {
 		num_players = jint(t_player_info, "num_players");
 		player_info = cJSON_GetObjectItem(t_player_info, "player_info");
+		cJSON *existing_amounts = cJSON_GetObjectItem(t_player_info, "payin_amounts");
+		if (existing_amounts) {
+			// Copy existing amounts
+			for (int i = 0; i < cJSON_GetArraySize(existing_amounts); i++) {
+				cJSON_AddItemToArray(payin_amounts, 
+					cJSON_CreateNumber(cJSON_GetArrayItem(existing_amounts, i)->valuedouble));
+			}
+		}
 		if (!player_info) {
 			dlg_error("Error with data on Key :: %s", T_PLAYER_INFO_KEY);
 			return NULL;
 		}
 	}
+	
 	sprintf(pa_tx_id, "%s_%s_%d", jstr(payin_tx_data, "verus_pid"), txid, num_players);
 	jaddistr(player_info, pa_tx_id);
+	cJSON_AddItemToArray(payin_amounts, cJSON_CreateNumber(payin_amount));
 	num_players++;
 
 	updated_t_player_info = cJSON_CreateObject();
 	cJSON_AddNumberToObject(updated_t_player_info, "num_players", num_players);
 	cJSON_AddItemToObject(updated_t_player_info, "player_info", player_info);
+	cJSON_AddItemToObject(updated_t_player_info, "payin_amounts", payin_amounts);
 
 	return updated_t_player_info;
 }

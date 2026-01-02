@@ -306,8 +306,9 @@ cJSON *player_read_betting_state(char *table_id)
 
 /**
  * Write betting action to player ID
+ * Amount is in CHIPS (e.g., 0.01, 0.02)
  */
-int32_t player_write_betting_action(char *table_id, const char *action, int32_t amount)
+int32_t player_write_betting_action(char *table_id, const char *action, double amount)
 {
 	int32_t retval = OK;
 	char game_id_str[65];
@@ -317,10 +318,10 @@ int32_t player_write_betting_action(char *table_id, const char *action, int32_t 
 	
 	action_obj = cJSON_CreateObject();
 	cJSON_AddStringToObject(action_obj, "action", action);
-	cJSON_AddNumberToObject(action_obj, "amount", amount);
+	cJSON_AddNumberToObject(action_obj, "amount", amount);  // In CHIPS
 	cJSON_AddNumberToObject(action_obj, "round", p_local_state.last_game_state);  // Use as round tracking
 	
-	dlg_info("Writing betting action: %s, amount=%d", action, amount);
+	dlg_info("Writing betting action: %s, amount=%.4f CHIPS", action, amount);
 	
 	out = poker_update_key_json(player_config.verus_pid,
 		get_key_data_vdxf_id(P_BETTING_ACTION_KEY, game_id_str),
@@ -351,13 +352,13 @@ int32_t player_handle_betting(char *table_id)
 	int32_t current_turn = jint(betting_state, "current_turn");
 	const char *action = jstr(betting_state, "action");
 	int32_t round = jint(betting_state, "round");
-	int32_t pot = jint(betting_state, "pot");
-	int32_t min_amount = jint(betting_state, "min_amount");
+	double pot = jdouble(betting_state, "pot");           // In CHIPS
+	double min_amount = jdouble(betting_state, "min_amount");  // In CHIPS
 	
 	// Check if it's our turn
 	if (current_turn != p_deck_info.player_id) {
 		// Not our turn, just display status
-		dlg_info("Waiting for Player %d to act (pot: %d)", current_turn, pot);
+		dlg_info("Waiting for Player %d to act (pot: %.4f CHIPS)", current_turn, pot);
 		return OK;
 	}
 	
@@ -366,8 +367,8 @@ int32_t player_handle_betting(char *table_id)
 	dlg_info("  🎯 YOUR TURN - Player %d (%s)             ", p_deck_info.player_id, player_config.verus_pid);
 	dlg_info("═══════════════════════════════════════════");
 	dlg_info("  Action: %s", action);
-	dlg_info("  Round: %d, Pot: %d", round, pot);
-	dlg_info("  Minimum to call: %d", min_amount);
+	dlg_info("  Round: %d, Pot: %.4f CHIPS", round, pot);
+	dlg_info("  Minimum to call: %.4f CHIPS", min_amount);
 	
 	// Display possibilities
 	cJSON *possibilities = cJSON_GetObjectItem(betting_state, "possibilities");
@@ -385,8 +386,8 @@ int32_t player_handle_betting(char *table_id)
 	// Display player funds
 	cJSON *player_funds = cJSON_GetObjectItem(betting_state, "player_funds");
 	if (player_funds && p_deck_info.player_id < cJSON_GetArraySize(player_funds)) {
-		int32_t my_funds = cJSON_GetArrayItem(player_funds, p_deck_info.player_id)->valueint;
-		dlg_info("  Your funds: %d", my_funds);
+		double my_funds = cJSON_GetArrayItem(player_funds, p_deck_info.player_id)->valuedouble;
+		dlg_info("  Your funds: %.4f CHIPS", my_funds);
 	}
 	
 	dlg_info("═══════════════════════════════════════════");
@@ -394,21 +395,21 @@ int32_t player_handle_betting(char *table_id)
 	// For now, auto-respond based on action type
 	// TODO: In production, get input from GUI via websocket
 	if (strcmp(action, "small_blind") == 0) {
-		dlg_info("Posting small blind...");
+		dlg_info("Posting small blind: %.4f CHIPS", min_amount);
 		retval = player_write_betting_action(table_id, "bet", min_amount);
 		p_local_state.last_game_state = round;
 	} else if (strcmp(action, "big_blind") == 0) {
-		dlg_info("Posting big blind...");
+		dlg_info("Posting big blind: %.4f CHIPS", min_amount);
 		retval = player_write_betting_action(table_id, "bet", min_amount);
 		p_local_state.last_game_state = round;
 	} else {
 		// Regular betting - for testing, auto-call or check
-		if (min_amount > 0) {
-			dlg_info("Auto-calling %d...", min_amount);
+		if (min_amount > 0.0) {
+			dlg_info("Auto-calling %.4f CHIPS...", min_amount);
 			retval = player_write_betting_action(table_id, "call", min_amount);
 		} else {
 			dlg_info("Auto-checking...");
-			retval = player_write_betting_action(table_id, "check", 0);
+			retval = player_write_betting_action(table_id, "check", 0.0);
 		}
 		p_local_state.last_game_state = round;
 	}

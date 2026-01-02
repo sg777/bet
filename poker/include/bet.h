@@ -112,16 +112,17 @@ struct privatebet_vars {
 	cJSON *actions[CARDS_MAXROUNDS][CARDS_MAXPLAYERS + 1];
 	int32_t mypermi[CARDS_MAXCARDS], permi[CARDS_MAXCARDS], turni, round, validperms, roundready, lastround,
 		numconsensus;
-	int32_t small_blind, big_blind;
-	int32_t betamount[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
+	double small_blind, big_blind;  // Actual CHIPS values (e.g., 0.01, 0.02)
+	double betamount[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
 	int32_t bet_actions[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
-	int32_t dealer, last_turn, last_raise;
-	int32_t pot;
-	int32_t player_funds;
-	int32_t funds[CARDS_MAXPLAYERS];
-	int32_t funds_spent[CARDS_MAXPLAYERS];
-	int32_t win_funds[CARDS_MAXPLAYERS];
-	int32_t ini_funds[CARDS_MAXPLAYERS];
+	int32_t dealer, last_turn;
+	double last_raise;
+	double pot;
+	double player_funds;
+	double funds[CARDS_MAXPLAYERS];       // Available funds in CHIPS
+	double funds_spent[CARDS_MAXPLAYERS]; // Total spent this game
+	double win_funds[CARDS_MAXPLAYERS];   // Winnings from pot
+	double ini_funds[CARDS_MAXPLAYERS];   // Initial funds (payin amount)
 	int32_t winners[CARDS_MAXPLAYERS];
 	char player_chips_addrs[CARDS_MAXPLAYERS][64];
 	int32_t req_id_to_player_id_mapping[CARDS_MAXPLAYERS];

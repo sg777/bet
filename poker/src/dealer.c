@@ -311,7 +311,7 @@ int32_t dealer_initiate_settlement(struct table *t, struct privatebet_vars *vars
 	settlement_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(settlement_info, "game_id", game_id_str);
 	cJSON_AddStringToObject(settlement_info, "status", "pending");
-	cJSON_AddNumberToObject(settlement_info, "pot", vars->pot * SB_in_chips);
+	cJSON_AddNumberToObject(settlement_info, "pot", vars->pot);  // Already in CHIPS
 	
 	// Winners array
 	winners_arr = cJSON_CreateArray();
@@ -322,10 +322,11 @@ int32_t dealer_initiate_settlement(struct table *t, struct privatebet_vars *vars
 	}
 	cJSON_AddItemToObject(settlement_info, "winners", winners_arr);
 	
-	// Settlement amounts per player (what each player gets back)
+	// Settlement amounts per player (what each player gets back in CHIPS)
+	// settle_amount = remaining funds + winnings from pot
 	amounts_arr = cJSON_CreateArray();
 	for (int32_t i = 0; i < num_of_players; i++) {
-		double amount = (vars->win_funds[i] + vars->funds[i]) * SB_in_chips;
+		double amount = vars->win_funds[i] + vars->funds[i];  // Already in CHIPS
 		cJSON_AddItemToArray(amounts_arr, cJSON_CreateNumber(amount));
 	}
 	cJSON_AddItemToObject(settlement_info, "settle_amounts", amounts_arr);
@@ -439,7 +440,37 @@ int32_t handle_game_state(struct table *t)
 		retval = verus_handle_round_betting(t->table_id, dcv_vars);
 		break;
 	case G_SHOWDOWN:
-		dlg_info("Showdown - initiating pot settlement");
+		dlg_info("Showdown - determining winners and pot distribution");
+		// For now, split pot among players who didn't fold
+		// TODO: Implement proper hand evaluation
+		{
+			int32_t active_players = 0;
+			for (int32_t i = 0; i < num_of_players; i++) {
+				// Check if player folded in any round
+				int32_t player_folded = 0;
+				for (int32_t r = 0; r < CARDS_MAXROUNDS; r++) {
+					if (dcv_vars->bet_actions[i][r] == fold) {
+						player_folded = 1;
+						break;
+					}
+				}
+				if (!player_folded) {
+					dcv_vars->winners[i] = 1;
+					active_players++;
+				}
+			}
+			// Split pot among winners (pot already in CHIPS)
+			if (active_players > 0) {
+				double share = dcv_vars->pot / active_players;
+				for (int32_t i = 0; i < num_of_players; i++) {
+					if (dcv_vars->winners[i] == 1) {
+						dcv_vars->win_funds[i] = share;
+						dlg_info("Player %d (%s): wins %.4f CHIPS", 
+							i, player_ids[i], share);
+					}
+				}
+			}
+		}
 		retval = dealer_initiate_settlement(t, dcv_vars);
 		break;
 	case G_SETTLEMENT_PENDING:
