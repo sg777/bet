@@ -755,7 +755,8 @@ int32_t load_player_deck_info(const char *game_id_str)
 
 	if ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
 		// Found saved deck info
-		p_deck_info.player_id = sqlite3_column_int(stmt, 0);
+		// Note: Don't overwrite player_id - it comes from chain via get_player_id()
+		// int32_t db_player_id = sqlite3_column_int(stmt, 0);  // Just for logging
 		player_priv_str = (const char *)sqlite3_column_text(stmt, 1);
 		player_deck_priv_hex = (const char *)sqlite3_column_text(stmt, 2);
 
