@@ -105,9 +105,11 @@ void dealer_init_deck()
 int32_t dealer_table_init(struct table *t)
 {
 	int32_t game_state = G_ZEROIZED_STATE, retval = OK;
-	char hexstr[65];
-	cJSON *out = NULL, *t_game_info = NULL;
-	char *game_id_vdxfid = NULL;
+	char hexstr[65], *hex_data = NULL;
+	cJSON *out = NULL, *t_game_info = NULL, *t_table_info = NULL;
+	cJSON *cmm = NULL, *data_obj = NULL;
+	char *game_id_vdxfid = NULL, *table_info_vdxfid = NULL;
+	char *bytevector_vdxfid = NULL, *game_id_key_vdxfid = NULL;
 
 	if (!is_id_exists(t->table_id, 0))
 		return ERR_ID_NOT_FOUND;
@@ -116,82 +118,86 @@ int32_t dealer_table_init(struct table *t)
 
 	switch (game_state) {
 	case G_ZEROIZED_STATE:
-		// Generate new game ID
-		game_id = rand256(0);
-		bits256_str(hexstr, game_id);
-		dlg_info("Generated new game_id: %s", hexstr);
-		
-		// Store game_id
-		dlg_info("Updating %s key...", T_GAME_ID_KEY);
-		out = poker_append_key_hex(t->table_id, T_GAME_ID_KEY, hexstr, false);
-		if (!out)
-			return ERR_TABLE_LAUNCH;
-		dlg_info("%s", cJSON_Print(out));
-
-		// Get VDXF key for game info using the in-memory game_id
-		game_id_vdxfid = get_key_data_vdxf_id(T_GAME_INFO_KEY, hexstr);
-		if (!game_id_vdxfid) {
-			dlg_error("Failed to get game_info vdxfid");
-			return ERR_TABLE_LAUNCH;
-		}
-		
-		// Set game state to TABLE_ACTIVE using the correct key
-		dlg_info("Updating Game state to %s with key %s...", game_state_str(G_TABLE_ACTIVE), game_id_vdxfid);
-		t_game_info = cJSON_CreateObject();
-		cJSON_AddNumberToObject(t_game_info, "game_state", G_TABLE_ACTIVE);
-		out = poker_append_key_json(t->table_id, game_id_vdxfid, t_game_info, true);
-		if (!out)
-			return ERR_GAME_STATE_UPDATE;
-		dlg_info("%s", cJSON_Print(out));
-		// No break is intentional
 	case G_TABLE_ACTIVE:
-		// Get game_id from chain if we're resuming
-		if (game_state == G_TABLE_ACTIVE) {
+		// Generate new game ID (or use existing if resuming)
+		if (game_state == G_ZEROIZED_STATE) {
+			game_id = rand256(0);
+		} else {
 			char *game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
 			if (!game_id_str) {
 				dlg_error("Failed to get game_id from chain");
 				return ERR_GAME_ID_NOT_FOUND;
 			}
-			strncpy(hexstr, game_id_str, sizeof(hexstr) - 1);
-			game_id_vdxfid = get_key_data_vdxf_id(T_GAME_INFO_KEY, hexstr);
+			game_id = bits256_conv(game_id_str);
 		}
+		bits256_str(hexstr, game_id);
+		dlg_info("Game ID: %s", hexstr);
 		
-		// Set start_block to current block height for join request polling
+		// Set start_block
 		t->start_block = chips_get_block_count();
-		dlg_info("Table start_block set to: %d", t->start_block);
-		
-		dlg_info("Updating %s key...", T_TABLE_INFO_KEY);
-		out = poker_append_key_json(
-			t->table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, hexstr),
-			struct_table_to_cJSON(t), true);
-		if (!out)
-			return ERR_TABLE_LAUNCH;
-		dlg_info("%s", cJSON_Print(out));
+		g_start_block = t->start_block;  // Set global for CMM reads
+		dlg_info("Table start_block: %d", t->start_block);
 
-		// Set game state to TABLE_STARTED using the correct key
-		dlg_info("Updating Game state to %s...", game_state_str(G_TABLE_STARTED));
+		// Build ALL keys in a single CMM for atomic update
+		cmm = cJSON_CreateObject();
+		bytevector_vdxfid = get_vdxf_id(BYTEVECTOR_VDXF_ID);
+		
+		// Key 1: T_GAME_ID_KEY
+		game_id_key_vdxfid = get_vdxf_id(T_GAME_ID_KEY);
+		data_obj = cJSON_CreateObject();
+		cJSON_AddStringToObject(data_obj, bytevector_vdxfid, hexstr);
+		cJSON_AddItemToObject(cmm, game_id_key_vdxfid, data_obj);
+
+		// Key 2: T_TABLE_INFO_KEY.<game_id>
+		table_info_vdxfid = get_key_data_vdxf_id(T_TABLE_INFO_KEY, hexstr);
+		t_table_info = struct_table_to_cJSON(t);
+		cJSON_hex(t_table_info, &hex_data);
+		data_obj = cJSON_CreateObject();
+		cJSON_AddStringToObject(data_obj, bytevector_vdxfid, hex_data);
+		cJSON_AddItemToObject(cmm, table_info_vdxfid, data_obj);
+		free(hex_data); hex_data = NULL;
+		cJSON_Delete(t_table_info);
+
+		// Key 3: T_GAME_INFO_KEY.<game_id> = {game_state: G_TABLE_STARTED}
+		game_id_vdxfid = get_key_data_vdxf_id(T_GAME_INFO_KEY, hexstr);
 		t_game_info = cJSON_CreateObject();
 		cJSON_AddNumberToObject(t_game_info, "game_state", G_TABLE_STARTED);
-		out = poker_append_key_json(t->table_id, game_id_vdxfid, t_game_info, true);
-		if (!out)
-			return ERR_GAME_STATE_UPDATE;
-		dlg_info("%s", cJSON_Print(out));
+		cJSON_hex(t_game_info, &hex_data);
+		data_obj = cJSON_CreateObject();
+		cJSON_AddStringToObject(data_obj, bytevector_vdxfid, hex_data);
+		cJSON_AddItemToObject(cmm, game_id_vdxfid, data_obj);
+		free(hex_data);
+		cJSON_Delete(t_game_info);
+
+		// Single atomic update with all keys
+		dlg_info("Updating table with all init data in single transaction...");
+		out = update_cmm(t->table_id, cmm);
+		cJSON_Delete(cmm);
+		
+		if (!out) {
+			dlg_error("Failed to update table CMM");
+			return ERR_TABLE_LAUNCH;
+		}
+		dlg_info("Table initialized successfully");
 		break;
 	default:
 		// Table is already started - load start_block and player_ids from chain
 		{
 			char *game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
 			if (game_id_str) {
-				cJSON *t_table_info = get_cJSON_from_id_key_vdxfid(t->table_id, 
-					get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+				// Bootstrap read with fallback height to get start_block
+				int32_t bootstrap_height = chips_get_block_count() - 1000;
+				cJSON *t_table_info = get_cJSON_from_id_key_vdxfid_from_height(t->table_id, 
+					get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str), bootstrap_height);
 				if (t_table_info) {
 					t->start_block = jint(t_table_info, "start_block");
+					g_start_block = t->start_block;  // Set global for CMM reads
 					dlg_info("Loaded start_block from chain: %d", t->start_block);
 				}
 				
-				// Load player_ids from t_player_info
-				cJSON *t_player_info = get_cJSON_from_id_key_vdxfid(t->table_id,
-					get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+				// Load player_ids from t_player_info (now g_start_block is set)
+				cJSON *t_player_info = get_cJSON_from_id_key_vdxfid_from_height(t->table_id,
+					get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
 				if (t_player_info) {
 					num_of_players = jint(t_player_info, "num_players");
 					cJSON *player_info_arr = cJSON_GetObjectItem(t_player_info, "player_info");
@@ -236,7 +242,7 @@ bool is_players_shuffled_deck(char *table_id)
 	} else if (game_state == G_PLAYERS_JOINED) {
 		game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 		t_player_info =
-			get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+			get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
 		num_players = jint(t_player_info, "num_players");
 		for (int32_t i = 0; i < num_players; i++) {
 			if (G_DECK_SHUFFLING_P == get_game_state(player_ids[i]))
@@ -260,7 +266,7 @@ int32_t dealer_shuffle_deck(char *id)
 
 	for (int32_t i = 0; i < num_of_players; i++) {
 		cJSON *player_deck =
-			get_cJSON_from_id_key_vdxfid(player_ids[i], get_key_data_vdxf_id(PLAYER_DECK_KEY, game_id_str));
+			get_cJSON_from_id_key_vdxfid_from_height(player_ids[i], get_key_data_vdxf_id(PLAYER_DECK_KEY, game_id_str), g_start_block);
 		cJSON *cardinfo = cJSON_GetObjectItem(player_deck, "cardinfo");
 		for (int32_t j = 0; j < cJSON_GetArraySize(cardinfo); j++) {
 			t_p_r[j] = jbits256i(cardinfo, j);
@@ -370,6 +376,7 @@ int32_t dealer_reset_table(struct table *t)
 
 	// Set new start_block
 	t->start_block = chips_get_block_count();
+	g_start_block = t->start_block;  // Set global for CMM reads
 	dlg_info("New start_block: %d", t->start_block);
 
 	// Build a single CMM with all keys for atomic update

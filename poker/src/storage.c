@@ -9,6 +9,8 @@
 #include <string.h>
 #include <pwd.h>
 
+extern int32_t g_start_block;
+
 #define no_of_tables 14
 
 char *db_name = NULL;
@@ -937,7 +939,7 @@ int32_t insert_cashier_deck_info(char *table_id)
 	cJSON_hex(b_perm, &perm);
 
 	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
-	t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+	t_player_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
 	num_players = jint(t_player_info, "num_players");
 
 	sql_query = calloc(sql_query_size, sizeof(char));

@@ -21,6 +21,10 @@ struct t_game_info_struct {
 
 extern struct t_game_info_struct t_game_info;
 
+// Global start_block for reading combined CMM view
+// Set by dealer during init, by player when joining table
+extern int32_t g_start_block;
+
 const char *game_state_str(int32_t game_state);
 cJSON *append_game_state(char *table_id, int32_t game_state, cJSON *game_state_info);
 int32_t get_game_state(char *table_id);

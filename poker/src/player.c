@@ -10,6 +10,7 @@
 #include "poker_vdxf.h"
 #include "storage.h"
 
+extern int32_t g_start_block;
 struct p_deck_info_struct p_deck_info;
 
 int32_t player_init_deck()
@@ -143,8 +144,8 @@ int32_t reveal_card(char *table_id)
 
 		// For community cards, first check if already revealed on table ID
 		if (is_community_card(card_type)) {
-			cJSON *board_cards = get_cJSON_from_id_key_vdxfid(table_id,
-				get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id_str));
+			cJSON *board_cards = get_cJSON_from_id_key_vdxfid_from_height(table_id,
+				get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id_str), g_start_block);
 			if (board_cards) {
 				int32_t existing_value = -1;
 				switch (card_type) {
@@ -177,8 +178,8 @@ int32_t reveal_card(char *table_id)
 		}
 
 		while (1) {
-			bv_info = get_cJSON_from_id_key_vdxfid(table_id,
-							       get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str));
+			bv_info = get_cJSON_from_id_key_vdxfid_from_height(table_id,
+							       get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str), g_start_block);
 			if (!bv_info) {
 				dlg_info("BV INFO hasn't revealed its secret yet");
 				wait_for_a_blocktime();
@@ -196,8 +197,8 @@ int32_t reveal_card(char *table_id)
 				break;
 		}
 
-		b_blinded_deck = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(all_t_b_p_keys[player_id],
-											     game_id_str));
+		b_blinded_deck = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(all_t_b_p_keys[player_id],
+											     game_id_str), g_start_block);
 		b_blinded_card = jbits256i(b_blinded_deck, card_id);
 		if (player_id == -1)
 			blinded_value = jbits256i(bv, player_id);
@@ -207,7 +208,7 @@ int32_t reveal_card(char *table_id)
 		dlg_info("blinded_value::%s", bits256_str(str, blinded_value));
 		dlg_info("blinded_card::%s", bits256_str(str, b_blinded_card));
 		dealer_blind_info =
-			get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_D_DECK_KEY, game_id_str));
+			get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_D_DECK_KEY, game_id_str), g_start_block);
 		dlg_info("dealer_blind_info::%s", cJSON_Print(dealer_blind_info));
 		card_value = decode_card(b_blinded_card, blinded_value, dealer_blind_info);
 		dlg_info("card_value ::%d", card_value);

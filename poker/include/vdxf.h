@@ -225,8 +225,10 @@ cJSON *getaddressutxos(char verus_addresses[][100], int n);
  * Poker Key Data Access (internal - use poker_vdxf.h for public API)
  * ============================================================================ */
 char *get_str_from_id_key(char *id, char *key);
+char *get_str_from_id_key_from_height(char *id, char *key, int32_t height_start);
 cJSON *get_cJSON_from_id_key(const char *id, const char *key, int32_t is_full_id);
 cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid);
+cJSON *get_cJSON_from_id_key_vdxfid_from_height(char *id, char *key_vdxfid, int32_t height_start);
 cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id);
 cJSON *append_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool is_key_vdxf_id);
 cJSON *update_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool is_key_vdxf_id);

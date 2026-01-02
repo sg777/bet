@@ -12,6 +12,7 @@
 #include "err.h"
 #include "table.h"
 #include "storage.h"
+#include "game.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -23,7 +24,9 @@
 
 char *poker_get_key_str(char *id, char *key)
 {
-	return get_str_from_id_key(id, key);
+	extern int32_t g_start_block;
+	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
+	return get_str_from_id_key_from_height(id, key, height_start);
 }
 
 cJSON *poker_get_key_json(const char *id, const char *key, int32_t is_full_id)
@@ -233,11 +236,34 @@ static bool is_txid_at_cashier(cJSON *cashier_txids, const char *txid)
 }
 
 /**
+ * Get block height of a transaction
+ * Returns block height or -1 if not found/unconfirmed
+ */
+static int32_t get_tx_block_height(const char *txid)
+{
+	cJSON *params = NULL, *result = NULL;
+	int32_t height = -1;
+	
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(txid));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(1));  // verbose
+	
+	if (chips_rpc("getrawtransaction", params, &result) == OK && result) {
+		height = jint(result, "height");
+		cJSON_Delete(result);
+	}
+	cJSON_Delete(params);
+	
+	return height;
+}
+
+/**
  * Check a specific player for pending join request
  * Returns 1 if processed, 0 if not applicable, negative on error
  */
 static int32_t check_player_join_request(const char *player_id, const char *table_id, 
-                                          const char *dealer_id, cJSON *cashier_txids)
+                                          const char *dealer_id, cJSON *cashier_txids,
+                                          int32_t start_block)
 {
 	cJSON *join_request = NULL;
 	
@@ -265,6 +291,15 @@ static int32_t check_player_join_request(const char *player_id, const char *tabl
 	// Verify the payin_tx exists at cashier
 	if (!is_txid_at_cashier(cashier_txids, req_payin)) {
 		dlg_warn("Player %s payin_tx %s not found at cashier", player_id, req_payin);
+		cJSON_Delete(join_request);
+		return 0;
+	}
+	
+	// Check if payin_tx was confirmed AFTER start_block (filter old game's transactions)
+	int32_t tx_height = get_tx_block_height(req_payin);
+	if (tx_height < start_block) {
+		dlg_info("Player %s payin_tx %s is from old game (block %d < start %d), skipping",
+			player_id, req_payin, tx_height, start_block);
 		cJSON_Delete(join_request);
 		return 0;
 	}
@@ -345,7 +380,7 @@ int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_i
 	const char *known_players[] = {"p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", NULL};
 	
 	for (int i = 0; known_players[i] != NULL; i++) {
-		result = check_player_join_request(known_players[i], table_id, dealer_id, txids);
+		result = check_player_join_request(known_players[i], table_id, dealer_id, txids, start_block);
 		if (result > 0) {
 			processed += result;
 		}

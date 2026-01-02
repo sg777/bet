@@ -232,7 +232,7 @@ cJSON *get_cmm_from_height(const char *id, int16_t full_id, int32_t height_start
 	return cmm;
 }
 
-/* Internal helper - get key data from CMM */
+/* Internal helper - get key data from CMM (current state only) */
 static cJSON *get_cmm_key_data(const char *id, int16_t full_id, const char *key)
 {
 	cJSON *cmm = NULL, *cmm_key_data = NULL;
@@ -241,6 +241,25 @@ static cJSON *get_cmm_key_data(const char *id, int16_t full_id, const char *key)
 		return NULL;
 
 	if ((cmm = get_cmm(id, full_id)) == NULL)
+		return NULL;
+	if ((cmm_key_data = cJSON_GetObjectItem(cmm, key)) == NULL)
+		return NULL;
+	cmm_key_data->next = NULL;
+	return cmm_key_data;
+}
+
+/* Get key data from CMM using height filter - gets COMBINED view of all updates since height_start
+ * This is essential for reading game data that spans multiple identity updates.
+ * Each updateidentity REPLACES the CMM, but getidentitycontent COMBINES all updates from height_start.
+ */
+static cJSON *get_cmm_key_data_from_height(const char *id, int16_t full_id, const char *key, int32_t height_start)
+{
+	cJSON *cmm = NULL, *cmm_key_data = NULL;
+
+	if ((id == NULL) || (key == NULL))
+		return NULL;
+
+	if ((cmm = get_cmm_from_height(id, full_id, height_start)) == NULL)
 		return NULL;
 	if ((cmm_key_data = cJSON_GetObjectItem(cmm, key)) == NULL)
 		return NULL;
@@ -311,18 +330,20 @@ end:
 
 int32_t get_player_id(int *player_id)
 {
+	extern int32_t g_start_block;
+	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
 	char *game_id_str = NULL, hexstr[65];
 	cJSON *t_player_info = NULL, *player_info = NULL;
 
-	game_id_str = get_str_from_id_key(player_config.table_id, get_vdxf_id(T_GAME_ID_KEY));
+	game_id_str = get_str_from_id_key_from_height(player_config.table_id, T_GAME_ID_KEY, height_start);
 	if (!game_id_str) {
 		return ERR_GAME_ID_NOT_FOUND;
 	}
 	p_deck_info.game_id = bits256_conv(game_id_str);
 	dlg_info("%s::%s", game_id_str, bits256_str(hexstr, p_deck_info.game_id));
 
-	t_player_info = get_cJSON_from_id_key_vdxfid(player_config.table_id,
-						     get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+	t_player_info = get_cJSON_from_id_key_vdxfid_from_height(player_config.table_id,
+						     get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), height_start);
 	if (!t_player_info) {
 		return ERR_T_PLAYER_INFO_NULL;
 	}
@@ -446,12 +467,19 @@ int32_t join_table()
 
 static void copy_table_to_struct_t(cJSON *t_table_info)
 {
+	extern int32_t g_start_block;
+	
 	player_t.max_players = jint(t_table_info, "max_players");
 	float_to_uint32_s(&player_t.big_blind, jdouble(t_table_info, "big_blind"));
 	float_to_uint32_s(&player_t.min_stake, jdouble(t_table_info, "min_stake"));
 	float_to_uint32_s(&player_t.max_stake, jdouble(t_table_info, "max_stake"));
 	strcpy(player_t.table_id, jstr(t_table_info, "table_id"));
 	strcpy(player_t.dealer_id, jstr(t_table_info, "dealer_id"));
+	
+	// Set start_block for height-filtered reads
+	player_t.start_block = jint(t_table_info, "start_block");
+	g_start_block = player_t.start_block;
+	dlg_info("Player set g_start_block: %d", g_start_block);
 }
 
 int32_t chose_table()
@@ -705,6 +733,9 @@ static void update_player_ids(cJSON *t_player_info)
 
 bool is_table_full(char *table_id)
 {
+	extern int32_t g_start_block;
+	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
+
 	if (table_id == NULL) {
 		dlg_error("Invalid table ID provided");
 		return false;
@@ -715,16 +746,16 @@ bool is_table_full(char *table_id)
 		return false;
 	}
 
-	char *game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	char *game_id_str = get_str_from_id_key_from_height(table_id, T_GAME_ID_KEY, height_start);
 	if (game_id_str == NULL) {
 		dlg_error("Failed to retrieve game ID for table %s", table_id);
 		return false;
 	}
 
 	cJSON *t_player_info =
-		get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+		get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), height_start);
 	cJSON *t_table_info =
-		get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+		get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str), height_start);
 
 	if (t_player_info == NULL || t_table_info == NULL) {
 		free(game_id_str);
@@ -760,11 +791,15 @@ static bool is_playerid_added(char *table_id)
 	char *game_id_str = NULL;
 	cJSON *t_player_info = NULL, *player_info = NULL;
 
+	extern int32_t g_start_block;
+	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
+	
 	game_state = get_game_state(table_id);
 	// Check for any game state where players could be in the table
 	if (game_state >= G_TABLE_STARTED) {
-		game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
-		t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+		game_id_str = get_str_from_id_key_from_height(table_id, T_GAME_ID_KEY, height_start);
+		t_player_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, 
+			get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), height_start);
 		player_info = jobj(t_player_info, "player_info");
 		for (int32_t i = 0; i < cJSON_GetArraySize(player_info); i++) {
 			if (strstr(jstri(player_info, i), player_config.verus_pid))
@@ -831,15 +866,18 @@ static int32_t check_if_d_t_available(char *dealer_id, char *table_id, cJSON **t
 /* Internal helper - check if enough funds available */
 static bool check_if_enough_funds_avail(char *table_id)
 {
+	extern int32_t g_start_block;
+	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
 	double balance = 0.0, min_stake = 0.0;
 	char *game_id_str = NULL;
 	cJSON *t_table_info = NULL;
 
-	game_id_str = get_str_from_id_key(table_id, get_vdxf_id(T_GAME_ID_KEY));
+	game_id_str = get_str_from_id_key_from_height(table_id, T_GAME_ID_KEY, height_start);
 	if (!game_id_str)
 		return false;
 
-	t_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+	t_table_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, 
+		get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str), height_start);
 	if (t_table_info) {
 		min_stake = jdouble(t_table_info, "min_stake");
 		balance = chips_get_balance();
@@ -852,14 +890,17 @@ static bool check_if_enough_funds_avail(char *table_id)
 /* Internal helper - get player info for table */
 static cJSON *get_t_player_info(char *table_id)
 {
+	extern int32_t g_start_block;
+	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
 	int32_t game_state;
 	char *game_id_str = NULL;
 	cJSON *t_player_info = NULL;
 
 	game_state = get_game_state(table_id);
-	if (game_state == G_TABLE_STARTED) {
-		game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
-		t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+	if (game_state >= G_TABLE_STARTED) {
+		game_id_str = get_str_from_id_key_from_height(table_id, T_GAME_ID_KEY, height_start);
+		t_player_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, 
+			get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), height_start);
 	}
 	return t_player_info;
 }
@@ -891,6 +932,35 @@ char *get_str_from_id_key(char *id, char *key)
 	} else if (first_item->type == cJSON_Object) {
 		// Nested format: array contains object with bytevector key
 		return jstr(first_item, get_vdxf_id(get_key_data_type(key)));
+	}
+
+	return NULL;
+}
+
+/* Get string from id key using height-filtered reading (COMBINED view) */
+char *get_str_from_id_key_from_height(char *id, char *key, int32_t height_start)
+{
+	cJSON *cmm = NULL;
+	cJSON *item = NULL;
+	int count = 0;
+
+	cmm = get_cmm_key_data_from_height(id, 0, get_vdxf_id(key), height_start);
+	if (!cmm) {
+		return NULL;
+	}
+
+	// Get LAST item (most recent)
+	count = cJSON_GetArraySize(cmm);
+	if (count <= 0) return NULL;
+	item = cJSON_GetArrayItem(cmm, count - 1);
+	if (!item) {
+		return NULL;
+	}
+
+	if (item->type == cJSON_String) {
+		return item->valuestring;
+	} else if (item->type == cJSON_Object) {
+		return jstr(item, get_vdxf_id(get_key_data_type(key)));
 	}
 
 	return NULL;
@@ -959,14 +1029,16 @@ cJSON *get_cJSON_from_id_key(const char *id, const char *key, int32_t is_full_id
 
 cJSON *get_cJSON_from_table_id_key(char *table_id, char *key)
 {
+	extern int32_t g_start_block;
+	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
 	char *game_id_str = NULL;
 	cJSON *cmm = NULL;
 
-	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	game_id_str = get_str_from_id_key_from_height(table_id, T_GAME_ID_KEY, height_start);
 	if (!game_id_str)
 		return NULL;
 
-	cmm = get_cmm_key_data(table_id, 0, get_key_data_vdxf_id(key, game_id_str));
+	cmm = get_cmm_key_data_from_height(table_id, 0, get_key_data_vdxf_id(key, game_id_str), height_start);
 	if (cmm) {
 		return hex_cJSON(jstr(cJSON_GetArrayItem(cmm, 0), get_vdxf_id(get_key_data_type(key))));
 	}
@@ -1007,17 +1079,56 @@ cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid)
 	return hex_cJSON(hex_str);
 }
 
-// Add a single key to CMM - reads existing CMM and merges
+/* Get cJSON from identity key using height-filtered reading (COMBINED view)
+ * Use this for game data that spans multiple identity updates.
+ * @param id Identity short name
+ * @param key_vdxfid The VDXF ID of the key
+ * @param height_start Block height to start reading from (table's start_block)
+ */
+cJSON *get_cJSON_from_id_key_vdxfid_from_height(char *id, char *key_vdxfid, int32_t height_start)
+{
+	cJSON *cmm = NULL;
+	cJSON *item = NULL;
+	const char *hex_str = NULL;
+	int count = 0;
+
+	cmm = get_cmm_key_data_from_height(id, 0, key_vdxfid, height_start);
+	if (!cmm) {
+		return NULL;
+	}
+
+	// Get LAST item (most recent)
+	count = cJSON_GetArraySize(cmm);
+	if (count <= 0) return NULL;
+	item = cJSON_GetArrayItem(cmm, count - 1);
+	if (!item) {
+		return NULL;
+	}
+
+	// VDXF data can be stored in two formats:
+	// 1. Simple array of hex strings: ["hexdata"]
+	// 2. Nested object format: [{"bytevector_vdxfid": "hexdata"}]
+	if (item->type == cJSON_String) {
+		hex_str = item->valuestring;
+	} else if (item->type == cJSON_Object) {
+		hex_str = jstr(item, get_vdxf_id(get_key_data_type(key_vdxfid)));
+	}
+
+	if (!hex_str) {
+		return NULL;
+	}
+
+	return hex_cJSON(hex_str);
+}
+
+// Update a single key in CMM - Verus merges automatically, no need to read entire CMM
 cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id)
 {
 	char *data_type = NULL, *data_key = NULL;
 	cJSON *data_obj = NULL, *cmm_obj = NULL;
 
-	// Read existing CMM and merge - Verus replaces entire CMM on update
-	cmm_obj = get_cmm(id, 0);
-	if (!cmm_obj) {
-		cmm_obj = cJSON_CreateObject();
-	}
+	// Just send the single key - Verus will merge it with existing CMM
+	cmm_obj = cJSON_CreateObject();
 
 	if (is_key_vdxf_id) {
 		data_type = get_vdxf_id(BYTEVECTOR_VDXF_ID);
@@ -1029,9 +1140,6 @@ cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool
 
 	data_obj = cJSON_CreateObject();
 	jaddstr(data_obj, data_type, hex_data);
-
-	// Remove old key if exists, then add new
-	cJSON_DeleteItemFromObject(cmm_obj, data_key);
 	cJSON_AddItemToObject(cmm_obj, data_key, data_obj);
 
 	return update_cmm(id, cmm_obj);
@@ -1173,8 +1281,11 @@ static int32_t do_payin_tx_checks(char *txid, cJSON *payin_tx_data)
 	}
 
 	//Load the table info into local variables for further checks
-	game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
-	t_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+	extern int32_t g_start_block;
+	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
+	
+	game_id_str = get_str_from_id_key_from_height(table_id, T_GAME_ID_KEY, height_start);
+	t_table_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str), height_start);
 
 	//Check the amount of funds that the player deposited at Cashier and see if these funds are with in the range of [min-max] stake.
 	amount = chips_get_balance_on_address_from_tx(get_vdxf_id(bet_get_cashiers_id_fqn()), txid);
@@ -1185,7 +1296,7 @@ static int32_t do_payin_tx_checks(char *txid, cJSON *payin_tx_data)
 	}
 	// Check for a duplicate join request and duplicate verus_pid, verus player ID should be unique so that ensures a player can occupy atmost one position on the table.
 	t_player_info = cJSON_CreateObject();
-	t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+	t_player_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), height_start);
 	if (!t_player_info) {
 		return OK; //Means no one joined yet
 	}
@@ -1208,16 +1319,18 @@ static int32_t do_payin_tx_checks(char *txid, cJSON *payin_tx_data)
 */
 static cJSON *compute_updated_t_player_info(char *txid, cJSON *payin_tx_data)
 {
+	extern int32_t g_start_block;
+	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
 	int32_t num_players = 0;
 	char *game_id_str = NULL, pa_tx_id[256] = { 0 };
 	cJSON *t_player_info = NULL, *player_info = NULL, *updated_t_player_info = NULL;
 
-	game_id_str = get_str_from_id_key_vdxfid(jstr(payin_tx_data, "table_id"), get_vdxf_id(T_GAME_ID_KEY));
+	game_id_str = get_str_from_id_key_from_height(jstr(payin_tx_data, "table_id"), T_GAME_ID_KEY, height_start);
 	if (!game_id_str)
 		return NULL;
 
-	t_player_info = get_cJSON_from_id_key_vdxfid(jstr(payin_tx_data, "table_id"),
-						     get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+	t_player_info = get_cJSON_from_id_key_vdxfid_from_height(jstr(payin_tx_data, "table_id"),
+						     get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), height_start);
 	player_info = cJSON_CreateArray();
 	if (t_player_info) {
 		num_players = jint(t_player_info, "num_players");
@@ -1250,19 +1363,18 @@ int32_t process_payin_tx_data(char *txid, cJSON *payin_tx_data)
 		return OK;
 	} else if (retval != OK) {
 		/*
-			Reverse the payin TX for any of the scenarios where player is unable to join the table. Like,
-			1. Table is FULL
-			2. Table ID doesn't exists
-			3. Duplicate PA
+			TODO: Implement payin reversal later
+			For now, just log and return error - reversal code was crashing
 		*/
-		dlg_error("Reversing the Payin TX due to :: %s", bet_err_str(retval));
-		double amount = chips_get_balance_on_address_from_tx(get_vdxf_id(CASHIERS_ID_FQN), txid);
-		cJSON *tx = chips_transfer_funds(amount, jstr(payin_tx_data, "verus_pid"));
-		dlg_info("Payback TX::%s", cJSON_Print(tx));
+		dlg_error("Cannot process join: %s (reversal not yet implemented)", bet_err_str(retval));
 		return retval;
 	}
 
-	game_id_str = get_str_from_id_key_vdxfid(jstr(payin_tx_data, "table_id"), get_vdxf_id(T_GAME_ID_KEY));
+	{
+		extern int32_t g_start_block;
+		int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
+		game_id_str = get_str_from_id_key_from_height(jstr(payin_tx_data, "table_id"), T_GAME_ID_KEY, height_start);
+	}
 	if (!game_id_str) {
 		return ERR_GAME_ID_NOT_FOUND;
 	}
@@ -1371,6 +1483,8 @@ cJSON *list_dealers()
 
 void list_tables()
 {
+	extern int32_t g_start_block;
+	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
 	cJSON *dealers = NULL;
 
 	dealers = list_dealers();
@@ -1381,11 +1495,11 @@ void list_tables()
 			dlg_info("%s", cJSON_Print(table_info));
 			if (is_id_exists(jstr(table_info, "table_id"), 0)) {
 				char *game_id = NULL;
-				game_id = get_str_from_id_key(jstr(table_info, "table_id"), get_vdxf_id(T_GAME_ID_KEY));
+				game_id = get_str_from_id_key_from_height(jstr(table_info, "table_id"), T_GAME_ID_KEY, height_start);
 				if (game_id) {
-					cJSON *player_info = get_cJSON_from_id_key_vdxfid(
+					cJSON *player_info = get_cJSON_from_id_key_vdxfid_from_height(
 						jstr(table_info, "table_id"),
-						get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id));
+						get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id), height_start);
 					dlg_info("Player Info of Table ::%s is ::%s", jstr(table_info, "table_id"),
 						 cJSON_Print(player_info));
 				}

@@ -2,12 +2,17 @@
 #include "game.h"
 #include "err.h"
 #include "poker_vdxf.h"
+#include "commands.h"
 
 // External references
 extern char player_ids[CARDS_MAXPLAYERS][MAX_ID_LEN];
 extern int32_t num_of_players;
 
 struct t_game_info_struct t_game_info;
+
+// Global start_block for reading combined CMM view
+// Set by dealer during init, by player when joining table
+int32_t g_start_block = 0;
 
 const char *game_state_str(int32_t game_state)
 {
@@ -62,8 +67,16 @@ int32_t get_game_state(char *table_id)
 	int32_t game_state = G_ZEROIZED_STATE;
 	char *game_id_str = NULL;
 	cJSON *t_game_info = NULL;
+	int32_t height_start = g_start_block;
 
-	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	// If g_start_block is 0, use current_block - 100 as fallback
+	if (height_start <= 0) {
+		height_start = chips_get_block_count() - 100;
+		if (height_start < 0) height_start = 0;
+	}
+
+	// Use getidentitycontent to get COMBINED view of all CMM updates from height_start
+	game_id_str = get_str_from_id_key_from_height(table_id, T_GAME_ID_KEY, height_start);
 	if (!game_id_str) {
 		/*
 			Game ID is NULL, it probably mean the table hasn't been started yet, so game state is in zeroized state.
@@ -71,7 +84,8 @@ int32_t get_game_state(char *table_id)
 		return game_state;
 	}
 
-	t_game_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str));
+	t_game_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, 
+		get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str), height_start);
 	if (!t_game_info)
 		return game_state;
 
@@ -88,7 +102,7 @@ cJSON *get_game_state_info(char *table_id)
 	if (!game_id_str)
 		return NULL;
 
-	t_game_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str));
+	t_game_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str), g_start_block);
 	if (!t_game_info)
 		return NULL;
 
@@ -122,7 +136,7 @@ int32_t init_game_meta_info(char *table_id)
 	cJSON *t_player_info = NULL;
 
 	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
-	t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+	t_player_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
 
 	game_meta_info.num_players = jint(t_player_info, "num_players");
 	game_meta_info.dealer_pos = 0;
@@ -384,8 +398,8 @@ int32_t update_board_cards(char *table_id, int32_t card_type)
 
 	// Poll each player for their decoded card value
 	for (int32_t i = 0; i < num_of_players; i++) {
-		cJSON *player_decoded = get_cJSON_from_id_key_vdxfid(player_ids[i],
-			get_key_data_vdxf_id(P_DECODED_CARD_KEY, game_id_str));
+		cJSON *player_decoded = get_cJSON_from_id_key_vdxfid_from_height(player_ids[i],
+			get_key_data_vdxf_id(P_DECODED_CARD_KEY, game_id_str), g_start_block);
 		if (player_decoded) {
 			int32_t p_card_type = jint(player_decoded, "card_type");
 			int32_t p_card_value = jint(player_decoded, "card_value");
@@ -413,7 +427,7 @@ int32_t update_board_cards(char *table_id, int32_t card_type)
 	dlg_info("All players confirmed community card type %d with value %d", card_type, consensus_value);
 
 	// Get or create board_cards
-	board_cards = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id_str));
+	board_cards = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id_str), g_start_block);
 	if (!board_cards) {
 		board_cards = cJSON_CreateObject();
 		flop_arr = cJSON_CreateArray();

@@ -6,6 +6,8 @@
 #include "game.h"
 #include "poker_vdxf.h"
 
+extern int32_t g_start_block;
+
 char all_t_b_p_keys[all_t_b_p_keys_no][128] = { T_B_P1_DECK_KEY, T_B_P2_DECK_KEY, T_B_P3_DECK_KEY, T_B_P4_DECK_KEY,
 						T_B_P5_DECK_KEY, T_B_P6_DECK_KEY, T_B_P7_DECK_KEY, T_B_P8_DECK_KEY,
 						T_B_P9_DECK_KEY, T_B_DECK_KEY };
@@ -65,7 +67,7 @@ void cashier_init_deck(char *table_id)
 	bet_permutation(b_deck_info.b_permi, CARDS_MAXCARDS);
 
 	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
-	t_player_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+	t_player_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
 	num_players = jint(t_player_info, "num_players");
 	for (int32_t i = 0; i < num_players; i++) {
 		gen_deck(b_deck_info.cashier_r[i], CARDS_MAXCARDS);
@@ -81,12 +83,12 @@ int32_t cashier_shuffle_deck(char *id)
 
 	cashier_init_deck(id);
 	game_id_str = poker_get_key_str(id, T_GAME_ID_KEY);
-	t_player_info = get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+	t_player_info = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
 	num_players = jint(t_player_info, "num_players");
 
 	for (int32_t i = 0; i < num_players; i++) {
 		t_d_p_deck_info =
-			get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(all_t_d_p_keys[(i + 1)], game_id_str));
+			get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(all_t_d_p_keys[(i + 1)], game_id_str), g_start_block);
 		int32_t deck_size = cJSON_GetArraySize(t_d_p_deck_info);
 		if (deck_size > CARDS_MAXCARDS) {
 			deck_size = CARDS_MAXCARDS;
@@ -117,7 +119,7 @@ int32_t reveal_bv(char *table_id)
 	bv_info = cJSON_CreateArray();
 	if (player_id == -1) {
 		t_player_info =
-			get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str));
+			get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
 		num_players = jint(t_player_info, "num_players");
 		for (int32_t i = 0; i < num_players; i++) {
 			jaddistr(bv_info, bits256_str(hexstr, b_deck_info.cashier_r[i][card_id].priv));
@@ -155,7 +157,7 @@ static int32_t handle_bv_reveal_card(char *table_id)
 
 	game_state_info = get_game_state_info(table_id);
 	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
-	card_bv = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str));
+	card_bv = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str), g_start_block);
 
 	if (card_bv && ((jint(game_state_info, "player_id") == jint(card_bv, "player_id")) &&
 			(jint(game_state_info, "card_id") == jint(card_bv, "card_id")))) {
