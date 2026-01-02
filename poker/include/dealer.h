@@ -12,5 +12,6 @@ int32_t register_table(struct table t);
 int32_t dealer_init(struct table t);
 int32_t dealer_init_with_reset(struct table t);
 int32_t dealer_reset_table(struct table *t);
+int32_t dealer_initiate_settlement(struct table *t, struct privatebet_vars *vars);
 
 #endif /* DEALER_H */

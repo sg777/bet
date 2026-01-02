@@ -9,9 +9,35 @@
 #include "print.h"
 #include "poker_vdxf.h"
 #include "storage.h"
+#include "vdxf.h"
 
 extern int32_t g_start_block;
 struct p_deck_info_struct p_deck_info;
+
+// Card names for display
+static const char *card_names[52] = {
+	"2♣", "3♣", "4♣", "5♣", "6♣", "7♣", "8♣", "9♣", "10♣", "J♣", "Q♣", "K♣", "A♣",
+	"2♦", "3♦", "4♦", "5♦", "6♦", "7♦", "8♦", "9♦", "10♦", "J♦", "Q♦", "K♦", "A♦",
+	"2♥", "3♥", "4♥", "5♥", "6♥", "7♥", "8♥", "9♥", "10♥", "J♥", "Q♥", "K♥", "A♥",
+	"2♠", "3♠", "4♠", "5♠", "6♠", "7♠", "8♠", "9♠", "10♠", "J♠", "Q♠", "K♠", "A♠"
+};
+
+static const char *get_card_name(int32_t card_value) {
+	if (card_value >= 0 && card_value < 52) return card_names[card_value];
+	return "??";
+}
+
+static const char *get_card_type_name(int32_t card_type) {
+	switch (card_type) {
+		case 1: return "HOLE CARD";
+		case 2: return "FLOP 1";
+		case 3: return "FLOP 2";
+		case 4: return "FLOP 3";
+		case 5: return "TURN";
+		case 6: return "RIVER";
+		default: return "UNKNOWN";
+	}
+}
 
 int32_t player_init_deck()
 {
@@ -215,6 +241,12 @@ int32_t reveal_card(char *table_id)
 		if (card_value == -1) {
 			retval = ERR_CARD_DECODING_FAILED;
 		} else {
+			// ========== CARD REVEALED ==========
+			dlg_info("╔════════════════════════════════════════╗");
+			dlg_info("║  🃏 CARD REVEALED: %-20s ║", get_card_name(card_value));
+			dlg_info("║  Type: %-10s  Card ID: %-10d ║", get_card_type_name(card_type), card_id);
+			dlg_info("╚════════════════════════════════════════╝");
+			
 			// Save decoded card to local state
 			if (card_id < hand_size) {
 				update_player_decoded_card(card_id, card_value);
@@ -258,6 +290,132 @@ static int32_t handle_player_reveal_card(char *table_id)
 	return retval;
 }
 
+/**
+ * Read betting state from table ID
+ */
+cJSON *player_read_betting_state(char *table_id)
+{
+	char *game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	if (!game_id_str) return NULL;
+	
+	return get_cJSON_from_id_key_vdxfid_from_height(
+		table_id,
+		get_key_data_vdxf_id(T_BETTING_STATE_KEY, game_id_str),
+		g_start_block);
+}
+
+/**
+ * Write betting action to player ID
+ */
+int32_t player_write_betting_action(char *table_id, const char *action, int32_t amount)
+{
+	int32_t retval = OK;
+	char game_id_str[65];
+	cJSON *action_obj = NULL, *out = NULL;
+	
+	bits256_str(game_id_str, p_deck_info.game_id);
+	
+	action_obj = cJSON_CreateObject();
+	cJSON_AddStringToObject(action_obj, "action", action);
+	cJSON_AddNumberToObject(action_obj, "amount", amount);
+	cJSON_AddNumberToObject(action_obj, "round", p_local_state.last_game_state);  // Use as round tracking
+	
+	dlg_info("Writing betting action: %s, amount=%d", action, amount);
+	
+	out = poker_update_key_json(player_config.verus_pid,
+		get_key_data_vdxf_id(P_BETTING_ACTION_KEY, game_id_str),
+		action_obj, true);
+	
+	cJSON_Delete(action_obj);
+	
+	if (!out) {
+		return ERR_GAME_STATE_UPDATE;
+	}
+	
+	return retval;
+}
+
+/**
+ * Display betting options and get player input
+ */
+int32_t player_handle_betting(char *table_id)
+{
+	int32_t retval = OK;
+	cJSON *betting_state = NULL;
+	
+	betting_state = player_read_betting_state(table_id);
+	if (!betting_state) {
+		return OK;  // No betting state yet, wait
+	}
+	
+	int32_t current_turn = jint(betting_state, "current_turn");
+	const char *action = jstr(betting_state, "action");
+	int32_t round = jint(betting_state, "round");
+	int32_t pot = jint(betting_state, "pot");
+	int32_t min_amount = jint(betting_state, "min_amount");
+	
+	// Check if it's our turn
+	if (current_turn != p_deck_info.player_id) {
+		// Not our turn, just display status
+		dlg_info("Waiting for Player %d to act (pot: %d)", current_turn, pot);
+		return OK;
+	}
+	
+	// It's our turn!
+	dlg_info("═══════════════════════════════════════════");
+	dlg_info("  🎯 YOUR TURN - Player %d (%s)             ", p_deck_info.player_id, player_config.verus_pid);
+	dlg_info("═══════════════════════════════════════════");
+	dlg_info("  Action: %s", action);
+	dlg_info("  Round: %d, Pot: %d", round, pot);
+	dlg_info("  Minimum to call: %d", min_amount);
+	
+	// Display possibilities
+	cJSON *possibilities = cJSON_GetObjectItem(betting_state, "possibilities");
+	if (possibilities) {
+		printf("\n  Options: ");
+		for (int i = 0; i < cJSON_GetArraySize(possibilities); i++) {
+			cJSON *opt = cJSON_GetArrayItem(possibilities, i);
+			if (opt && opt->valuestring) {
+				printf("[%s] ", opt->valuestring);
+			}
+		}
+		printf("\n");
+	}
+	
+	// Display player funds
+	cJSON *player_funds = cJSON_GetObjectItem(betting_state, "player_funds");
+	if (player_funds && p_deck_info.player_id < cJSON_GetArraySize(player_funds)) {
+		int32_t my_funds = cJSON_GetArrayItem(player_funds, p_deck_info.player_id)->valueint;
+		dlg_info("  Your funds: %d", my_funds);
+	}
+	
+	dlg_info("═══════════════════════════════════════════");
+	
+	// For now, auto-respond based on action type
+	// TODO: In production, get input from GUI via websocket
+	if (strcmp(action, "small_blind") == 0) {
+		dlg_info("Posting small blind...");
+		retval = player_write_betting_action(table_id, "bet", min_amount);
+		p_local_state.last_game_state = round;
+	} else if (strcmp(action, "big_blind") == 0) {
+		dlg_info("Posting big blind...");
+		retval = player_write_betting_action(table_id, "bet", min_amount);
+		p_local_state.last_game_state = round;
+	} else {
+		// Regular betting - for testing, auto-call or check
+		if (min_amount > 0) {
+			dlg_info("Auto-calling %d...", min_amount);
+			retval = player_write_betting_action(table_id, "call", min_amount);
+		} else {
+			dlg_info("Auto-checking...");
+			retval = player_write_betting_action(table_id, "check", 0);
+		}
+		p_local_state.last_game_state = round;
+	}
+	
+	return retval;
+}
+
 int32_t handle_game_state_player(char *table_id)
 {
 	int32_t game_state, retval = OK;
@@ -267,6 +425,25 @@ int32_t handle_game_state_player(char *table_id)
 	switch (game_state) {
 	case G_REVEAL_CARD:
 		retval = handle_player_reveal_card(table_id);
+		break;
+	case G_ROUND_BETTING:
+		retval = player_handle_betting(table_id);
+		break;
+	case G_SHOWDOWN:
+		dlg_info("═══════════════════════════════════════════");
+		dlg_info("  🏆 SHOWDOWN - Game Complete!              ");
+		dlg_info("═══════════════════════════════════════════");
+		// Display final cards
+		for (int i = 0; i < hand_size && i < p_local_state.cards_decoded_count; i++) {
+			if (p_local_state.decoded_cards[i] >= 0) {
+				dlg_info("  Card %d: %s", i + 1, get_card_name(p_local_state.decoded_cards[i]));
+			}
+		}
+		break;
+	case G_SETTLEMENT_COMPLETE:
+		dlg_info("═══════════════════════════════════════════");
+		dlg_info("  💰 PAYOUT RECEIVED - Game Finished!       ");
+		dlg_info("═══════════════════════════════════════════");
 		break;
 	}
 	return retval;

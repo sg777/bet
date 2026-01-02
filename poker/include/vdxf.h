@@ -63,6 +63,32 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 */
 #define P_JOIN_REQUEST_KEY "chips.vrsc::poker.sg777z.p_join_request"
 
+/*
+* t_betting_state - Dealer writes to TABLE ID during betting
+* {
+*   current_turn: player index whose turn it is
+*   round: betting round (0=preflop, 1=flop, 2=turn, 3=river)
+*   pot: total pot amount
+*   action: "small_blind" | "big_blind" | "round_betting"
+*   min_amount: minimum amount to call/bet
+*   possibilities: array of allowed actions [call, raise, fold, check, allin]
+*   bet_amounts: array of current bets per player this round
+*   player_funds: array of remaining funds per player
+* }
+*/
+#define T_BETTING_STATE_KEY "chips.vrsc::poker.sg777z.t_betting_state"
+
+/*
+* p_betting_action - Player writes to PLAYER ID when taking action
+* {
+*   round: betting round
+*   action: "fold" | "call" | "raise" | "check" | "allin"
+*   amount: bet amount (if raise/allin)
+*   card_id: card turn this action is for
+* }
+*/
+#define P_BETTING_ACTION_KEY "chips.vrsc::poker.sg777z.p_betting_action"
+
 #define T_D_DECK_KEY "chips.vrsc::poker.sg777z.t_d_deck"
 #define T_D_P1_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p1_deck"
 #define T_D_P2_DECK_KEY "chips.vrsc::poker.sg777z.t_d_p2_deck"
@@ -124,6 +150,61 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 * }
 */
 #define T_GAME_INFO_KEY "chips.vrsc::poker.sg777z.t_game_info"
+
+/*
+* t_settlement_info {
+*   game_id: The game ID this settlement is for
+*   status: "pending" | "completed" | "failed"
+*   winners: Array of winner player indices
+*   settle_amounts: Amount each player gets back (in CHIPS)
+*   player_ids: Player Verus IDs for payout
+*   payin_txs: Original payin transaction IDs
+*   pot: Total pot amount
+*   payout_txs: Array of payout transaction IDs (filled by cashier)
+* }
+*/
+#define T_SETTLEMENT_INFO_KEY "chips.vrsc::poker.sg777z.t_settlement_info"
+
+/*
+* p_game_history - Stored on player ID after joining a game
+* {
+*   payin_tx: Player's payin transaction ID
+*   table_id: The table joined
+*   dealer_id: The dealer
+*   game_id: The game ID
+*   join_block: Block height when joined
+*   amount: Amount paid in (CHIPS)
+* }
+*/
+#define P_GAME_HISTORY_KEY "chips.vrsc::poker.sg777z.p_game_history"
+
+/*
+* p_dispute_request - Player raises a dispute
+* {
+*   payin_tx: The payin transaction to dispute
+*   table_id: The table
+*   game_id: The game ID
+*   reason: "no_payout" | "game_aborted" | "timeout"
+*   request_block: Block when dispute was raised
+* }
+*/
+#define P_DISPUTE_REQUEST_KEY "chips.vrsc::poker.sg777z.p_dispute_request"
+
+/*
+* c_dispute_result - Cashier's response to a dispute (stored on cashier ID)
+* {
+*   player_id: The player who raised dispute
+*   game_id: The game ID
+*   status: "refunded" | "paid" | "rejected"
+*   payout_tx: Payout/refund transaction ID
+*   reason: Explanation
+*   resolved_block: Block when resolved
+* }
+*/
+#define C_DISPUTE_RESULT_KEY "chips.vrsc::poker.sg777z.c_dispute_result"
+
+// Number of blocks after which a pending game is considered aborted
+#define DISPUTE_TIMEOUT_BLOCKS 100
 
 /*
 * player_deck {
@@ -257,6 +338,33 @@ int32_t process_payin_tx_data(char *txid, cJSON *payin_tx_data);
 cJSON *list_dealers();
 void list_tables();
 int32_t verify_poker_setup();
+
+/* ============================================================================
+ * Dispute Resolution
+ * ============================================================================ */
+
+/**
+ * Player raises a dispute for a game
+ * @param game_id The game ID to dispute
+ * @param reason The reason: "no_payout", "game_aborted", "timeout"
+ * @return OK on success, error code on failure
+ */
+int32_t player_raise_dispute(const char *game_id, const char *reason);
+
+/**
+ * Cashier polls for and processes pending disputes
+ * @param known_players Array of known player IDs to check
+ * @param num_players Number of players
+ * @return Number of disputes processed
+ */
+int32_t cashier_poll_disputes(const char **known_players, int32_t num_players);
+
+/**
+ * Player checks dispute result
+ * @param game_id The game ID that was disputed
+ * @return cJSON with dispute result or NULL
+ */
+cJSON *player_check_dispute_result(const char *game_id);
 
 /* ============================================================================
  * NOTE: For poker-specific operations, prefer using poker_vdxf.h which

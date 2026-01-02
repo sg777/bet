@@ -509,6 +509,29 @@ void bet_start(int argc, char **argv)
 			dlg_info("%s", cJSON_Print(out));
 		}
 	}
+	// Dispute resolution
+	else if (strcmp(cmd, "dispute") == 0 && argc >= 3) {
+		if (argc >= 4) {
+			// dispute raise <game_id> <reason>
+			if (strcmp(argv[2], "raise") == 0 && argc >= 5) {
+				retval = player_raise_dispute(argv[3], argv[4]);
+			}
+			// dispute check <game_id>
+			else if (strcmp(argv[2], "check") == 0) {
+				cJSON *result = player_check_dispute_result(argv[3]);
+				if (result) {
+					dlg_info("Dispute result: %s", cJSON_Print(result));
+				} else {
+					dlg_info("No dispute result found for game %s", argv[3]);
+				}
+			}
+		} else {
+			dlg_info("Usage:");
+			dlg_info("  ./bet dispute raise <game_id> <reason>");
+			dlg_info("    reason: no_payout | game_aborted | timeout");
+			dlg_info("  ./bet dispute check <game_id>");
+		}
+	}
 	// Help commands
 	else if (strcmp(cmd, "h") == 0 || strcmp(cmd, "-h") == 0 || 
 		 strcmp(cmd, "help") == 0 || strcmp(cmd, "--help") == 0) {

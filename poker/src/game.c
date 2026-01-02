@@ -3,10 +3,24 @@
 #include "err.h"
 #include "poker_vdxf.h"
 #include "commands.h"
+#include "vdxf.h"
 
 // External references
 extern char player_ids[CARDS_MAXPLAYERS][MAX_ID_LEN];
 extern int32_t num_of_players;
+
+// Card type names for display
+static const char *get_card_type_str(int32_t card_type) {
+	switch (card_type) {
+		case 1: return "HOLE";
+		case 2: return "FLOP-1";
+		case 3: return "FLOP-2";
+		case 4: return "FLOP-3";
+		case 5: return "TURN";
+		case 6: return "RIVER";
+		default: return "???";
+	}
+}
 
 struct t_game_info_struct t_game_info;
 
@@ -37,6 +51,12 @@ const char *game_state_str(int32_t game_state)
 		return "Drawing the card from deck";
 	case G_ROUND_BETTING:
 		return "Round betting is happening...";
+	case G_SHOWDOWN:
+		return "Showdown - determining winner";
+	case G_SETTLEMENT_PENDING:
+		return "Settlement pending - cashier processing payouts";
+	case G_SETTLEMENT_COMPLETE:
+		return "Settlement complete - game finished";
 	default:
 		return "Invalid game state...";
 	}
@@ -158,18 +178,27 @@ int32_t is_card_drawn(char *table_id)
 
 	// TODO:: Need to add block wait time and based on whcih dealer can take action on player
 	game_state_info = get_game_state_info(table_id);
-	dlg_info("Players verus ID::%s", player_ids[jint(game_state_info, "player_id")]);
+	int32_t target_player = jint(game_state_info, "player_id");
+	int32_t target_card = jint(game_state_info, "card_id");
+	int32_t card_type = jint(game_state_info, "card_type");
+	
+	dlg_info("╔═══════════════════════════════════════════════════════╗");
+	dlg_info("║  Waiting for player %s to reveal card...    ║", player_ids[target_player]);
+	dlg_info("║  Card ID: %d, Type: %-8s                          ║", target_card, get_card_type_str(card_type));
+	dlg_info("╚═══════════════════════════════════════════════════════╝");
+	
 	while (1) {
-		player_game_state_info = get_game_state_info(player_ids[jint(game_state_info, "player_id")]);
+		player_game_state_info = get_game_state_info(player_ids[target_player]);
 		if (!player_game_state_info) {
 			sleep(2);
 			continue;
 		}
-		if ((jint(game_state_info, "player_id") == jint(player_game_state_info, "player_id")) &&
-		    (jint(game_state_info, "card_id") == jint(player_game_state_info, "card_id"))) {
-			dlg_info("Drawn card details::%s", cJSON_Print(player_game_state_info));
+		if ((target_player == jint(player_game_state_info, "player_id")) &&
+		    (target_card == jint(player_game_state_info, "card_id"))) {
+			dlg_info("✓ Player %s confirmed card %d", player_ids[target_player], target_card);
 			break;
 		}
+		sleep(2);
 	}
 	return retval;
 }
@@ -315,8 +344,12 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 				}
 			}
 		}
-		if (flag)
+		if (flag) {
 			hole_cards_drawn = 1;
+			dlg_info("═══════════════════════════════════════════");
+			dlg_info("  ✓ ALL HOLE CARDS DEALT - PREFLOP BETTING  ");
+			dlg_info("═══════════════════════════════════════════");
+		}
 
 	} else if (flop_cards_drawn == 0) {
 		flag = 1;
@@ -329,6 +362,9 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 		}
 		if (flag) {
 			flop_cards_drawn = 1;
+			dlg_info("═══════════════════════════════════════════");
+			dlg_info("  ✓ FLOP DEALT - FLOP BETTING               ");
+			dlg_info("═══════════════════════════════════════════");
 			// Update board cards on table ID for each flop card
 			update_board_cards(table_id, flop_card_1);
 			update_board_cards(table_id, flop_card_2);
@@ -347,6 +383,9 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 		}
 		if (flag) {
 			turn_card_drawn = 1;
+			dlg_info("═══════════════════════════════════════════");
+			dlg_info("  ✓ TURN DEALT - TURN BETTING               ");
+			dlg_info("═══════════════════════════════════════════");
 			// Update board cards on table ID
 			update_board_cards(table_id, turn_card);
 		}
@@ -363,6 +402,9 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 		}
 		if (flag) {
 			river_card_drawn = 1;
+			dlg_info("═══════════════════════════════════════════");
+			dlg_info("  ✓ RIVER DEALT - FINAL BETTING             ");
+			dlg_info("═══════════════════════════════════════════");
 			// Update board cards on table ID
 			update_board_cards(table_id, river_card);
 		}
@@ -370,7 +412,9 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 
 	if (flag) {
 		if (vars->round == 0) {
-			dlg_info("Initiate betting with small blind");
+			dlg_info("═══════════════════════════════════════════");
+			dlg_info("  💰 INITIATING BETTING - SMALL BLIND       ");
+			dlg_info("═══════════════════════════════════════════");
 			//retval = bet_dcv_small_blind(NULL, vars);
 			retval = verus_small_blind(table_id, vars);
 		} else {
@@ -476,8 +520,7 @@ int32_t verus_small_blind(char *table_id, struct privatebet_vars *vars)
 	cJSON *smallBlindInfo = NULL, *out = NULL;
 
 	vars->last_turn = vars->dealer;
-	vars->turni = (vars->dealer) % num_of_players; // vars->dealer+1 is removed since
-	// dealer is the one who does small_blind
+	vars->turni = (vars->dealer) % num_of_players;
 
 	smallBlindInfo = cJSON_CreateObject();
 	cJSON_AddStringToObject(smallBlindInfo, "method", "betting");
@@ -485,9 +528,268 @@ int32_t verus_small_blind(char *table_id, struct privatebet_vars *vars)
 	cJSON_AddNumberToObject(smallBlindInfo, "playerid", vars->turni);
 	cJSON_AddNumberToObject(smallBlindInfo, "round", vars->round);
 	cJSON_AddNumberToObject(smallBlindInfo, "pot", vars->pot);
+	cJSON_AddNumberToObject(smallBlindInfo, "min_amount", vars->small_blind);
 
 	out = append_game_state(table_id, G_ROUND_BETTING, smallBlindInfo);
-	dlg_info("%s", cJSON_Print(out));
+	dlg_info("═══════════════════════════════════════════");
+	dlg_info("  💰 SMALL BLIND - Player %d (%s)          ", vars->turni, player_ids[vars->turni]);
+	dlg_info("═══════════════════════════════════════════");
+	
+	// Also write betting state to TABLE ID
+	retval = verus_write_betting_state(table_id, vars, "small_blind");
 
+	return retval;
+}
+
+/**
+ * Write betting state to TABLE ID for players to read
+ */
+int32_t verus_write_betting_state(char *table_id, struct privatebet_vars *vars, const char *action)
+{
+	int32_t retval = OK;
+	char *game_id_str = NULL;
+	cJSON *betting_state = NULL, *bet_amounts = NULL, *player_funds = NULL;
+	cJSON *possibilities = NULL, *out = NULL;
+	
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	if (!game_id_str) return ERR_GAME_ID_NOT_FOUND;
+	
+	betting_state = cJSON_CreateObject();
+	cJSON_AddNumberToObject(betting_state, "current_turn", vars->turni);
+	cJSON_AddNumberToObject(betting_state, "round", vars->round);
+	cJSON_AddNumberToObject(betting_state, "pot", vars->pot);
+	cJSON_AddStringToObject(betting_state, "action", action);
+	cJSON_AddNumberToObject(betting_state, "last_turn", vars->last_turn);
+	
+	// Calculate min amount to call
+	int32_t maxbet = 0;
+	for (int i = 0; i < num_of_players; i++) {
+		if (vars->betamount[i][vars->round] > maxbet)
+			maxbet = vars->betamount[i][vars->round];
+	}
+	cJSON_AddNumberToObject(betting_state, "min_amount", maxbet - vars->betamount[vars->turni][vars->round]);
+	
+	// Bet amounts per player
+	bet_amounts = cJSON_CreateArray();
+	for (int i = 0; i < num_of_players; i++) {
+		cJSON_AddItemToArray(bet_amounts, cJSON_CreateNumber(vars->betamount[i][vars->round]));
+	}
+	cJSON_AddItemToObject(betting_state, "bet_amounts", bet_amounts);
+	
+	// Player funds
+	player_funds = cJSON_CreateArray();
+	for (int i = 0; i < num_of_players; i++) {
+		cJSON_AddItemToArray(player_funds, cJSON_CreateNumber(vars->funds[i]));
+	}
+	cJSON_AddItemToObject(betting_state, "player_funds", player_funds);
+	
+	// Possibilities (what actions are allowed)
+	possibilities = cJSON_CreateArray();
+	if (strcmp(action, "small_blind") == 0 || strcmp(action, "big_blind") == 0) {
+		cJSON_AddItemToArray(possibilities, cJSON_CreateString("bet"));
+	} else {
+		// Regular betting round
+		if (maxbet == vars->betamount[vars->turni][vars->round]) {
+			cJSON_AddItemToArray(possibilities, cJSON_CreateString("check"));
+		}
+		if (maxbet > vars->betamount[vars->turni][vars->round]) {
+			cJSON_AddItemToArray(possibilities, cJSON_CreateString("call"));
+		}
+		cJSON_AddItemToArray(possibilities, cJSON_CreateString("raise"));
+		cJSON_AddItemToArray(possibilities, cJSON_CreateString("fold"));
+		cJSON_AddItemToArray(possibilities, cJSON_CreateString("allin"));
+	}
+	cJSON_AddItemToObject(betting_state, "possibilities", possibilities);
+	
+	dlg_info("Writing betting state: turn=%d, round=%d, pot=%d, action=%s",
+		vars->turni, vars->round, vars->pot, action);
+	
+	out = poker_update_key_json(table_id, 
+		get_key_data_vdxf_id(T_BETTING_STATE_KEY, game_id_str), betting_state, true);
+	
+	cJSON_Delete(betting_state);
+	
+	if (!out) {
+		return ERR_GAME_STATE_UPDATE;
+	}
+	
+	return retval;
+}
+
+/**
+ * Poll player's betting action from their ID
+ * Returns: action string or NULL if not yet acted
+ */
+cJSON *verus_poll_player_action(char *table_id, int32_t player_idx, int32_t expected_round)
+{
+	char *game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	if (!game_id_str) return NULL;
+	
+	cJSON *action = get_cJSON_from_id_key_vdxfid_from_height(
+		player_ids[player_idx],
+		get_key_data_vdxf_id(P_BETTING_ACTION_KEY, game_id_str),
+		g_start_block);
+	
+	if (!action) return NULL;
+	
+	// Check if action is for current round
+	if (jint(action, "round") != expected_round) {
+		return NULL;  // Old action from previous round
+	}
+	
+	return action;
+}
+
+/**
+ * Dealer processes a player's betting action
+ */
+int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *vars, cJSON *action_info)
+{
+	int32_t retval = OK;
+	const char *action = jstr(action_info, "action");
+	int32_t amount = jint(action_info, "amount");
+	int32_t playerid = vars->turni;
+	
+	dlg_info("═══════════════════════════════════════════");
+	dlg_info("  Player %d (%s): %s %d", playerid, player_ids[playerid], action, amount);
+	dlg_info("═══════════════════════════════════════════");
+	
+	if (strcmp(action, "fold") == 0) {
+		vars->bet_actions[playerid][vars->round] = fold;
+	} else if (strcmp(action, "call") == 0) {
+		int32_t maxbet = 0;
+		for (int i = 0; i < num_of_players; i++) {
+			if (vars->betamount[i][vars->round] > maxbet)
+				maxbet = vars->betamount[i][vars->round];
+		}
+		int32_t to_call = maxbet - vars->betamount[playerid][vars->round];
+		vars->betamount[playerid][vars->round] += to_call;
+		vars->funds[playerid] -= to_call;
+		vars->pot += to_call;
+		vars->bet_actions[playerid][vars->round] = call;
+	} else if (strcmp(action, "raise") == 0) {
+		vars->betamount[playerid][vars->round] += amount;
+		vars->funds[playerid] -= amount;
+		vars->pot += amount;
+		vars->bet_actions[playerid][vars->round] = raise;
+		vars->last_raise = amount;
+	} else if (strcmp(action, "check") == 0) {
+		vars->bet_actions[playerid][vars->round] = check;
+	} else if (strcmp(action, "allin") == 0) {
+		int32_t allin_amount = vars->funds[playerid];
+		vars->betamount[playerid][vars->round] += allin_amount;
+		vars->pot += allin_amount;
+		vars->funds[playerid] = 0;
+		vars->bet_actions[playerid][vars->round] = allin;
+	} else if (strcmp(action, "small_blind") == 0 || strcmp(action, "bet") == 0) {
+		vars->betamount[playerid][vars->round] = amount;
+		vars->funds[playerid] -= amount;
+		vars->pot += amount;
+		vars->bet_actions[playerid][vars->round] = small_blind;
+	} else if (strcmp(action, "big_blind") == 0) {
+		vars->betamount[playerid][vars->round] = amount;
+		vars->funds[playerid] -= amount;
+		vars->pot += amount;
+		vars->bet_actions[playerid][vars->round] = big_blind;
+	}
+	
+	dlg_info("  Pot: %d, Player funds: %d", vars->pot, vars->funds[playerid]);
+	
+	return retval;
+}
+
+/**
+ * Determine next turn in betting round
+ * Returns: next player index, or -1 if round complete
+ */
+int32_t verus_next_turn(struct privatebet_vars *vars)
+{
+	int32_t maxamount = 0;
+	
+	// Find max bet this round
+	for (int i = 0; i < num_of_players; i++) {
+		if (vars->bet_actions[i][vars->round] != fold) {
+			if (vars->betamount[i][vars->round] > maxamount)
+				maxamount = vars->betamount[i][vars->round];
+		}
+	}
+	
+	// Find next player who needs to act
+	for (int i = 1; i <= num_of_players; i++) {
+		int idx = (vars->turni + i) % num_of_players;
+		
+		// Skip folded/allin players
+		if (vars->bet_actions[idx][vars->round] == fold ||
+		    vars->bet_actions[idx][vars->round] == allin ||
+		    vars->funds[idx] == 0)
+			continue;
+		
+		// Player hasn't acted yet
+		if (vars->bet_actions[idx][vars->round] == 0)
+			return idx;
+		
+		// Player needs to call a raise
+		if (vars->betamount[idx][vars->round] < maxamount)
+			return idx;
+	}
+	
+	return -1;  // Round complete
+}
+
+/**
+ * Dealer handles round betting - called from handle_game_state
+ */
+int32_t verus_handle_round_betting(char *table_id, struct privatebet_vars *vars)
+{
+	int32_t retval = OK;
+	cJSON *player_action = NULL;
+	
+	// Poll current player for their action
+	player_action = verus_poll_player_action(table_id, vars->turni, vars->round);
+	
+	if (!player_action) {
+		// Player hasn't acted yet, keep waiting
+		return OK;
+	}
+	
+	// Process the action
+	retval = verus_process_betting_action(table_id, vars, player_action);
+	if (retval != OK) return retval;
+	
+	// Determine next turn
+	int32_t next = verus_next_turn(vars);
+	
+	if (next == -1) {
+		// Round complete
+		vars->round++;
+		vars->turni = vars->dealer;
+		
+		// Count players still in
+		int32_t players_left = 0;
+		for (int i = 0; i < num_of_players; i++) {
+			if (vars->bet_actions[i][vars->round - 1] != fold)
+				players_left++;
+		}
+		
+		if (vars->round >= CARDS_MAXROUNDS || players_left < 2) {
+			// Game over - showdown
+			dlg_info("═══════════════════════════════════════════");
+			dlg_info("  🏆 SHOWDOWN - Evaluating hands...         ");
+			dlg_info("═══════════════════════════════════════════");
+			append_game_state(table_id, G_SHOWDOWN, NULL);
+		} else {
+			// Deal next community cards
+			dlg_info("═══════════════════════════════════════════");
+			dlg_info("  → Round %d complete, dealing next cards   ", vars->round);
+			dlg_info("═══════════════════════════════════════════");
+			retval = deal_next_card(table_id);
+		}
+	} else {
+		// Next player's turn
+		vars->last_turn = vars->turni;
+		vars->turni = next;
+		retval = verus_write_betting_state(table_id, vars, "round_betting");
+	}
+	
 	return retval;
 }

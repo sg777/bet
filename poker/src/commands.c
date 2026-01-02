@@ -124,7 +124,8 @@ static int32_t chips_rpc_rest(const char *method, const char *params_str, cJSON 
 	curl_easy_cleanup(curl);
 
 	if (response_code != 200) {
-		dlg_error("HTTP error: %ld, Response: %s", response_code, chunk.data);
+		// Only log HTTP errors in verbose mode (not for expected "not found" cases)
+		// dlg_error("HTTP error: %ld, Response: %s", response_code, chunk.data);
 		free(chunk.data);
 		return ERR_CHIPS_RPC;
 	}

@@ -290,6 +290,104 @@ int32_t dealer_shuffle_deck(char *id)
 	return retval;
 }
 
+// Initiate pot settlement after showdown
+// Writes settlement info to table ID for cashier to process
+int32_t dealer_initiate_settlement(struct table *t, struct privatebet_vars *vars)
+{
+	int32_t retval = OK;
+	char *game_id_str = NULL, hexstr[65];
+	cJSON *settlement_info = NULL, *winners_arr = NULL, *amounts_arr = NULL;
+	cJSON *player_ids_arr = NULL, *payin_txs_arr = NULL;
+	
+	dlg_info("=== INITIATING POT SETTLEMENT ===");
+	
+	game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
+	if (!game_id_str) {
+		dlg_error("Failed to get game_id for settlement");
+		return ERR_GAME_ID_NOT_FOUND;
+	}
+	
+	// Build settlement info
+	settlement_info = cJSON_CreateObject();
+	cJSON_AddStringToObject(settlement_info, "game_id", game_id_str);
+	cJSON_AddStringToObject(settlement_info, "status", "pending");
+	cJSON_AddNumberToObject(settlement_info, "pot", vars->pot * SB_in_chips);
+	
+	// Winners array
+	winners_arr = cJSON_CreateArray();
+	for (int32_t i = 0; i < num_of_players; i++) {
+		if (vars->winners[i] == 1) {
+			cJSON_AddItemToArray(winners_arr, cJSON_CreateNumber(i));
+		}
+	}
+	cJSON_AddItemToObject(settlement_info, "winners", winners_arr);
+	
+	// Settlement amounts per player (what each player gets back)
+	amounts_arr = cJSON_CreateArray();
+	for (int32_t i = 0; i < num_of_players; i++) {
+		double amount = (vars->win_funds[i] + vars->funds[i]) * SB_in_chips;
+		cJSON_AddItemToArray(amounts_arr, cJSON_CreateNumber(amount));
+	}
+	cJSON_AddItemToObject(settlement_info, "settle_amounts", amounts_arr);
+	
+	// Player IDs (Verus IDs for payouts)
+	player_ids_arr = cJSON_CreateArray();
+	for (int32_t i = 0; i < num_of_players; i++) {
+		cJSON_AddItemToArray(player_ids_arr, cJSON_CreateString(player_ids[i]));
+	}
+	cJSON_AddItemToObject(settlement_info, "player_ids", player_ids_arr);
+	
+	// Get payin TXs from t_player_info
+	cJSON *t_player_info = get_cJSON_from_id_key_vdxfid_from_height(t->table_id,
+		get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
+	if (t_player_info) {
+		cJSON *player_info_arr = cJSON_GetObjectItem(t_player_info, "player_info");
+		payin_txs_arr = cJSON_CreateArray();
+		if (player_info_arr) {
+			for (int32_t i = 0; i < cJSON_GetArraySize(player_info_arr); i++) {
+				cJSON *item = cJSON_GetArrayItem(player_info_arr, i);
+				if (item && item->valuestring) {
+					// Format: "p1_<payin_tx>_<slot>" - extract payin_tx
+					char *str = item->valuestring;
+					char *first_underscore = strchr(str, '_');
+					if (first_underscore) {
+						char *second_underscore = strchr(first_underscore + 1, '_');
+						if (second_underscore) {
+							size_t tx_len = second_underscore - (first_underscore + 1);
+							char tx[128] = {0};
+							strncpy(tx, first_underscore + 1, tx_len < 127 ? tx_len : 127);
+							cJSON_AddItemToArray(payin_txs_arr, cJSON_CreateString(tx));
+						}
+					}
+				}
+			}
+		}
+		cJSON_AddItemToObject(settlement_info, "payin_txs", payin_txs_arr);
+	}
+	
+	// Add cashier ID
+	cJSON_AddStringToObject(settlement_info, "cashier_id", t->cashier_id);
+	
+	dlg_info("Settlement info: %s", cJSON_Print(settlement_info));
+	
+	// Write to table ID
+	cJSON *out = poker_update_key_json(t->table_id, 
+		get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, game_id_str),
+		settlement_info, true);
+	
+	if (!out) {
+		dlg_error("Failed to write settlement info to table ID");
+		return ERR_GAME_STATE_UPDATE;
+	}
+	
+	dlg_info("Settlement info written to table ID, waiting for cashier to process");
+	
+	// Update game state to settlement pending
+	append_game_state(t->table_id, G_SETTLEMENT_PENDING, NULL);
+	
+	return retval;
+}
+
 int32_t handle_game_state(struct table *t)
 {
 	int32_t game_state, retval = OK;
@@ -335,6 +433,22 @@ int32_t handle_game_state(struct table *t)
 			dlg_info("Card is drawn");
 			retval = verus_receive_card(t->table_id, dcv_vars);
 		}
+		break;
+	case G_ROUND_BETTING:
+		// Poll current player for their betting action
+		retval = verus_handle_round_betting(t->table_id, dcv_vars);
+		break;
+	case G_SHOWDOWN:
+		dlg_info("Showdown - initiating pot settlement");
+		retval = dealer_initiate_settlement(t, dcv_vars);
+		break;
+	case G_SETTLEMENT_PENDING:
+		dlg_info("Waiting for cashier to process settlement...");
+		// Cashier will update game state to G_SETTLEMENT_COMPLETE when done
+		break;
+	case G_SETTLEMENT_COMPLETE:
+		dlg_info("Settlement complete - game finished!");
+		// Could reset table for next game here
 		break;
 	}
 	return retval;

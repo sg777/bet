@@ -6,6 +6,7 @@
 #include "storage.h"
 #include "config.h"
 #include "dealer_registration.h"
+#include "poker_vdxf.h"
 
 struct table player_t = { 0 };
 
@@ -176,7 +177,7 @@ cJSON *get_cmm(const char *id, int16_t full_id)
 	cJSON_Delete(params);
 	
 	if (retval != OK || !result) {
-		dlg_info("%s", bet_err_str(retval));
+		// Silently return NULL - caller handles the case
 		return NULL;
 	}
 
@@ -460,6 +461,31 @@ int32_t join_table()
 		 In such scenarios, using dispute resolution protocol the player can get funds back.
 		*/
 		return retval;
+	}
+
+	// Step 4: Store game history on player ID for dispute resolution
+	{
+		cJSON *game_history = cJSON_CreateObject();
+		cJSON_AddStringToObject(game_history, "payin_tx", player_config.txid);
+		cJSON_AddStringToObject(game_history, "table_id", player_config.table_id);
+		cJSON_AddStringToObject(game_history, "dealer_id", player_config.dealer_id);
+		cJSON_AddStringToObject(game_history, "cashier_id", bet_get_cashiers_id_fqn());
+		cJSON_AddNumberToObject(game_history, "join_block", chips_get_block_count());
+		cJSON_AddNumberToObject(game_history, "amount", payin_amount);
+		
+		// Get game_id from table
+		char *game_id_str = poker_get_key_str(player_config.table_id, T_GAME_ID_KEY);
+		if (game_id_str) {
+			cJSON_AddStringToObject(game_history, "game_id", game_id_str);
+			
+			// Store with game_id as suffix
+			char *key_vdxfid = get_key_data_vdxf_id(P_GAME_HISTORY_KEY, game_id_str);
+			cJSON *out = poker_update_key_json(player_config.verus_pid, key_vdxfid, game_history, true);
+			if (out) {
+				dlg_info("Stored game history for dispute resolution");
+			}
+		}
+		cJSON_Delete(game_history);
 	}
 
 	return retval;
@@ -1647,4 +1673,385 @@ bool is_table_registered(char *table_id, char *dealer_id)
 		return true;
 	}
 	return false;
+}
+
+/* ============================================================================
+ * DISPUTE RESOLUTION FUNCTIONS
+ * ============================================================================ */
+
+/**
+ * Player raises a dispute for a game
+ * @param game_id The game ID to dispute
+ * @param reason The reason: "no_payout", "game_aborted", "timeout"
+ * @return OK on success, error code on failure
+ */
+int32_t player_raise_dispute(const char *game_id, const char *reason)
+{
+	int32_t retval = OK;
+	cJSON *dispute_request = NULL, *game_history = NULL, *out = NULL;
+	char *key_vdxfid = NULL;
+	
+	if (!game_id || !reason) {
+		dlg_error("game_id and reason are required");
+		return ERR_ARGS_NULL;
+	}
+	
+	dlg_info("=== RAISING DISPUTE ===");
+	dlg_info("Game ID: %s, Reason: %s", game_id, reason);
+	
+	// First, get game history to verify we have valid dispute data
+	key_vdxfid = get_key_data_vdxf_id(P_GAME_HISTORY_KEY, (char *)game_id);
+	game_history = get_cJSON_from_id_key_vdxfid(player_config.verus_pid, key_vdxfid);
+	
+	if (!game_history) {
+		dlg_error("No game history found for game_id %s - cannot dispute", game_id);
+		return ERR_GAME_ID_NOT_FOUND;
+	}
+	
+	const char *payin_tx = jstr(game_history, "payin_tx");
+	const char *table_id = jstr(game_history, "table_id");
+	
+	if (!payin_tx || !table_id) {
+		dlg_error("Invalid game history - missing payin_tx or table_id");
+		return ERR_INVALID_POS;
+	}
+	
+	// Build dispute request
+	dispute_request = cJSON_CreateObject();
+	cJSON_AddStringToObject(dispute_request, "payin_tx", payin_tx);
+	cJSON_AddStringToObject(dispute_request, "table_id", table_id);
+	cJSON_AddStringToObject(dispute_request, "game_id", game_id);
+	cJSON_AddStringToObject(dispute_request, "reason", reason);
+	cJSON_AddNumberToObject(dispute_request, "request_block", chips_get_block_count());
+	cJSON_AddStringToObject(dispute_request, "player_id", player_config.verus_pid);
+	
+	dlg_info("Dispute request: %s", cJSON_Print(dispute_request));
+	
+	// Store dispute request on player ID
+	key_vdxfid = get_key_data_vdxf_id(P_DISPUTE_REQUEST_KEY, (char *)game_id);
+	out = poker_update_key_json(player_config.verus_pid, key_vdxfid, dispute_request, true);
+	
+	cJSON_Delete(dispute_request);
+	
+	if (!out) {
+		dlg_error("Failed to store dispute request");
+		return ERR_GAME_STATE_UPDATE;
+	}
+	
+	dlg_info("Dispute request submitted successfully. Cashier will process it.");
+	return retval;
+}
+
+/**
+ * Check if a payin_tx is still unspent (funds with cashier)
+ * @param payin_tx The transaction ID
+ * @return true if still unspent, false if spent
+ */
+static bool is_payin_tx_unspent(const char *payin_tx)
+{
+	cJSON *tx_info = NULL, *params = NULL, *result = NULL;
+	int32_t retval = OK;
+	bool unspent = false;
+	
+	// Get raw transaction to find vout index for cashier
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(payin_tx));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(1)); // verbose
+	
+	retval = chips_rpc("getrawtransaction", params, &result);
+	cJSON_Delete(params);
+	
+	if (retval != OK || !result) {
+		return false;
+	}
+	
+	cJSON *vout = cJSON_GetObjectItem(result, "vout");
+	if (!vout) {
+		cJSON_Delete(result);
+		return false;
+	}
+	
+	// Find the vout that goes to cashier
+	for (int i = 0; i < cJSON_GetArraySize(vout); i++) {
+		cJSON *output = cJSON_GetArrayItem(vout, i);
+		cJSON *scriptPubKey = cJSON_GetObjectItem(output, "scriptPubKey");
+		if (scriptPubKey) {
+			cJSON *addresses = cJSON_GetObjectItem(scriptPubKey, "addresses");
+			if (addresses && cJSON_GetArraySize(addresses) > 0) {
+				// Check if this output is to cashier
+				// For now, assume any non-change output might be cashier's
+				int vout_n = jint(output, "n");
+				
+				// Check if this UTXO is still unspent
+				cJSON *utxo_params = cJSON_CreateArray();
+				cJSON_AddItemToArray(utxo_params, cJSON_CreateString(payin_tx));
+				cJSON_AddItemToArray(utxo_params, cJSON_CreateNumber(vout_n));
+				
+				cJSON *utxo_result = NULL;
+				int32_t utxo_retval = chips_rpc("gettxout", utxo_params, &utxo_result);
+				cJSON_Delete(utxo_params);
+				
+				if (utxo_retval == OK && utxo_result && utxo_result->type != cJSON_NULL) {
+					unspent = true;
+					cJSON_Delete(utxo_result);
+					break;
+				}
+				if (utxo_result) cJSON_Delete(utxo_result);
+			}
+		}
+	}
+	
+	cJSON_Delete(result);
+	return unspent;
+}
+
+/**
+ * Cashier processes a single dispute
+ * @param player_id The player who raised the dispute
+ * @param dispute_request The dispute request data
+ * @return OK on success, error code on failure
+ */
+static int32_t cashier_resolve_dispute(const char *player_id, cJSON *dispute_request)
+{
+	int32_t retval = OK;
+	const char *payin_tx = jstr(dispute_request, "payin_tx");
+	const char *table_id = jstr(dispute_request, "table_id");
+	const char *game_id = jstr(dispute_request, "game_id");
+	const char *reason = jstr(dispute_request, "reason");
+	int32_t request_block = jint(dispute_request, "request_block");
+	
+	cJSON *dispute_result = NULL, *out = NULL;
+	char *result_key = NULL;
+	const char *status = NULL;
+	const char *result_reason = NULL;
+	char payout_tx[128] = "";
+	
+	dlg_info("=== PROCESSING DISPUTE ===");
+	dlg_info("Player: %s, Game: %s, Reason: %s", player_id, game_id, reason);
+	
+	// Step 1: Verify payin_tx is still unspent (funds with cashier)
+	if (!is_payin_tx_unspent(payin_tx)) {
+		dlg_info("Payin TX %s already spent - dispute rejected", payin_tx);
+		status = "rejected";
+		result_reason = "payin_tx_already_spent";
+		goto write_result;
+	}
+	
+	// Step 2: Get game state from table
+	int32_t game_state = G_ZEROIZED_STATE;
+	char *current_game_id = poker_get_key_str((char *)table_id, T_GAME_ID_KEY);
+	
+	if (current_game_id && strcmp(current_game_id, game_id) == 0) {
+		game_state = get_game_state((char *)table_id);
+	}
+	
+	dlg_info("Current game state: %d", game_state);
+	
+	// Step 3: Decision logic
+	if (game_state == G_SETTLEMENT_COMPLETE) {
+		// Game already settled
+		status = "rejected";
+		result_reason = "game_already_settled";
+		dlg_info("Game already settled - dispute rejected");
+		
+	} else if (game_state == G_SETTLEMENT_PENDING) {
+		// Settlement pending but not complete - process it now
+		dlg_info("Settlement pending - processing now");
+		
+		// Read settlement info and send payout
+		cJSON *settlement = get_cJSON_from_id_key_vdxfid_from_height((char *)table_id,
+			get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, (char *)game_id), 0);
+		
+		if (settlement) {
+			// Find this player's payout amount
+			cJSON *player_ids_arr = cJSON_GetObjectItem(settlement, "player_ids");
+			cJSON *settle_amounts = cJSON_GetObjectItem(settlement, "settle_amounts");
+			
+			for (int i = 0; i < cJSON_GetArraySize(player_ids_arr); i++) {
+				cJSON *pid = cJSON_GetArrayItem(player_ids_arr, i);
+				if (pid && pid->valuestring && strcmp(pid->valuestring, player_id) == 0) {
+					double amount = cJSON_GetArrayItem(settle_amounts, i)->valuedouble;
+					
+					if (amount > 0) {
+						cJSON *payout_data = cJSON_CreateObject();
+						cJSON_AddStringToObject(payout_data, "type", "dispute_settlement");
+						cJSON_AddStringToObject(payout_data, "game_id", game_id);
+						
+						cJSON *tx_result = verus_sendcurrency_data(player_id, amount, payout_data);
+						if (tx_result) {
+							const char *txid = (tx_result->type == cJSON_String) ? 
+								tx_result->valuestring : jstr(tx_result, "opid");
+							if (txid) strncpy(payout_tx, txid, 127);
+							status = "paid";
+							result_reason = "settlement_processed";
+						} else {
+							status = "rejected";
+							result_reason = "payout_failed";
+						}
+						cJSON_Delete(payout_data);
+					} else {
+						status = "paid";
+						result_reason = "zero_amount_due";
+					}
+					break;
+				}
+			}
+		} else {
+			status = "rejected";
+			result_reason = "no_settlement_info";
+		}
+		
+	} else {
+		// Game in progress or aborted - check timeout
+		int32_t current_block = chips_get_block_count();
+		int32_t blocks_elapsed = current_block - request_block;
+		
+		// Get join_block from game history to check how old the payin is
+		cJSON *game_history = get_cJSON_from_id_key_vdxfid_from_height((char *)player_id,
+			get_key_data_vdxf_id(P_GAME_HISTORY_KEY, (char *)game_id), 0);
+		
+		int32_t join_block = game_history ? jint(game_history, "join_block") : 0;
+		int32_t payin_age = current_block - join_block;
+		
+		if (payin_age < DISPUTE_TIMEOUT_BLOCKS && game_state != G_ZEROIZED_STATE) {
+			// Game still active, too soon to dispute
+			status = "rejected";
+			result_reason = "game_still_active";
+			dlg_info("Game still active (payin age: %d blocks) - dispute rejected", payin_age);
+			
+		} else {
+			// Game likely aborted - refund player
+			dlg_info("Game appears aborted (payin age: %d blocks) - processing refund", payin_age);
+			
+			double amount = game_history ? jdouble(game_history, "amount") : 0;
+			
+			if (amount > 0) {
+				cJSON *refund_data = cJSON_CreateObject();
+				cJSON_AddStringToObject(refund_data, "type", "dispute_refund");
+				cJSON_AddStringToObject(refund_data, "game_id", game_id);
+				cJSON_AddStringToObject(refund_data, "reason", "game_aborted");
+				
+				cJSON *tx_result = verus_sendcurrency_data(player_id, amount, refund_data);
+				if (tx_result) {
+					const char *txid = (tx_result->type == cJSON_String) ? 
+						tx_result->valuestring : jstr(tx_result, "opid");
+					if (txid) strncpy(payout_tx, txid, 127);
+					status = "refunded";
+					result_reason = "game_aborted_refund";
+				} else {
+					status = "rejected";
+					result_reason = "refund_failed";
+				}
+				cJSON_Delete(refund_data);
+			} else {
+				status = "rejected";
+				result_reason = "no_amount_to_refund";
+			}
+		}
+	}
+
+write_result:
+	// Write dispute result to cashier ID
+	dispute_result = cJSON_CreateObject();
+	cJSON_AddStringToObject(dispute_result, "player_id", player_id);
+	cJSON_AddStringToObject(dispute_result, "game_id", game_id);
+	cJSON_AddStringToObject(dispute_result, "status", status);
+	cJSON_AddStringToObject(dispute_result, "payout_tx", payout_tx);
+	cJSON_AddStringToObject(dispute_result, "reason", result_reason);
+	cJSON_AddNumberToObject(dispute_result, "resolved_block", chips_get_block_count());
+	
+	dlg_info("Dispute result: %s", cJSON_Print(dispute_result));
+	
+	// Build key: c_dispute_result.<game_id>.<player_id>
+	char composite_key[256] = {0};
+	snprintf(composite_key, sizeof(composite_key), "%s.%s", game_id, player_id);
+	result_key = get_key_data_vdxf_id(C_DISPUTE_RESULT_KEY, composite_key);
+	
+	out = poker_update_key_json((char *)bet_get_cashiers_id_fqn(), result_key, dispute_result, true);
+	
+	cJSON_Delete(dispute_result);
+	
+	if (!out) {
+		dlg_error("Failed to write dispute result");
+		return ERR_GAME_STATE_UPDATE;
+	}
+	
+	dlg_info("Dispute resolved: %s - %s", status, result_reason);
+	return retval;
+}
+
+/**
+ * Cashier polls for and processes pending disputes
+ * @param known_players Array of known player IDs to check
+ * @param num_players Number of players
+ * @return Number of disputes processed
+ */
+int32_t cashier_poll_disputes(const char **known_players, int32_t num_players)
+{
+	int32_t disputes_processed = 0;
+	
+	for (int32_t i = 0; i < num_players; i++) {
+		const char *player_id = known_players[i];
+		if (!player_id) continue;
+		
+		// Check for dispute requests on this player's ID
+		// We need to check all game IDs - for now, use a recent bootstrap height
+		int32_t bootstrap_height = chips_get_block_count() - 200;
+		
+		cJSON *cmm = get_cmm_from_height(player_id, 0, bootstrap_height);
+		if (!cmm) continue;
+		
+		// Look for p_dispute_request keys - iterate through CMM object
+		cJSON *item = cmm->child;
+		while (item) {
+			const char *key = item->string;
+			if (key && strstr(key, "p_dispute_request")) {
+				// Found a dispute request
+				cJSON *dispute_data = item;
+				if (dispute_data && cJSON_GetArraySize(dispute_data) > 0) {
+					cJSON *latest = cJSON_GetArrayItem(dispute_data, cJSON_GetArraySize(dispute_data) - 1);
+					if (latest && latest->type == cJSON_String) {
+						cJSON *dispute_request = hex_cJSON(latest->valuestring);
+						if (dispute_request) {
+							// Check if already processed
+							const char *game_id = jstr(dispute_request, "game_id");
+							if (game_id) {
+								char composite_key[256] = {0};
+								snprintf(composite_key, sizeof(composite_key), "%s.%s", game_id, player_id);
+								cJSON *existing_result = get_cJSON_from_id_key_vdxfid(
+									(char *)bet_get_cashiers_id_fqn(), 
+									get_key_data_vdxf_id(C_DISPUTE_RESULT_KEY, composite_key));
+								
+								if (!existing_result) {
+									// Not yet processed
+									cashier_resolve_dispute(player_id, dispute_request);
+									disputes_processed++;
+								}
+							}
+							cJSON_Delete(dispute_request);
+						}
+					}
+				}
+			}
+			item = item->next;
+		}
+	}
+	
+	return disputes_processed;
+}
+
+/**
+ * Player checks dispute result
+ * @param game_id The game ID that was disputed
+ * @return cJSON with dispute result or NULL
+ */
+cJSON *player_check_dispute_result(const char *game_id)
+{
+	if (!game_id) return NULL;
+	
+	char composite_key[256] = {0};
+	snprintf(composite_key, sizeof(composite_key), "%s.%s", game_id, player_config.verus_pid);
+	
+	return get_cJSON_from_id_key_vdxfid((char *)bet_get_cashiers_id_fqn(), 
+		get_key_data_vdxf_id(C_DISPUTE_RESULT_KEY, composite_key));
 }

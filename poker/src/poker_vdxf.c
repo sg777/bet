@@ -267,6 +267,11 @@ static int32_t check_player_join_request(const char *player_id, const char *tabl
 {
 	cJSON *join_request = NULL;
 	
+	// First check if player identity exists (silently, to avoid noisy logs)
+	if (!is_id_exists(player_id, 0)) {
+		return 0;  // Player identity doesn't exist yet
+	}
+	
 	// Get player's p_join_request from their identity
 	join_request = get_cJSON_from_id_key(player_id, P_JOIN_REQUEST_KEY, 0);
 	if (!join_request) {

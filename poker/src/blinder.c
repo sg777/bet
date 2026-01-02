@@ -169,6 +169,119 @@ static int32_t handle_bv_reveal_card(char *table_id)
 	return retval;
 }
 
+// Process settlement - cashier sends funds to players
+static int32_t cashier_process_settlement(char *table_id)
+{
+	int32_t retval = OK;
+	char *game_id_str = NULL;
+	cJSON *settlement_info = NULL, *settle_amounts = NULL, *player_ids = NULL;
+	cJSON *payout_txs = NULL;
+	
+	dlg_info("=== PROCESSING POT SETTLEMENT ===");
+	
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	if (!game_id_str) {
+		dlg_error("Failed to get game_id");
+		return ERR_GAME_ID_NOT_FOUND;
+	}
+	
+	// Read settlement info from table ID
+	settlement_info = get_cJSON_from_id_key_vdxfid_from_height(table_id,
+		get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, game_id_str), g_start_block);
+	
+	if (!settlement_info) {
+		dlg_error("No settlement info found");
+		return ERR_INVALID_POS;
+	}
+	
+	const char *status = jstr(settlement_info, "status");
+	if (!status || strcmp(status, "pending") != 0) {
+		dlg_info("Settlement not pending (status: %s)", status ? status : "null");
+		return OK;
+	}
+	
+	settle_amounts = cJSON_GetObjectItem(settlement_info, "settle_amounts");
+	player_ids = cJSON_GetObjectItem(settlement_info, "player_ids");
+	
+	if (!settle_amounts || !player_ids) {
+		dlg_error("Missing settle_amounts or player_ids in settlement info");
+		return ERR_INVALID_POS;
+	}
+	
+	int num_players = cJSON_GetArraySize(settle_amounts);
+	payout_txs = cJSON_CreateArray();
+	
+	// Send funds to each player
+	for (int i = 0; i < num_players; i++) {
+		cJSON *amount_item = cJSON_GetArrayItem(settle_amounts, i);
+		cJSON *player_id_item = cJSON_GetArrayItem(player_ids, i);
+		
+		if (!amount_item || !player_id_item) continue;
+		
+		double amount = amount_item->valuedouble;
+		const char *player_id = player_id_item->valuestring;
+		
+		if (amount <= 0) {
+			dlg_info("Player %s has no payout (amount: %f)", player_id, amount);
+			cJSON_AddItemToArray(payout_txs, cJSON_CreateString(""));
+			continue;
+		}
+		
+		dlg_info("Sending %f CHIPS to player %s", amount, player_id);
+		
+		// Create payout data
+		cJSON *payout_data = cJSON_CreateObject();
+		cJSON_AddStringToObject(payout_data, "type", "game_settlement");
+		cJSON_AddStringToObject(payout_data, "game_id", game_id_str);
+		cJSON_AddStringToObject(payout_data, "table_id", table_id);
+		cJSON_AddNumberToObject(payout_data, "player_slot", i);
+		
+		// Send using sendcurrency
+		cJSON *tx_result = verus_sendcurrency_data(player_id, amount, payout_data);
+		
+		if (tx_result) {
+			const char *txid = NULL;
+			if (tx_result->type == cJSON_String) {
+				txid = tx_result->valuestring;
+			} else {
+				txid = jstr(tx_result, "opid");
+			}
+			dlg_info("Payout TX for player %s: %s", player_id, txid ? txid : "pending");
+			cJSON_AddItemToArray(payout_txs, cJSON_CreateString(txid ? txid : "pending"));
+		} else {
+			dlg_error("Failed to send payout to player %s", player_id);
+			cJSON_AddItemToArray(payout_txs, cJSON_CreateString("failed"));
+		}
+		
+		cJSON_Delete(payout_data);
+	}
+	
+	// Update settlement info with payout TXs and mark complete
+	cJSON *updated_settlement = cJSON_Duplicate(settlement_info, 1);
+	cJSON_DeleteItemFromObject(updated_settlement, "status");
+	cJSON_AddStringToObject(updated_settlement, "status", "completed");
+	cJSON_AddItemToObject(updated_settlement, "payout_txs", payout_txs);
+	
+	// Write updated settlement to table ID
+	cJSON *out = poker_update_key_json(table_id,
+		get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, game_id_str),
+		updated_settlement, true);
+	
+	if (!out) {
+		dlg_error("Failed to update settlement status");
+		cJSON_Delete(updated_settlement);
+		return ERR_GAME_STATE_UPDATE;
+	}
+	
+	dlg_info("Settlement complete - updating game state");
+	
+	// Update game state to complete
+	append_game_state(table_id, G_SETTLEMENT_COMPLETE, NULL);
+	
+	cJSON_Delete(updated_settlement);
+	return retval;
+}
+
 int32_t handle_game_state_cashier(char *table_id)
 {
 	int32_t game_state, retval = OK;
@@ -190,6 +303,13 @@ int32_t handle_game_state_cashier(char *table_id)
 		break;
 	case G_REVEAL_CARD:
 		retval = handle_bv_reveal_card(table_id);
+		break;
+	case G_SETTLEMENT_PENDING:
+		dlg_info("Processing pot settlement...");
+		retval = cashier_process_settlement(table_id);
+		break;
+	case G_SETTLEMENT_COMPLETE:
+		dlg_info("Settlement complete - game finished");
 		break;
 	}
 	return retval;
