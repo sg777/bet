@@ -9,6 +9,7 @@
 #include "dealer_registration.h"
 #include "config.h"
 #include "poker_vdxf.h"
+#include "storage.h"
 
 struct d_deck_info_struct d_deck_info;
 struct game_meta_info_struct game_meta_info;
@@ -181,49 +182,71 @@ int32_t dealer_table_init(struct table *t)
 		dlg_info("Table initialized successfully");
 		break;
 	default:
-		// Table is already started - load start_block and player_ids from chain
+		// Table is already started - attempt REJOIN
+		dlg_info("═══════════════════════════════════════════");
+		dlg_info("  🔄 DEALER REJOIN - Resuming game...      ");
+		dlg_info("═══════════════════════════════════════════");
 		{
 			char *game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
-			if (game_id_str) {
-				// Bootstrap read with fallback height to get start_block
-				int32_t bootstrap_height = chips_get_block_count() - 1000;
-				cJSON *t_table_info = get_cJSON_from_id_key_vdxfid_from_height(t->table_id, 
-					get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str), bootstrap_height);
-				if (t_table_info) {
-					t->start_block = jint(t_table_info, "start_block");
-					g_start_block = t->start_block;  // Set global for CMM reads
-					dlg_info("Loaded start_block from chain: %d", t->start_block);
-				}
-				
-				// Load player_ids from t_player_info (now g_start_block is set)
-				cJSON *t_player_info = get_cJSON_from_id_key_vdxfid_from_height(t->table_id,
-					get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
-				if (t_player_info) {
-					num_of_players = jint(t_player_info, "num_players");
-					cJSON *player_info_arr = cJSON_GetObjectItem(t_player_info, "player_info");
-					if (player_info_arr && player_info_arr->type == cJSON_Array) {
-						for (int32_t i = 0; i < num_of_players && i < CARDS_MAXPLAYERS; i++) {
-							cJSON *item = cJSON_GetArrayItem(player_info_arr, i);
-							if (item && item->valuestring) {
-								// Parse the player_id from format: "p1_<public_key>_<slot>"
-								char *player_info_str = item->valuestring;
-								// Extract player_id (part before the first underscore)
-								char *underscore = strchr(player_info_str, '_');
-								if (underscore) {
-									size_t id_len = underscore - player_info_str;
-									if (id_len < MAX_ID_LEN) {
-										strncpy(player_ids[i], player_info_str, id_len);
-										player_ids[i][id_len] = '\0';
-										dlg_info("Loaded player %d ID: %s", i, player_ids[i]);
-									}
+			if (!game_id_str) {
+				dlg_error("Cannot rejoin: game_id not found on chain");
+				return ERR_GAME_ID_NOT_FOUND;
+			}
+			
+			// Bootstrap read with fallback height to get start_block
+			int32_t bootstrap_height = chips_get_block_count() - 1000;
+			cJSON *t_table_info = get_cJSON_from_id_key_vdxfid_from_height(t->table_id, 
+				get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str), bootstrap_height);
+			if (t_table_info) {
+				t->start_block = jint(t_table_info, "start_block");
+				g_start_block = t->start_block;
+				dlg_info("Loaded start_block from chain: %d", t->start_block);
+			} else {
+				dlg_error("Cannot rejoin: t_table_info not found");
+				return ERR_TABLE_LAUNCH;
+			}
+			
+			// Load player_ids from t_player_info
+			cJSON *t_player_info = get_cJSON_from_id_key_vdxfid_from_height(t->table_id,
+				get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
+			if (t_player_info) {
+				num_of_players = jint(t_player_info, "num_players");
+				cJSON *player_info_arr = cJSON_GetObjectItem(t_player_info, "player_info");
+				if (player_info_arr && player_info_arr->type == cJSON_Array) {
+					for (int32_t i = 0; i < num_of_players && i < CARDS_MAXPLAYERS; i++) {
+						cJSON *item = cJSON_GetArrayItem(player_info_arr, i);
+						if (item && item->valuestring) {
+							char *player_info_str = item->valuestring;
+							char *underscore = strchr(player_info_str, '_');
+							if (underscore) {
+								size_t id_len = underscore - player_info_str;
+								if (id_len < MAX_ID_LEN) {
+									strncpy(player_ids[i], player_info_str, id_len);
+									player_ids[i][id_len] = '\0';
+									dlg_info("Loaded player %d ID: %s", i, player_ids[i]);
 								}
 							}
 						}
 					}
 				}
 			}
+			
+			// If game is past dealer shuffle, load deck info from local DB
+			if (game_state >= G_DECK_SHUFFLING_D) {
+				int32_t load_result = load_dealer_deck_info(game_id_str);
+				if (load_result == OK) {
+					dlg_info("✓ Dealer deck info loaded from local DB - rejoin successful");
+				} else {
+					dlg_error("✗ Cannot rejoin: dealer deck info not found in local DB");
+					dlg_error("  Game cannot continue - deck keys lost");
+					return ERR_DECK_BLINDING_DEALER;
+				}
+			}
+			
+			// Set game_id global
+			game_id = bits256_conv(game_id_str);
 		}
-		dlg_info("Table is in game, at state ::%s", game_state_str(game_state));
+		dlg_info("Rejoin successful. Game state: %s", game_state_str(game_state));
 	}
 	return retval;
 }
@@ -286,6 +309,11 @@ int32_t dealer_shuffle_deck(char *id)
 	if (!out)
 		retval = ERR_DECK_BLINDING_DEALER;
 	dlg_info("%s", cJSON_Print(out));
+
+	// Save dealer deck info to local DB for rejoin capability
+	if (retval == OK) {
+		save_dealer_deck_info(game_id_str);
+	}
 
 	return retval;
 }

@@ -358,6 +358,7 @@ void bet_start(int argc, char **argv)
 	bet_parse_rpc_credentials(); // Load RPC credentials for REST API
 	bet_set_unique_id();
 	bet_parse_blockchain_config_ini_file();
+	bet_sqlite3_init();  // Initialize SQLite database for all node types
 
 	// Dealer management commands
 	if (strcmp(cmd, "add_dealer") == 0 && argc == 3) {

@@ -31,6 +31,8 @@ int32_t insert_cashier_deck_info(char *table_id);
 // Player deck info persistence for rejoin
 int32_t save_player_deck_info(const char *game_id_str, const char *table_id, int32_t player_id);
 int32_t load_player_deck_info(const char *game_id_str);
+int32_t save_dealer_deck_info(const char *game_id_str);
+int32_t load_dealer_deck_info(const char *game_id_str);
 
 // Player local state persistence (payin_tx, decoded cards, game progress)
 void init_p_local_state(void);

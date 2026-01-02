@@ -558,10 +558,10 @@ int32_t update_player_deck_info_game_id_p_id(char *tx_id)
 	return retval;
 }
 
-int32_t insert_dealer_deck_info()
+int32_t save_dealer_deck_info(const char *game_id_str)
 {
 	int32_t retval = OK;
-	char *sql_query = NULL, game_id_str[65], str[65], *dealer_deck_priv = NULL, *perm = NULL;
+	char *sql_query = NULL, str[65], *dealer_deck_priv = NULL, *perm = NULL;
 	cJSON *d_perm = NULL, *d_blindinfo = NULL;
 
 	d_perm = cJSON_CreateArray();
@@ -576,11 +576,19 @@ int32_t insert_dealer_deck_info()
 	}
 	cJSON_hex(d_blindinfo, &dealer_deck_priv);
 
-	sql_query = calloc(sql_query_size, sizeof(char));
+	sql_query = calloc(sql_query_size * 4, sizeof(char));
 	sprintf(sql_query,
-		"insert into dealer_deck_info(game_id, perm, dealer_deck_priv) values(\'%s\', \'%s\', \'%s\')",
+		"INSERT OR REPLACE INTO dealer_deck_info(game_id, perm, dealer_deck_priv) VALUES(\'%s\', \'%s\', \'%s\')",
 		game_id_str, perm, dealer_deck_priv);
+	
+	dlg_info("Saving dealer deck info for game_id: %s", game_id_str);
 	retval = bet_run_query(sql_query);
+	if (retval != OK) {
+		dlg_error("Failed to save dealer deck info");
+	} else {
+		dlg_info("Dealer deck info saved successfully");
+	}
+	
 	if (sql_query)
 		free(sql_query);
 	if (perm)
@@ -591,6 +599,84 @@ int32_t insert_dealer_deck_info()
 		cJSON_Delete(d_perm);
 	if (d_blindinfo)
 		cJSON_Delete(d_blindinfo);
+	return retval;
+}
+
+int32_t load_dealer_deck_info(const char *game_id_str)
+{
+	sqlite3_stmt *stmt = NULL;
+	sqlite3 *db = NULL;
+	char *sql_query = NULL;
+	int32_t rc, retval = ERR_ID_NOT_FOUND;
+	const char *perm_hex = NULL, *deck_priv_hex = NULL;
+	char *perm_json = NULL, *deck_priv_json = NULL;
+	cJSON *perm_array = NULL, *deck_priv_array = NULL;
+
+	db = bet_get_db_instance();
+	sql_query = calloc(sql_query_size, sizeof(char));
+	sprintf(sql_query, "SELECT perm, dealer_deck_priv FROM dealer_deck_info WHERE game_id = \'%s\'",
+		game_id_str);
+
+	rc = sqlite3_prepare_v2(db, sql_query, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		dlg_error("DB error: %s", sqlite3_errmsg(db));
+		goto end;
+	}
+
+	if ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+		perm_hex = (const char *)sqlite3_column_text(stmt, 0);
+		deck_priv_hex = (const char *)sqlite3_column_text(stmt, 1);
+
+		if (perm_hex == NULL || deck_priv_hex == NULL) {
+			dlg_error("Dealer deck info incomplete in DB");
+			retval = ERR_TABLE_DECODING_FAILED;
+			goto end;
+		}
+
+		// Decode permutation (hex to JSON string)
+		size_t perm_hex_len = strlen(perm_hex);
+		perm_json = calloc(perm_hex_len / 2 + 1, sizeof(char));
+		hexstr_to_str(perm_hex, perm_json);
+		
+		perm_array = cJSON_Parse(perm_json);
+		if (perm_array && perm_array->type == cJSON_Array) {
+			for (int32_t i = 0; i < cJSON_GetArraySize(perm_array) && i < CARDS_MAXCARDS; i++) {
+				d_deck_info.d_permi[i] = (int32_t)cJSON_GetArrayItem(perm_array, i)->valuedouble;
+			}
+		}
+
+		// Decode deck private keys (hex to JSON string)
+		size_t deck_hex_len = strlen(deck_priv_hex);
+		deck_priv_json = calloc(deck_hex_len / 2 + 1, sizeof(char));
+		hexstr_to_str(deck_priv_hex, deck_priv_json);
+		
+		deck_priv_array = cJSON_Parse(deck_priv_json);
+		if (deck_priv_array && deck_priv_array->type == cJSON_Array) {
+			for (int32_t i = 0; i < cJSON_GetArraySize(deck_priv_array) && i < CARDS_MAXCARDS; i++) {
+				cJSON *item = cJSON_GetArrayItem(deck_priv_array, i);
+				if (item && item->type == cJSON_String && item->valuestring) {
+					char *priv_str = strdup(item->valuestring);
+					d_deck_info.dealer_r[i].priv = bits256_conv(priv_str);
+					// Recompute public point from private
+					d_deck_info.dealer_r[i].prod = xoverz_donna(d_deck_info.dealer_r[i].priv);
+					free(priv_str);
+				}
+			}
+		}
+
+		dlg_info("Dealer deck info loaded for game_id: %s", game_id_str);
+		retval = OK;
+	} else {
+		dlg_warn("No dealer deck info found for game_id: %s", game_id_str);
+	}
+
+end:
+	if (stmt) sqlite3_finalize(stmt);
+	if (sql_query) free(sql_query);
+	if (perm_json) free(perm_json);
+	if (deck_priv_json) free(deck_priv_json);
+	if (perm_array) cJSON_Delete(perm_array);
+	if (deck_priv_array) cJSON_Delete(deck_priv_array);
 	return retval;
 }
 
