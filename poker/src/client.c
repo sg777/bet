@@ -983,23 +983,21 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 static void bet_gui_init_message(struct privatebet_info *bet)
 {
 	cJSON *init_info = NULL;
-	cJSON *req_seats_info = NULL;
 
-	if (backend_status == backend_not_ready) {
-		// Backend is searching for or joining a table
-		init_info = cJSON_CreateObject();
-		cJSON_AddStringToObject(init_info, "method", "backend_status");
-		cJSON_AddNumberToObject(init_info, "backend_status", backend_not_ready);
-		cJSON_AddStringToObject(init_info, "message", "Connected! Backend is joining table...");
-		dlg_info("GUI connected. Backend is processing table join...");
-		player_lws_write(init_info);
+	// Send actual backend_status (1 if wallet+ID verified, 0 if not)
+	init_info = cJSON_CreateObject();
+	cJSON_AddStringToObject(init_info, "method", "backend_status");
+	cJSON_AddNumberToObject(init_info, "backend_status", backend_status);
+	
+	if (backend_status == backend_ready) {
+		cJSON_AddStringToObject(init_info, "message", "Backend ready!");
+		dlg_info("GUI connected. Backend status: READY");
 	} else {
-		req_seats_info = cJSON_CreateObject();
-		cJSON_AddStringToObject(req_seats_info, "method", "req_seats_info");
-		cJSON_AddStringToObject(req_seats_info, "req_identifier", req_identifier);
-		dlg_info("Requesting seats into with the dealer \n %s", cJSON_Print(req_seats_info));
-		// Nanomsg removed - no longer used
+		cJSON_AddStringToObject(init_info, "message", "Backend initializing...");
+		dlg_info("GUI connected. Backend status: NOT READY");
 	}
+	
+	player_lws_write(init_info);
 }
 
 int32_t lws_callback_http_player_write(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in,

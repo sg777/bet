@@ -447,6 +447,11 @@ void bet_start(int argc, char **argv)
 	
 	// Backend initialization
 	if (retval == OK) {
+		// Set backend ready - wallet and ID accessible
+		extern int32_t backend_status;
+		backend_status = backend_ready;
+		dlg_info("Backend status set to READY (wallet + ID verified)");
+		
 		pthread_t ws_thread;  // Declare outside so it's accessible later
 		
 		if (g_betting_mode == BET_MODE_GUI) {
