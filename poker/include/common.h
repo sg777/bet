@@ -40,10 +40,7 @@ enum betting_mode {
 
 extern int g_betting_mode;
 
-// GUI join approval mechanism
-extern bool gui_join_approved;
-extern pthread_mutex_t gui_join_mutex;
-extern pthread_cond_t gui_join_cond;  // Global betting mode
+// Global betting mode
 
 
 #define mchips_msatoshichips    1000000 // 0.01mCHIPS

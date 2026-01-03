@@ -51,11 +51,6 @@ int64_t sc_start_block = 9693174;
 // Betting mode: 0=AUTO (for testing), 1=CLI (read from stdin), 2=GUI (websocket)
 int g_betting_mode = BET_MODE_AUTO;
 
-// GUI join approval mechanism
-bool gui_join_approved = false;
-pthread_mutex_t gui_join_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t gui_join_cond = PTHREAD_COND_INITIALIZER;
-
 struct privatebet_info *bet_player = NULL;
 struct privatebet_vars *player_vars = NULL;
 
@@ -452,52 +447,40 @@ void bet_start(int argc, char **argv)
 	
 	// Backend initialization
 	if (retval == OK) {
-	if (g_betting_mode == BET_MODE_GUI) {
-		// Set player-specific WebSocket port from config
-		gui_ws_port = player_config.ws_port;
+		pthread_t ws_thread;  // Declare outside so it's accessible later
+		
+		if (g_betting_mode == BET_MODE_GUI) {
+			// Set player-specific WebSocket port from config
+			gui_ws_port = player_config.ws_port;
 			
-			// Start WebSocket thread
-			pthread_t ws_thread;
-				
-				dlg_info("Starting GUI WebSocket server on port %d...", gui_ws_port);
-				
-				// Start WebSocket thread for GUI communication
-				if (OS_thread_create(&ws_thread, NULL, (void *)bet_player_frontend_loop, NULL) != 0) {
-					dlg_error("Failed to start WebSocket thread");
-				}
-				
+			dlg_info("Starting GUI WebSocket server on port %d...", gui_ws_port);
+			
+			// Start WebSocket thread for GUI communication
+			if (OS_thread_create(&ws_thread, NULL, (void *)bet_player_frontend_loop, NULL) != 0) {
+				dlg_error("Failed to start WebSocket thread");
+			}
+			
 			// Small delay to let WebSocket server start
 			sleep(1);
 			
 			dlg_info("Player node started. WebSocket server listening on port %d", gui_ws_port);
-			dlg_info("Waiting for GUI to connect and send join command...");
-			dlg_info("GUI should send { \"method\": \"join_table\" } to proceed");
-			
-			// Wait for GUI to approve join
-			pthread_mutex_lock(&gui_join_mutex);
-			while (!gui_join_approved) {
-				pthread_cond_wait(&gui_join_cond, &gui_join_mutex);
-			}
-			pthread_mutex_unlock(&gui_join_mutex);
+			dlg_info("Backend will process game events and send updates to GUI");
+		}
 		
-		dlg_info("\033[1;35m[✓ JOIN APPROVED]\033[0m Proceeding with table join...");
-
-			// Run backend - it will keep trying to find/join tables
-			retval = handle_verus_player();
-				
-				// If backend exits, wait for WebSocket thread (keeps process alive)
-				dlg_info("Backend exited, WebSocket still running...");
-				pthread_join(ws_thread, NULL);
-			} else {
-				// Non-GUI mode - just run backend directly
-				retval = handle_verus_player();
-			}
-			
-			if (retval != OK) {
-				dlg_error("[Backend] Backend initialization failed: %s", bet_err_str(retval));
-			}
+		// Run backend - it will keep trying to find/join tables
+		retval = handle_verus_player();
+		
+		if (g_betting_mode == BET_MODE_GUI) {
+			// If backend exits, wait for WebSocket thread (keeps process alive)
+			dlg_info("Backend exited, WebSocket still running...");
+			pthread_join(ws_thread, NULL);
+		}
+		
+		if (retval != OK) {
+			dlg_error("[Backend] Backend initialization failed: %s", bet_err_str(retval));
 		}
 	}
+	}  // Close player block
 	// Game commands
 	else if (strcmp(cmd, "game") == 0) {
 		playing_nodes_init();

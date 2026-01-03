@@ -118,7 +118,6 @@ void player_lws_write(cJSON *data)
 	if (method != NULL) {
 		if (strcmp(method, "table_info") == 0 ||
 		    strcmp(method, "backend_status") == 0 ||
-		    strcmp(method, "join_ack") == 0 ||
 		    strcmp(method, "bal_info") == 0) {
 			is_safe_message = true;
 		}
@@ -948,20 +947,8 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 		bet_player_table_info();
 		break;
 	cases("join_table")
-	// GUI approved joining table
-	dlg_info("\033[1;33m[⚡ ACTION]\033[0m Received join_table command from GUI");
-		pthread_mutex_lock(&gui_join_mutex);
-		gui_join_approved = true;
-		pthread_cond_signal(&gui_join_cond);
-		pthread_mutex_unlock(&gui_join_mutex);
-		
-		// Send acknowledgment to GUI
-		cJSON *join_ack = cJSON_CreateObject();
-		cJSON_AddStringToObject(join_ack, "method", "join_ack");
-		cJSON_AddStringToObject(join_ack, "status", "approved");
-		cJSON_AddStringToObject(join_ack, "message", "Joining table...");
-		player_lws_write(join_ack);
-		cJSON_Delete(join_ack);
+		// Legacy handler - no longer needed, backend auto-joins
+		dlg_info("Received join_table command from GUI (ignored - backend auto-joins)");
 		break;
 		cases("withdraw")
 			{
@@ -999,13 +986,12 @@ static void bet_gui_init_message(struct privatebet_info *bet)
 	cJSON *req_seats_info = NULL;
 
 	if (backend_status == backend_not_ready) {
-		// In GUI mode, backend is waiting for join approval
-		// Send a friendly status message instead of a warning
+		// Backend is searching for or joining a table
 		init_info = cJSON_CreateObject();
 		cJSON_AddStringToObject(init_info, "method", "backend_status");
 		cJSON_AddNumberToObject(init_info, "backend_status", backend_not_ready);
-		cJSON_AddStringToObject(init_info, "message", "Connected! Request wallet info and click 'Join Table' to start.");
-		dlg_info("GUI connected. Waiting for user to request wallet info and approve join.");
+		cJSON_AddStringToObject(init_info, "message", "Connected! Backend is joining table...");
+		dlg_info("GUI connected. Backend is processing table join...");
 		player_lws_write(init_info);
 	} else {
 		req_seats_info = cJSON_CreateObject();
