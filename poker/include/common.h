@@ -31,6 +31,15 @@ enum bet_dcv_state {
 	pos_on_table_full  = 3 
 };
 
+// Betting input mode
+enum betting_mode {
+	BET_MODE_AUTO = 0,   // Auto-check/call for testing
+	BET_MODE_CLI  = 1,   // Read from CLI (stdin)
+	BET_MODE_GUI  = 2    // Read from GUI via websocket
+};
+
+extern int g_betting_mode;  // Global betting mode
+
 
 #define mchips_msatoshichips    1000000 // 0.01mCHIPS
 #define channel_fund_satoshis   16777215 // 0.167CHIPS this is the mx limit set up the c lightning node
@@ -38,7 +47,8 @@ enum bet_dcv_state {
 #define satoshis_per_unit       1000
 #define normalization_factor    100
 
-#define CARDS_MAXCARDS       14 // 52 for full deck. 14 = 4 hole (2 players) + 5 community + 5 spare
+#define CARDS_MAXCARDS       14 // 14 cards for 2 players (4 hole + 5 community + 5 spare)
+// Note: 52-card deck requires chunked identity updates (too large for single update)
 #define CARDS_MAXPLAYERS     9 // 9   //
 #define CARDS_MAXROUNDS      4 // 9   //
 #define CARDS_MAXCHIPS       1000

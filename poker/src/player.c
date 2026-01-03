@@ -402,26 +402,120 @@ int32_t player_handle_betting(char *table_id)
 	
 	dlg_info("═══════════════════════════════════════════");
 	
-	// For now, auto-respond based on action type
-	// TODO: In production, get input from GUI via websocket
-	if (strcmp(action, "small_blind") == 0) {
-		dlg_info("Posting small blind: %.4f CHIPS", min_amount);
-		retval = player_write_betting_action(table_id, "bet", min_amount);
-		p_local_state.last_game_state = round;
-	} else if (strcmp(action, "big_blind") == 0) {
-		dlg_info("Posting big blind: %.4f CHIPS", min_amount);
-		retval = player_write_betting_action(table_id, "bet", min_amount);
-		p_local_state.last_game_state = round;
-	} else {
-		// Regular betting - for testing, auto-call or check
-		if (min_amount > 0.0) {
-			dlg_info("Auto-calling %.4f CHIPS...", min_amount);
-			retval = player_write_betting_action(table_id, "call", min_amount);
+	// Handle based on betting mode
+	extern int g_betting_mode;
+	
+	if (g_betting_mode == BET_MODE_CLI) {
+		// CLI mode - get input from user
+		char input[256] = {0};
+		double bet_amount = 0.0;
+		
+		// For blinds, auto-post (mandatory)
+		if (strcmp(action, "small_blind") == 0 || strcmp(action, "big_blind") == 0) {
+			printf("\n  [AUTO] Posting %s: %.4f CHIPS\n", action, min_amount);
+			retval = player_write_betting_action(table_id, "bet", min_amount);
 		} else {
-			dlg_info("Auto-checking...");
-			retval = player_write_betting_action(table_id, "check", 0.0);
+			// Regular betting round - get user input
+			printf("\n  Enter action (fold/check/call/raise/allin): ");
+			fflush(stdout);
+			
+			if (fgets(input, sizeof(input), stdin) != NULL) {
+				// Remove newline
+				input[strcspn(input, "\n")] = 0;
+				
+				// Parse the action
+				char action_str[32] = {0};
+				double raise_amount = 0.0;
+				
+				// Parse "raise 0.05" style input
+				if (sscanf(input, "%31s %lf", action_str, &raise_amount) >= 1) {
+					if (strcmp(action_str, "fold") == 0 || strcmp(action_str, "f") == 0) {
+						printf("  → Folding...\n");
+						retval = player_write_betting_action(table_id, "fold", 0.0);
+					} else if (strcmp(action_str, "check") == 0 || strcmp(action_str, "x") == 0) {
+						if (min_amount > 0.0) {
+							printf("  ⚠ Cannot check, must call %.4f or fold\n", min_amount);
+							printf("  Enter action: ");
+							fflush(stdout);
+							// Re-read
+							if (fgets(input, sizeof(input), stdin) != NULL) {
+								input[strcspn(input, "\n")] = 0;
+								if (strcmp(input, "call") == 0 || strcmp(input, "c") == 0) {
+									printf("  → Calling %.4f CHIPS...\n", min_amount);
+									retval = player_write_betting_action(table_id, "call", min_amount);
+								} else {
+									printf("  → Folding...\n");
+									retval = player_write_betting_action(table_id, "fold", 0.0);
+								}
+							}
+						} else {
+							printf("  → Checking...\n");
+							retval = player_write_betting_action(table_id, "check", 0.0);
+						}
+					} else if (strcmp(action_str, "call") == 0 || strcmp(action_str, "c") == 0) {
+						printf("  → Calling %.4f CHIPS...\n", min_amount);
+						retval = player_write_betting_action(table_id, "call", min_amount);
+					} else if (strcmp(action_str, "raise") == 0 || strcmp(action_str, "r") == 0) {
+						if (raise_amount <= 0.0) {
+							printf("  Enter raise amount: ");
+							fflush(stdout);
+							if (scanf("%lf", &raise_amount) != 1) raise_amount = min_amount * 2;
+							// Clear input buffer
+							int ch; while ((ch = getchar()) != '\n' && ch != EOF);
+						}
+						printf("  → Raising to %.4f CHIPS...\n", raise_amount);
+						retval = player_write_betting_action(table_id, "raise", raise_amount);
+					} else if (strcmp(action_str, "allin") == 0 || strcmp(action_str, "a") == 0) {
+						// Get player funds
+						cJSON *pf = cJSON_GetObjectItem(betting_state, "player_funds");
+						double my_funds = 0.0;
+						if (pf && p_deck_info.player_id < cJSON_GetArraySize(pf)) {
+							my_funds = cJSON_GetArrayItem(pf, p_deck_info.player_id)->valuedouble;
+						}
+						printf("  → Going ALL-IN with %.4f CHIPS!\n", my_funds);
+						retval = player_write_betting_action(table_id, "allin", my_funds);
+					} else {
+						printf("  ⚠ Unknown action '%s'. Auto-checking/calling...\n", action_str);
+						if (min_amount > 0.0) {
+							retval = player_write_betting_action(table_id, "call", min_amount);
+						} else {
+							retval = player_write_betting_action(table_id, "check", 0.0);
+						}
+					}
+				} else {
+					// Empty input - auto check/call
+					if (min_amount > 0.0) {
+						printf("  → Auto-calling %.4f CHIPS...\n", min_amount);
+						retval = player_write_betting_action(table_id, "call", min_amount);
+					} else {
+						printf("  → Auto-checking...\n");
+						retval = player_write_betting_action(table_id, "check", 0.0);
+					}
+				}
+			}
 		}
 		p_local_state.last_game_state = round;
+	} else {
+		// AUTO mode - auto-respond based on action type
+		if (strcmp(action, "small_blind") == 0) {
+			dlg_info("Posting small blind: %.4f CHIPS", min_amount);
+			retval = player_write_betting_action(table_id, "bet", min_amount);
+			p_local_state.last_game_state = round;
+		} else if (strcmp(action, "big_blind") == 0) {
+			dlg_info("Posting big blind: %.4f CHIPS", min_amount);
+			retval = player_write_betting_action(table_id, "bet", min_amount);
+			p_local_state.last_game_state = round;
+		} else {
+			// Regular betting - for testing, auto-call or check
+			if (min_amount > 0.0) {
+				dlg_info("Auto-calling %.4f CHIPS...", min_amount);
+				retval = player_write_betting_action(table_id, "call", min_amount);
+			} else {
+				dlg_info("Auto-checking...");
+				retval = player_write_betting_action(table_id, "check", 0.0);
+			}
+			p_local_state.last_game_state = round;
+		}
 	}
 	
 	return retval;

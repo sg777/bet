@@ -576,8 +576,18 @@ int32_t save_dealer_deck_info(const char *game_id_str)
 	}
 	cJSON_hex(d_blindinfo, &dealer_deck_priv);
 
-	sql_query = calloc(sql_query_size * 4, sizeof(char));
-	sprintf(sql_query,
+	// For 52-card deck: 52 keys * 64 hex chars * 2 (hex encoding) + overhead = ~10KB needed
+	size_t deck_query_size = 16 * 1024;  // 16KB for full deck
+	sql_query = calloc(deck_query_size, sizeof(char));
+	if (!sql_query) {
+		dlg_error("Failed to allocate memory for dealer deck query");
+		if (perm) free(perm);
+		if (dealer_deck_priv) free(dealer_deck_priv);
+		if (d_perm) cJSON_Delete(d_perm);
+		if (d_blindinfo) cJSON_Delete(d_blindinfo);
+		return ERR_MEMORY_ALLOC;
+	}
+	snprintf(sql_query, deck_query_size,
 		"INSERT OR REPLACE INTO dealer_deck_info(game_id, perm, dealer_deck_priv) VALUES(\'%s\', \'%s\', \'%s\')",
 		game_id_str, perm, dealer_deck_priv);
 	
@@ -709,8 +719,16 @@ int32_t save_player_deck_info(const char *game_id_str, const char *table_id, int
 	cJSON_hex(cardinfo, &player_deck_priv);
 
 	// Use REPLACE to handle both insert and update
-	sql_query = calloc(sql_query_size * 4, sizeof(char));  // Need more space for the deck priv data
-	sprintf(sql_query,
+	// For 52-card deck: 52 keys * 64 hex chars * 2 (hex encoding) + overhead = ~10KB needed
+	size_t deck_query_size = 16 * 1024;  // 16KB for full deck
+	sql_query = calloc(deck_query_size, sizeof(char));
+	if (!sql_query) {
+		dlg_error("Failed to allocate memory for deck query");
+		cJSON_Delete(cardinfo);
+		if (player_deck_priv) free(player_deck_priv);
+		return ERR_MEMORY_ALLOC;
+	}
+	snprintf(sql_query, deck_query_size,
 		"INSERT OR REPLACE INTO player_deck_info(game_id, table_id, player_id, player_priv, player_deck_priv) "
 		"VALUES(\'%s\', \'%s\', %d, \'%s\', \'%s\')",
 		game_id_str, table_id, player_id, player_priv, player_deck_priv);

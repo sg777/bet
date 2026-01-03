@@ -48,6 +48,9 @@
 */
 int64_t sc_start_block = 9693174;
 
+// Betting mode: 0=AUTO (for testing), 1=CLI (read from stdin), 2=GUI (websocket)
+int g_betting_mode = BET_MODE_AUTO;
+
 struct privatebet_info *bet_player = NULL;
 struct privatebet_vars *player_vars = NULL;
 
@@ -414,13 +417,24 @@ void bet_start(int argc, char **argv)
 	} else if (strcmp(cmd, "p") == 0 || strcmp(cmd, "player") == 0) {
 		bet_node_type = player;
 		
-		// Optional: player config file path as second argument
-		// Usage: ./bet p [config_file]
-		if (argc >= 3) {
-			// Use provided config file path
-			strncpy(verus_player_config_file, argv[2], PATH_MAX - 1);
-			verus_player_config_file[PATH_MAX - 1] = '\0';
-			dlg_info("Using player config: %s", verus_player_config_file);
+		// Parse player arguments
+		// Usage: ./bet player [config_file] [--cli|--auto|--gui]
+		for (int i = 2; i < argc; i++) {
+			if (strcmp(argv[i], "--cli") == 0) {
+				g_betting_mode = BET_MODE_CLI;
+				dlg_info("Betting mode: CLI (interactive)");
+			} else if (strcmp(argv[i], "--auto") == 0) {
+				g_betting_mode = BET_MODE_AUTO;
+				dlg_info("Betting mode: AUTO (testing)");
+			} else if (strcmp(argv[i], "--gui") == 0) {
+				g_betting_mode = BET_MODE_GUI;
+				dlg_info("Betting mode: GUI (websocket)");
+			} else if (argv[i][0] != '-') {
+				// Config file path
+				strncpy(verus_player_config_file, argv[i], PATH_MAX - 1);
+				verus_player_config_file[PATH_MAX - 1] = '\0';
+				dlg_info("Using player config: %s", verus_player_config_file);
+			}
 		}
 		
 		dlg_info("Starting player node");
