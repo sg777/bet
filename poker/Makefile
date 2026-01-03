@@ -17,7 +17,8 @@ SRCFILES := $(SRC_DIR)/cards.c  $(SRC_DIR)/client.c  $(SRC_DIR)/commands.c  $(SR
             $(SRC_DIR)/storage.c $(SRC_DIR)/config.c $(SRC_DIR)/misc.c $(SRC_DIR)/heartbeat.c \
             $(SRC_DIR)/help.c $(SRC_DIR)/err.c $(SRC_DIR)/vdxf.c $(SRC_DIR)/poker_vdxf.c \
             $(SRC_DIR)/player.c $(SRC_DIR)/blinder.c $(SRC_DIR)/dealer.c $(SRC_DIR)/print.c \
-            $(SRC_DIR)/test.c $(SRC_DIR)/deck.c $(SRC_DIR)/game.c $(SRC_DIR)/dealer_registration.c
+            $(SRC_DIR)/test.c $(SRC_DIR)/deck.c $(SRC_DIR)/game.c $(SRC_DIR)/dealer_registration.c \
+            $(SRC_DIR)/gui.c
 
 # Object files go in build directory
 OBJFILES := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCFILES))

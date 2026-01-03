@@ -10,6 +10,7 @@
 #include "poker_vdxf.h"
 #include "storage.h"
 #include "vdxf.h"
+#include "gui.h"
 #include <time.h>
 
 extern int32_t g_start_block;
@@ -255,6 +256,41 @@ int32_t reveal_card(char *table_id)
 					card_id, card_type, card_value);
 			}
 
+			// Send GUI message for each card reveal
+			{
+				// Hole cards: send when we have both (card 0 and 1)
+				if (card_type == 1) {
+					// This is a hole card
+					if (card_id == 1) {
+						// Second hole card - now we have both
+						int32_t card1 = p_local_state.decoded_cards[0];
+						int32_t card2 = card_value;
+						if (card1 >= 0) {
+							cJSON *deal_msg = gui_build_deal_holecards(card1, card2, 0.0);
+							gui_send_message(deal_msg);
+							cJSON_Delete(deal_msg);
+						}
+					}
+				} else if (is_community_card(card_type)) {
+					// Board card - build array of all board cards revealed so far
+					int32_t board[5] = {-1, -1, -1, -1, -1};
+					int32_t board_count = 0;
+					for (int i = 2; i < 7 && i < hand_size; i++) {
+						if (p_local_state.decoded_cards[i] >= 0) {
+							board[board_count++] = p_local_state.decoded_cards[i];
+						}
+					}
+					// Add current card if not already in local state
+					if (card_id >= 2 && card_id < 7) {
+						board[card_id - 2] = card_value;
+						board_count = card_id - 2 + 1;
+					}
+					cJSON *deal_msg = gui_build_deal_board(board, board_count);
+					gui_send_message(deal_msg);
+					cJSON_Delete(deal_msg);
+				}
+			}
+
 			// For community cards, report to player ID for dealer verification
 			if (is_community_card(card_type)) {
 				report_decoded_card(card_id, card_type, card_value);
@@ -404,6 +440,43 @@ int32_t player_handle_betting(char *table_id)
 	
 	// Handle based on betting mode
 	extern int g_betting_mode;
+	
+	// Send GUI message for betting round (always log for testing)
+	{
+		// Build possibilities array for GUI
+		int32_t poss_arr[8] = {0, 1, 2, 3, 4, 5, 6, 7};  // fold, call, raise, check, allin, bet
+		int32_t poss_count = 6;
+		
+		// Build player funds array
+		double funds_arr[CARDS_MAXPLAYERS];
+		cJSON *player_funds_json = cJSON_GetObjectItem(betting_state, "player_funds");
+		int32_t num_players = player_funds_json ? cJSON_GetArraySize(player_funds_json) : 0;
+		for (int i = 0; i < num_players && i < CARDS_MAXPLAYERS; i++) {
+			funds_arr[i] = cJSON_GetArrayItem(player_funds_json, i)->valuedouble;
+		}
+		
+		// Calculate min raise (typically 2x the call amount or big blind)
+		double min_raise = min_amount > 0 ? min_amount * 2 : 0.02;
+		
+		cJSON *gui_msg = gui_build_betting_round(
+			p_deck_info.player_id,
+			pot,
+			min_amount,
+			min_raise,
+			poss_arr,
+			poss_count,
+			funds_arr,
+			num_players
+		);
+		gui_send_message(gui_msg);
+		cJSON_Delete(gui_msg);
+		
+		// In GUI mode, wait for WebSocket message from GUI
+		if (g_betting_mode == BET_MODE_GUI) {
+			dlg_info("Waiting for GUI action...");
+			return OK;
+		}
+	}
 	
 	if (g_betting_mode == BET_MODE_CLI) {
 		// CLI mode - get input from user

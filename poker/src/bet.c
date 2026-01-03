@@ -439,12 +439,40 @@ void bet_start(int argc, char **argv)
 		
 		dlg_info("Starting player node");
 		
-		// GUI thread disabled - focusing on backend implementation
-		// TODO: Re-enable GUI thread when ready
-		
 		// Backend initialization
 		if (retval == OK) {
-			retval = handle_verus_player();
+			if (g_betting_mode == BET_MODE_GUI) {
+				// Set player-specific WebSocket port
+				gui_ws_port = DEFAULT_PLAYER_WS_PORT;
+				
+				// Start WebSocket thread
+				pthread_t ws_thread;
+				
+				dlg_info("Starting GUI WebSocket server on port %d...", gui_ws_port);
+				
+				// Start WebSocket thread for GUI communication
+				if (OS_thread_create(&ws_thread, NULL, (void *)bet_player_frontend_loop, NULL) != 0) {
+					dlg_error("Failed to start WebSocket thread");
+				}
+				
+				// Small delay to let WebSocket server start
+				sleep(1);
+				
+				// Run backend in main thread (it will loop when tables are available)
+				dlg_info("Player node started. WebSocket server listening on port %d", gui_ws_port);
+				dlg_info("Backend running... Press Ctrl+C to stop");
+				
+				// Run backend - it will keep trying to find/join tables
+				retval = handle_verus_player();
+				
+				// If backend exits, wait for WebSocket thread (keeps process alive)
+				dlg_info("Backend exited, WebSocket still running...");
+				pthread_join(ws_thread, NULL);
+			} else {
+				// Non-GUI mode - just run backend directly
+				retval = handle_verus_player();
+			}
+			
 			if (retval != OK) {
 				dlg_error("[Backend] Backend initialization failed: %s", bet_err_str(retval));
 			}
