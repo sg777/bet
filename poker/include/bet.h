@@ -269,6 +269,7 @@ struct verus_player_config {
 	char wallet_addr[64];
 	char txid[128];
 	char verus_pid[128];
+	int32_t ws_port;  // WebSocket port for GUI mode
 };
 extern struct verus_player_config player_config;
 

@@ -552,6 +552,9 @@ int32_t bet_parse_verus_player()
 		strncpy(player_config.verus_pid, iniparser_getstring(ini, "verus:player_id", NULL),
 			sizeof(player_config.verus_pid));
 	}
+	// Read WebSocket port for GUI mode (default: 9001)
+	player_config.ws_port = iniparser_getint(ini, "verus:ws_port", DEFAULT_PLAYER_WS_PORT);
+	
 	//Check if all IDs are valid
 	if ((player_config.dealer_id[0] == '\0') || (player_config.table_id[0] == '\0') || (player_config.verus_pid[0] == '\0') ||
 	    !is_id_exists(player_config.dealer_id, 0) || !is_id_exists(player_config.table_id, 0)) {

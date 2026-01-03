@@ -111,19 +111,34 @@ void write_to_GUI(void *ptr)
 
 void player_lws_write(cJSON *data)
 {
-	if (backend_status == backend_ready) {
+	// Check if this is a "safe" message that can be sent before backend is fully ready
+	// These are wallet/status queries that don't require game state
+	bool is_safe_message = false;
+	const char *method = jstr(data, "method");
+	if (method != NULL) {
+		if (strcmp(method, "table_info") == 0 ||
+		    strcmp(method, "backend_status") == 0 ||
+		    strcmp(method, "join_ack") == 0 ||
+		    strcmp(method, "bal_info") == 0) {
+			is_safe_message = true;
+		}
+	}
+	
+	if (backend_status == backend_ready || is_safe_message) {
 		if (ws_connection_status == 1) {
 			// Wait for previous write to complete (same pattern as dealer)
-			if (data_exists == 1) {
-				dlg_info("Waiting for previous write to complete...");
-				while (data_exists == 1) {
-					sleep(1);
-				}
+		if (data_exists == 1) {
+			dlg_info("Waiting for previous write to complete...");
+			while (data_exists == 1) {
+				sleep(1);
 			}
-			memset(player_gui_data, 0, sizeof(player_gui_data));
-			strncpy(player_gui_data, cJSON_Print(data), strlen(cJSON_Print(data)));
-			data_exists = 1;
-			lws_callback_on_writable(wsi_global_client);
+		}
+		memset(player_gui_data, 0, sizeof(player_gui_data));
+		char *json_str = cJSON_Print(data);
+		dlg_info("\033[34m[► TO GUI]\033[0m %s", json_str);
+		strncpy(player_gui_data, json_str, strlen(json_str));
+		data_exists = 1;
+		lws_callback_on_writable(wsi_global_client);
 		} else {
 			dlg_warn("Backend is ready, but GUI is not started yet...");
 		}
@@ -824,21 +839,65 @@ static void bet_player_handle_invalid_method(char *method)
 
 // bet_player_withdraw_request and bet_player_withdraw removed - now using common wallet handler bet_wallet_withdraw_request() and bet_wallet_withdraw()
 
-static void bet_player_wallet_info()
+static void bet_player_table_info()
 {
-	cJSON *wallet_info = NULL;
-
-	wallet_info = cJSON_CreateObject();
-	cJSON_AddStringToObject(wallet_info, "method", "walletInfo");
-	cJSON_AddStringToObject(wallet_info, "addr", chips_get_wallet_address());
-	cJSON_AddNumberToObject(wallet_info, "balance", chips_get_balance());
-	cJSON_AddNumberToObject(wallet_info, "backend_status", backend_status);
-	cJSON_AddNumberToObject(wallet_info, "max_players", max_players);
-	cJSON_AddNumberToObject(wallet_info, "table_stack_in_chips", (table_stake_in_chips / SB_in_chips));
-	cJSON_AddStringToObject(wallet_info, "table_id", table_id);
-	cJSON_AddNumberToObject(wallet_info, "tx_fee", chips_tx_fee);
-	dlg_info("%s\n", cJSON_Print(wallet_info));
-	player_lws_write(wallet_info);
+	cJSON *table_info = NULL;
+	cJSON *occupied_seats = NULL;
+	cJSON *t_player_info = NULL;
+	cJSON *player_info_array = NULL;
+	
+	table_info = cJSON_CreateObject();
+	cJSON_AddStringToObject(table_info, "method", "table_info");
+	cJSON_AddStringToObject(table_info, "addr", chips_get_wallet_address());
+	cJSON_AddNumberToObject(table_info, "balance", chips_get_balance());
+	cJSON_AddNumberToObject(table_info, "backend_status", backend_status);
+	cJSON_AddNumberToObject(table_info, "max_players", max_players);
+	cJSON_AddNumberToObject(table_info, "table_stack_in_chips", (table_stake_in_chips / SB_in_chips));
+	cJSON_AddStringToObject(table_info, "table_id", table_id);
+	cJSON_AddStringToObject(table_info, "dealer_id", player_config.dealer_id);
+	
+	// Get occupied seats from blockchain
+	occupied_seats = cJSON_CreateArray();
+	if (strlen(table_id) > 0) {
+		extern cJSON *get_t_player_info(char *table_id);
+		t_player_info = get_t_player_info(table_id);
+		if (t_player_info) {
+			player_info_array = cJSON_GetObjectItem(t_player_info, "player_info");
+			if (player_info_array && player_info_array->type == cJSON_Array) {
+				int array_size = cJSON_GetArraySize(player_info_array);
+				for (int i = 0; i < array_size; i++) {
+					char *player_entry = cJSON_GetArrayItem(player_info_array, i)->valuestring;
+					// Format: "verus_pid_txid_amount_slot"
+					// Extract slot number (last part after last underscore)
+					char *last_underscore = strrchr(player_entry, '_');
+					if (last_underscore) {
+						int seat_num = atoi(last_underscore + 1);
+						// Extract player ID (first part before first underscore)
+						char player_id[128] = {0};
+						char *first_underscore = strchr(player_entry, '_');
+						if (first_underscore) {
+							int pid_len = first_underscore - player_entry;
+							if (pid_len < 128) {
+								strncpy(player_id, player_entry, pid_len);
+								player_id[pid_len] = '\0';
+								
+								cJSON *seat_obj = cJSON_CreateObject();
+								cJSON_AddNumberToObject(seat_obj, "seat", seat_num);
+								cJSON_AddStringToObject(seat_obj, "player_id", player_id);
+								cJSON_AddItemToArray(occupied_seats, seat_obj);
+							}
+						}
+					}
+				}
+			}
+			cJSON_Delete(t_player_info);
+		}
+	}
+	cJSON_AddItemToObject(table_info, "occupied_seats", occupied_seats);
+	
+	dlg_info("%s\n", cJSON_Print(table_info));
+	player_lws_write(table_info);
+	cJSON_Delete(table_info);
 }
 
 static void bet_player_process_be_status()
@@ -859,7 +918,7 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 
 	method = jstr(argjson,"method");
 	switchs(method) {
-		dlg_info("Recv from GUI :: %s", cJSON_Print(argjson));
+		dlg_info("\033[32m[◄ FROM GUI]\033[0m %s", cJSON_Print(argjson));
 		cases("backend_status")
 			bet_player_process_be_status();
 			break;
@@ -885,9 +944,25 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 		cases("sitout")
 			sitout_value = jint(argjson, "value");
 			break;
-		cases("walletInfo") 
-			bet_player_wallet_info();
-			break;
+	cases("table_info") 
+		bet_player_table_info();
+		break;
+	cases("join_table")
+	// GUI approved joining table
+	dlg_info("\033[1;33m[⚡ ACTION]\033[0m Received join_table command from GUI");
+		pthread_mutex_lock(&gui_join_mutex);
+		gui_join_approved = true;
+		pthread_cond_signal(&gui_join_cond);
+		pthread_mutex_unlock(&gui_join_mutex);
+		
+		// Send acknowledgment to GUI
+		cJSON *join_ack = cJSON_CreateObject();
+		cJSON_AddStringToObject(join_ack, "method", "join_ack");
+		cJSON_AddStringToObject(join_ack, "status", "approved");
+		cJSON_AddStringToObject(join_ack, "message", "Joining table...");
+		player_lws_write(join_ack);
+		cJSON_Delete(join_ack);
+		break;
 		cases("withdraw")
 			{
 				// Common wallet functionality
@@ -920,15 +995,18 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 
 static void bet_gui_init_message(struct privatebet_info *bet)
 {
-	cJSON *warning_info = NULL;
+	cJSON *init_info = NULL;
 	cJSON *req_seats_info = NULL;
 
 	if (backend_status == backend_not_ready) {
-		warning_info = cJSON_CreateObject();
-		cJSON_AddStringToObject(warning_info, "method", "warning");
-		cJSON_AddNumberToObject(warning_info, "warning_num", backend_not_ready);
-		dlg_warn("Backend is not yet ready, it takes a while please wait...");
-		player_lws_write(warning_info);
+		// In GUI mode, backend is waiting for join approval
+		// Send a friendly status message instead of a warning
+		init_info = cJSON_CreateObject();
+		cJSON_AddStringToObject(init_info, "method", "backend_status");
+		cJSON_AddNumberToObject(init_info, "backend_status", backend_not_ready);
+		cJSON_AddStringToObject(init_info, "message", "Connected! Request wallet info and click 'Join Table' to start.");
+		dlg_info("GUI connected. Waiting for user to request wallet info and approve join.");
+		player_lws_write(init_info);
 	} else {
 		req_seats_info = cJSON_CreateObject();
 		cJSON_AddStringToObject(req_seats_info, "method", "req_seats_info");
@@ -1723,7 +1801,7 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 			dlg_info("Player_stakes");
 			for (int32_t i = 0; i < bet->maxplayers; i++) {
 				vars->funds[i] = jinti(stakes, i);
-				dlg_info("player::%d, stake::%d", i, vars->funds[i]);
+    dlg_info("player::%d, stake::%.8f", i, vars->funds[i]);
 			}
 		} else if (strcmp(method, "signrawtransaction") == 0) {
 			if (jint(argjson, "playerid") == bet->myplayerid) {
@@ -1743,7 +1821,7 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 			}
 		} else if (strcmp(method, "tx_status") == 0) {
 			if (strcmp(req_identifier, jstr(argjson, "id")) == 0) {
-				bet_player_wallet_info();
+				bet_player_table_info();
 				vars->player_funds = jint(argjson, "player_funds");
 				if (jint(argjson, "tx_validity") == OK) {
 					dlg_info("Dealer verified the TX made by the player");

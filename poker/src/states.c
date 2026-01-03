@@ -479,8 +479,8 @@ int32_t bet_display_current_state(cJSON *argjson, struct privatebet_info *bet, s
 {
 	int32_t retval = OK;
 
-	dlg_info("small_blind:%d", vars->small_blind);
-	dlg_info("big_blind:%d", vars->big_blind);
+ dlg_info("small_blind:%.8f", vars->small_blind);
+ dlg_info("big_blind:%.8f", vars->big_blind);
 
 	dlg_info("Display Actions:");
 
@@ -500,7 +500,7 @@ int32_t bet_display_current_state(cJSON *argjson, struct privatebet_info *bet, s
 			} else if (vars->bet_actions[i][j] == fold) {
 				dlg_info("fold ");
 			}
-			dlg_info("%d ", vars->betamount[i][j]);
+   dlg_info("%.8f ", vars->betamount[i][j]);
 		}
 	}
 

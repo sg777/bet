@@ -15,7 +15,7 @@ static cJSON *get_cmm_key_data(const char *id, int16_t full_id, const char *key)
 static const char *get_key_data_type(const char *key_name);
 static char *get_str_from_id_key_vdxfid(char *id, char *key_vdxfid);
 static cJSON *get_z_getoperationstatus(char *op_id);
-static cJSON *get_t_player_info(char *table_id);
+cJSON *get_t_player_info(char *table_id); // Made non-static for use in client.c
 static bool check_if_enough_funds_avail(char *table_id);
 static int32_t check_if_d_t_available(char *dealer_id, char *table_id, cJSON **t_table_info);
 static cJSON *get_available_t_of_d(char *dealer_id);
@@ -913,8 +913,8 @@ static bool check_if_enough_funds_avail(char *table_id)
 	return false;
 }
 
-/* Internal helper - get player info for table */
-static cJSON *get_t_player_info(char *table_id)
+/* Get player info for table - used by client.c for seat info */
+cJSON *get_t_player_info(char *table_id)
 {
 	extern int32_t g_start_block;
 	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;

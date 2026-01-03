@@ -1035,7 +1035,7 @@ int32_t det_dcv_pot_split(struct privatebet_info *bet, struct privatebet_vars *v
 	}
 	dlg_info("Funds spent");
 	for (int32_t i = 0; i < bet->maxplayers; i++) {
-		dlg_info("player id ::%d::funds_spent::%d", i, vars->funds_spent[i]);
+  dlg_info("player id ::%d::funds_spent::%.8f", i, vars->funds_spent[i]);
 	}
 	while (flag) {
 		max_score = 0;
@@ -1087,8 +1087,8 @@ int32_t det_dcv_pot_split(struct privatebet_info *bet, struct privatebet_vars *v
 			flag = 0;
 		}
 		for (int i = 0; i < bet->maxplayers; i++) {
-			dlg_info("win_funds::%d, funds::%d, ini_funds::%d", vars->win_funds[i], vars->funds[i],
-				 vars->ini_funds[i]);
+   dlg_info("win_funds::%.8f, funds::%.8f, ini_funds::%.8f", vars->win_funds[i], vars->funds[i],
+     vars->ini_funds[i]);
 		}
 	}
 	for (int i = 0; i < bet->maxplayers; i++) {
@@ -1396,7 +1396,7 @@ static int32_t bet_dcv_process_join_req(cJSON *argjson, struct privatebet_info *
 			cJSON *stakes_info = cJSON_CreateObject();
 			cJSON *stakes = cJSON_CreateArray();
 			for (int i = 0; i < bet->maxplayers; i++) {
-				dlg_info("player::%d::funds::%d::ini_funds::%d", i, vars->funds[i], vars->ini_funds[i]);
+    dlg_info("player::%d::funds::%.8f::ini_funds::%.8f", i, vars->funds[i], vars->ini_funds[i]);
 			}
 			for (int i = 0; i < bet->maxplayers; i++) {
 				vars->funds[i] = vars->ini_funds[vars->req_id_to_player_id_mapping[i]];
@@ -1405,7 +1405,7 @@ static int32_t bet_dcv_process_join_req(cJSON *argjson, struct privatebet_info *
 				vars->ini_funds[i] = vars->funds[i];
 			}
 			for (int i = 0; i < bet->maxplayers; i++) {
-				dlg_info("player::%d::funds::%d::ini_funds::%d", i, vars->funds[i], vars->ini_funds[i]);
+    dlg_info("player::%d::funds::%.8f::ini_funds::%.8f", i, vars->funds[i], vars->ini_funds[i]);
 			}
 			cJSON_AddStringToObject(stakes_info, "method", "player_stakes_info");
 			for (int i = 0; i < bet->maxplayers; i++) {

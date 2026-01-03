@@ -1,0 +1,9 @@
+{
+  "name": "bet-tools",
+  "version": "1.0.0",
+  "description": "Testing tools for Pangea-Bet",
+  "private": true,
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

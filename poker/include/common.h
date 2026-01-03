@@ -38,7 +38,12 @@ enum betting_mode {
 	BET_MODE_GUI  = 2    // Read from GUI via websocket
 };
 
-extern int g_betting_mode;  // Global betting mode
+extern int g_betting_mode;
+
+// GUI join approval mechanism
+extern bool gui_join_approved;
+extern pthread_mutex_t gui_join_mutex;
+extern pthread_cond_t gui_join_cond;  // Global betting mode
 
 
 #define mchips_msatoshichips    1000000 // 0.01mCHIPS

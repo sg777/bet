@@ -44,17 +44,29 @@ This document maps the C backend data to the React GUI's expected message format
 }
 ```
 
-### 2. `walletInfo`
+### 2. `table_info` (formerly `walletInfo`)
 ```json
 {
-  "method": "walletInfo",
-  "backend_status": 1,
-  "balance": 100.5,        // Player's total CHIPS balance
+  "method": "table_info",
+  "backend_status": 0,     // 0=waiting for join, 1=ready
+  "balance": 132.5399,     // Player's total CHIPS balance
   "addr": "RAddress...",   // Deposit address
-  "table_stack_in_chips": 0.5,  // Buy-in amount
-  "max_players": 2
+  "table_stack_in_chips": 50,  // Buy-in amount
+  "max_players": 2,
+  "table_id": "t1",
+  "dealer_id": "d1",
+  "occupied_seats": [      // Array of occupied seats
+    {"seat": 0, "player_id": "p1"},
+    {"seat": 3, "player_id": "p2"}
+  ]
 }
 ```
+
+**GUI Behavior:**
+- Populates `players` state to visualize seat occupancy
+- Empty seats show "SIT HERE" (clickable)
+- Occupied seats show player ID
+- User clicks empty seat → sends `{"method": "join_table", "seat": N}`
 
 ### 3. `seats`
 ```json
