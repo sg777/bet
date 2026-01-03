@@ -35,6 +35,7 @@
 #include "config.h"
 #include "err.h"
 #include "switchs.h"
+#include "player.h"
 // Legacy Lightning Network functions removed - use CHIPS transactions instead
 
 #define LWS_PLUGIN_STATIC
@@ -852,14 +853,14 @@ static void bet_player_table_info()
 	cJSON_AddNumberToObject(table_info, "backend_status", backend_status);
 	cJSON_AddNumberToObject(table_info, "max_players", max_players);
 	cJSON_AddNumberToObject(table_info, "table_stack_in_chips", (table_stake_in_chips / SB_in_chips));
-	cJSON_AddStringToObject(table_info, "table_id", table_id);
+	cJSON_AddStringToObject(table_info, "table_id", player_config.table_id);
 	cJSON_AddStringToObject(table_info, "dealer_id", player_config.dealer_id);
 	
 	// Get occupied seats from blockchain
 	occupied_seats = cJSON_CreateArray();
-	if (strlen(table_id) > 0) {
+	if (strlen(player_config.table_id) > 0) {
 		extern cJSON *get_t_player_info(char *table_id);
-		t_player_info = get_t_player_info(table_id);
+		t_player_info = get_t_player_info(player_config.table_id);
 		if (t_player_info) {
 			player_info_array = cJSON_GetObjectItem(t_player_info, "player_info");
 			if (player_info_array && player_info_array->type == cJSON_Array) {
@@ -909,6 +910,32 @@ static void bet_player_process_be_status()
 	player_lws_write(be_info);
 }
 
+void send_init_state_to_gui(int32_t state)
+{
+	extern int32_t player_init_state;
+	extern const char *player_init_state_str(int32_t state);
+	
+	if (g_betting_mode != BET_MODE_GUI) {
+		return;  // Only send to GUI in GUI mode
+	}
+	
+	player_init_state = state;
+	
+	cJSON *state_msg = cJSON_CreateObject();
+	cJSON_AddStringToObject(state_msg, "method", "player_init_state");
+	cJSON_AddNumberToObject(state_msg, "state", state);
+	cJSON_AddStringToObject(state_msg, "state_name", player_init_state_str(state));
+	
+	// Add player_id (Verus ID) for JOINED state - can be used as player name
+	if (state == P_INIT_JOINED) {
+		cJSON_AddStringToObject(state_msg, "player_id", player_config.verus_pid);
+	}
+	
+	dlg_info("\033[34m[► TO GUI]\033[0m Player state: %s", player_init_state_str(state));
+	player_lws_write(state_msg);
+	cJSON_Delete(state_msg);
+}
+
 // clang-format off
 int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 {
@@ -943,13 +970,43 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 		cases("sitout")
 			sitout_value = jint(argjson, "value");
 			break;
-	cases("table_info") 
-		bet_player_table_info();
-		break;
-	cases("join_table")
-		// Legacy handler - no longer needed, backend auto-joins
-		dlg_info("Received join_table command from GUI (ignored - backend auto-joins)");
-		break;
+		cases("table_info")
+			{
+				dlg_info("Received table_info request from GUI");
+				
+				// Signal backend thread to proceed with finding table
+				pthread_mutex_lock(&gui_table_mutex);
+				gui_table_requested = 1;
+				pthread_cond_signal(&gui_table_cond);
+				pthread_mutex_unlock(&gui_table_mutex);
+				dlg_info("Signaled backend to find table");
+				
+				// Send current table info to GUI
+				bet_player_table_info();
+			}
+			break;
+		cases("join_table")
+			{
+				dlg_info("Received join_table command from GUI");
+				
+				// Signal backend thread to proceed with join
+				dlg_info("Acquiring gui_join_mutex to signal backend thread...");
+				pthread_mutex_lock(&gui_join_mutex);
+				dlg_info("Setting gui_join_approved = 1 and signaling condition variable...");
+				gui_join_approved = 1;
+				pthread_cond_signal(&gui_join_cond);
+				pthread_mutex_unlock(&gui_join_mutex);
+				dlg_info("Signal sent to backend thread");
+				
+				// Send acknowledgment to GUI
+				cJSON *join_ack = cJSON_CreateObject();
+				cJSON_AddStringToObject(join_ack, "method", "join_ack");
+				cJSON_AddStringToObject(join_ack, "status", "approved");
+				cJSON_AddStringToObject(join_ack, "message", "Join approved, proceeding with payin transaction");
+				player_lws_write(join_ack);
+				cJSON_Delete(join_ack);
+			}
+			break;
 		cases("withdraw")
 			{
 				// Common wallet functionality

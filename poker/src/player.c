@@ -1,5 +1,6 @@
 #include "bet.h"
 #include "player.h"
+#include "client.h"
 #include "err.h"
 #include "misc.h"
 #include "commands.h"
@@ -38,6 +39,23 @@ static const char *get_card_type_name(int32_t card_type) {
 		case 5: return "TURN";
 		case 6: return "RIVER";
 		default: return "UNKNOWN";
+	}
+}
+
+// Player initialization state tracking
+int32_t player_init_state = 0;
+
+const char *player_init_state_str(int32_t state)
+{
+	switch (state) {
+		case P_INIT_WALLET_READY: return "WALLET_READY";
+		case P_INIT_TABLE_FOUND:  return "TABLE_FOUND";
+		case P_INIT_WAIT_JOIN:    return "WAIT_JOIN";
+		case P_INIT_JOINING:      return "JOINING";
+		case P_INIT_JOINED:       return "JOINED";
+		case P_INIT_DECK_READY:   return "DECK_READY";
+		case P_INIT_IN_GAME:      return "IN_GAME";
+		default:                  return "UNKNOWN";
 	}
 }
 
@@ -661,11 +679,27 @@ int32_t handle_verus_player()
 		dlg_error("Poker not ready: %s", bet_err_str(retval));
 		return retval;
 	}
-
 	// Parse Verus player configuration
 	if ((retval = bet_parse_verus_player()) != OK) {
 		dlg_error("Failed to parse Verus player configuration: %s", bet_err_str(retval));
 		return retval;
+	}
+	
+	// State 1: Wallet + ID ready, can read blockchain
+	send_init_state_to_gui(P_INIT_WALLET_READY);
+	dlg_info("Player init state: %s", player_init_state_str(P_INIT_WALLET_READY));
+
+	// In GUI mode, wait for GUI to request table info before trying to find a table
+	if (g_betting_mode == BET_MODE_GUI) {
+		dlg_info("GUI mode: waiting for GUI to send table_info request...");
+		pthread_mutex_lock(&gui_table_mutex);
+		while (gui_table_requested == 0) {
+			pthread_cond_wait(&gui_table_cond, &gui_table_mutex);
+		}
+		// Reset for next request
+		gui_table_requested = 0;
+		pthread_mutex_unlock(&gui_table_mutex);
+		dlg_info("GUI triggered table finding");
 	}
 
 	// Find a table
@@ -677,19 +711,59 @@ int32_t handle_verus_player()
 			retval = OK;  // Clear the error since we're handling it
 		} else {
 			dlg_error("Failed to find table: %s", bet_err_str(retval));
+			// In GUI mode, send error to GUI instead of returning
+			if (g_betting_mode == BET_MODE_GUI) {
+				cJSON *error_msg = cJSON_CreateObject();
+				cJSON_AddStringToObject(error_msg, "method", "error");
+				cJSON_AddStringToObject(error_msg, "error", bet_err_str(retval));
+				cJSON_AddStringToObject(error_msg, "message", "Failed to find table");
+				player_lws_write(error_msg);
+				cJSON_Delete(error_msg);
+			}
 			return retval;
 		}
 	}
 	dlg_info("Table found");
 	print_struct_table(&player_t);
+	
+	// State 2: Found table, have table info
+	send_init_state_to_gui(P_INIT_TABLE_FOUND);
+	dlg_info("Player init state: %s", player_init_state_str(P_INIT_TABLE_FOUND));
+	
+	// If GUI mode, wait for GUI to approve join
+	if (g_betting_mode == BET_MODE_GUI) {
+		// State 3: Waiting for GUI approval
+		send_init_state_to_gui(P_INIT_WAIT_JOIN);
+		dlg_info("Player init state: %s - waiting for GUI approval...", player_init_state_str(P_INIT_WAIT_JOIN));
+		
+		// Wait for GUI to send join_table message
+		pthread_mutex_lock(&gui_join_mutex);
+		dlg_info("Waiting for GUI join signal (gui_join_approved=%d)...", gui_join_approved);
+		while (gui_join_approved == 0) {
+			pthread_cond_wait(&gui_join_cond, &gui_join_mutex);
+		}
+		// Reset for next join
+		gui_join_approved = 0;
+		pthread_mutex_unlock(&gui_join_mutex);
+		
+		dlg_info("GUI join approved, proceeding to join table");
+	}
 
 	// Join the table (skip if already joined)
 	if (!already_joined) {
+		// State 4: Joining table (executing payin_tx)
+		send_init_state_to_gui(P_INIT_JOINING);
+		dlg_info("Player init state: %s", player_init_state_str(P_INIT_JOINING));
+		
 		if ((retval = poker_join_table()) != OK) {
 			dlg_error("Failed to join table: %s", bet_err_str(retval));
 			return retval;
 		}
 		dlg_info("Table Joined");
+		
+		// State 5: Successfully joined (have seat)
+		send_init_state_to_gui(P_INIT_JOINED);
+		dlg_info("Player init state: %s", player_init_state_str(P_INIT_JOINED));
 	}
 
 	// Get player ID
@@ -801,6 +875,14 @@ int32_t handle_verus_player()
 		save_player_local_state(player_config.txid);
 		dlg_info("Player deck shuffling info updated to table");
 	}
+	
+	// State 6: Deck initialized/loaded, ready for game
+	send_init_state_to_gui(P_INIT_DECK_READY);
+	dlg_info("Player init state: %s", player_init_state_str(P_INIT_DECK_READY));
+
+	// State 7: Entering game loop
+	send_init_state_to_gui(P_INIT_IN_GAME);
+	dlg_info("Player init state: %s - entering game loop", player_init_state_str(P_INIT_IN_GAME));
 
 	// Main game loop
 	while (1) {

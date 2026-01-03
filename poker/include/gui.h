@@ -12,6 +12,9 @@ cJSON *cards_to_json_array(int32_t *cards, int32_t count);
 // Send a message to the GUI via WebSocket
 void gui_send_message(cJSON *message);
 
+// Send player initialization state to GUI
+void send_init_state_to_gui(int32_t state);
+
 // GUI Message builders
 cJSON *gui_build_backend_status(int32_t status);
 cJSON *gui_build_wallet_info(double balance, const char *addr, double stack_amount, int32_t max_players);

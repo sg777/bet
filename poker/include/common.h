@@ -40,6 +40,17 @@ enum betting_mode {
 
 extern int g_betting_mode;
 
+// GUI synchronization for player join approval
+#include <pthread.h>
+extern pthread_mutex_t gui_join_mutex;
+extern pthread_cond_t gui_join_cond;
+extern int gui_join_approved;  // 0 = waiting, 1 = approved
+
+// GUI synchronization for table finding trigger
+extern pthread_mutex_t gui_table_mutex;
+extern pthread_cond_t gui_table_cond;
+extern int gui_table_requested;  // 0 = waiting, 1 = GUI requested table info
+
 // Global betting mode
 
 

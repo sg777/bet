@@ -60,3 +60,4 @@ compile_commands.json
 # RPC credentials (contains secrets - never commit)
 poker/.rpccredentials
 .rpccredentials
+poker/.cache/

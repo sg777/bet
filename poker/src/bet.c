@@ -51,6 +51,16 @@ int64_t sc_start_block = 9693174;
 // Betting mode: 0=AUTO (for testing), 1=CLI (read from stdin), 2=GUI (websocket)
 int g_betting_mode = BET_MODE_AUTO;
 
+// GUI synchronization for player join approval
+pthread_mutex_t gui_join_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t gui_join_cond = PTHREAD_COND_INITIALIZER;
+int gui_join_approved = 0;  // 0 = waiting, 1 = approved
+
+// GUI synchronization for table finding trigger
+pthread_mutex_t gui_table_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t gui_table_cond = PTHREAD_COND_INITIALIZER;
+int gui_table_requested = 0;  // 0 = waiting, 1 = GUI requested table info
+
 struct privatebet_info *bet_player = NULL;
 struct privatebet_vars *player_vars = NULL;
 
