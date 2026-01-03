@@ -81,7 +81,7 @@ int32_t player_init_deck()
 	dlg_info("%s", cJSON_Print(out));
 
 	dlg_info("Updating game state...");
-	out = append_game_state(player_config.verus_pid, G_DECK_SHUFFLING_P, NULL);
+	out = append_game_state(player_config.table_id, G_DECK_SHUFFLING_P, NULL);
 	if (!out)
 		return ERR_GAME_STATE_UPDATE;
 	dlg_info("%s", cJSON_Print(out));
@@ -284,7 +284,7 @@ static int32_t handle_player_reveal_card(char *table_id)
 	if ((!player_game_state_info) || (jint(game_state_info, "card_id") > jint(player_game_state_info, "card_id"))) {
 		retval = reveal_card(table_id);
 		if (retval == OK) {
-			append_game_state(player_config.verus_pid, G_REVEAL_CARD_P_DONE, game_state_info);
+			append_game_state(table_id, G_REVEAL_CARD_P_DONE, game_state_info);
 			dlg_info("Updating players revealed card info :: %s", cJSON_Print(game_state_info));
 		}
 	}
