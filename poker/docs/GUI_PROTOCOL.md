@@ -98,38 +98,104 @@ Progress updates during player initialization. Sent at each stage of the join/ga
 
 #### State Codes
 
-| State | Value | Description | GUI Action |
-|-------|-------|-------------|------------|
-| `WALLET_READY` | 1 | Wallet + Verus ID verified | Show "Loading table info..." |
-| `TABLE_FOUND` | 2 | Table found on blockchain | Show table details |
-| `WAIT_JOIN` | 3 | Waiting for user to join | Show "Join Table" button, wait for user click |
-| `JOINING` | 4 | Executing payin transaction | Show spinner: "Processing payin..." (takes 10-30s) |
-| `JOINED` | 5 | Successfully joined, have seat | Show seat assignment, use `player_id` as name |
-| `DECK_READY` | 6 | Deck initialized | Show "Preparing game..." |
-| `IN_GAME` | 7 | In active game loop | Transition to poker table UI |
+All states are sent to GUI via `player_init_state` messages.
+
+| State | Value | Sent to GUI? | Extra Fields | Description |
+|-------|-------|--------------|--------------|-------------|
+| `WALLET_READY` | 1 | ⚠️ Maybe* | - | Wallet + Verus ID verified |
+| `TABLE_FOUND` | 2 | ✅ Yes | - | Table found on blockchain |
+| `WAIT_JOIN` | 3 | ✅ Yes | - | Waiting for user to click join |
+| `JOINING` | 4 | ✅ Yes | - | Payin TX executing (10-30s) |
+| `JOINED` | 5 | ✅ Yes | `player_id` | Player has seat |
+| `DECK_READY` | 6 | ✅ Yes | - | Deck shuffling complete |
+| `IN_GAME` | 7 | ✅ Yes | - | Game loop active |
+
+> ⚠️ **Note on WALLET_READY**: This state is sent very early, often BEFORE the GUI WebSocket connects. The GUI may not receive this message. GUI should request `table_info` after receiving `backend_status` instead of waiting for `WALLET_READY`.
+
+#### Detailed State Descriptions
+
+##### 1. WALLET_READY (state=1)
+- **When sent**: Immediately after backend verifies wallet and Verus ID
+- **GUI receives?**: Often NO - sent before WebSocket connects
+- **What happens next**: Backend waits for GUI to send `table_info`
+- **GUI action**: N/A (use `backend_status` message instead)
+
+##### 2. TABLE_FOUND (state=2)
+- **When sent**: After `poker_find_table()` succeeds
+- **GUI receives?**: YES
+- **What happens next**: Immediately followed by WAIT_JOIN
+- **GUI action**: Update UI with table details
+
+##### 3. WAIT_JOIN (state=3)  
+- **When sent**: After TABLE_FOUND, before backend blocks waiting
+- **GUI receives?**: YES
+- **What happens next**: Backend BLOCKS waiting for `join_table` message
+- **GUI action**: Show "Join Table" button, wait for user click
+
+##### 4. JOINING (state=4)
+- **When sent**: After GUI sends `join_table`, before payin TX
+- **GUI receives?**: YES
+- **What happens next**: Backend executes blockchain payin (10-30 seconds)
+- **GUI action**: Show loading spinner "Processing payin transaction..."
+
+##### 5. JOINED (state=5)
+- **When sent**: After payin TX confirmed and player added to table
+- **GUI receives?**: YES
+- **Extra field**: `player_id` - Player's Verus ID (use as display name)
+- **What happens next**: Deck initialization begins
+- **GUI action**: Show seat assignment, display player name
+
+##### 6. DECK_READY (state=6)
+- **When sent**: After player's deck shuffling data stored on blockchain
+- **GUI receives?**: YES
+- **What happens next**: Waiting for other players/dealer to complete
+- **GUI action**: Show "Waiting for other players..."
+
+##### 7. IN_GAME (state=7)
+- **When sent**: When all players ready and game loop starts
+- **GUI receives?**: YES
+- **What happens next**: Game events (cards, betting, etc.)
+- **GUI action**: Transition to poker table UI
 
 #### State Flow Diagram
 
 ```
-WALLET_READY (1)
+[Backend starts]
+      │
+      ▼
+WALLET_READY (1) ──── Sent to GUI (may miss if GUI not connected yet)
+      │
+      ▼
+[Backend WAITS for GUI "table_info" request]
       │
       ▼ [GUI sends table_info]
-TABLE_FOUND (2)
+      │
+TABLE_FOUND (2) ───── Sent to GUI ✓
       │
       ▼
-WAIT_JOIN (3) ◄── Backend waits here for GUI
+WAIT_JOIN (3) ─────── Sent to GUI ✓
+      │
+      ▼
+[Backend WAITS for GUI "join_table" request]
       │
       ▼ [GUI sends join_table]
-JOINING (4) ◄── Payin TX executing (blockchain operation)
+      │
+JOINING (4) ───────── Sent to GUI ✓
+      │
+      ▼ [Payin TX executing... 10-30 seconds]
+      │
+JOINED (5) ────────── Sent to GUI ✓ (includes player_id)
+      │
+      ▼ [Deck initialization...]
+      │
+DECK_READY (6) ────── Sent to GUI ✓
+      │
+      ▼ [Waiting for all players...]
+      │
+IN_GAME (7) ───────── Sent to GUI ✓
       │
       ▼
-JOINED (5) ◄── Player has seat, includes player_id
-      │
-      ▼
-DECK_READY (6)
-      │
-      ▼
-IN_GAME (7) ◄── Game loop active
+[Game loop - betting, cards, etc.]
 ```
 
 ---
