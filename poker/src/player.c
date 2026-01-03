@@ -415,7 +415,8 @@ int32_t player_handle_betting(char *table_id)
 			printf("\n  [AUTO] Posting %s: %.4f CHIPS\n", action, min_amount);
 			retval = player_write_betting_action(table_id, "bet", min_amount);
 		} else {
-			// Regular betting round - get user input
+			// Regular betting round - two-step input
+			// Step 1: Get action
 			printf("\n  Enter action (fold/check/call/raise/allin): ");
 			fflush(stdout);
 			
@@ -423,66 +424,80 @@ int32_t player_handle_betting(char *table_id)
 				// Remove newline
 				input[strcspn(input, "\n")] = 0;
 				
-				// Parse the action
-				char action_str[32] = {0};
-				double raise_amount = 0.0;
+				// Convert to lowercase for easier comparison
+				for (int i = 0; input[i]; i++) {
+					if (input[i] >= 'A' && input[i] <= 'Z') input[i] += 32;
+				}
 				
-				// Parse "raise 0.05" style input
-				if (sscanf(input, "%31s %lf", action_str, &raise_amount) >= 1) {
-					if (strcmp(action_str, "fold") == 0 || strcmp(action_str, "f") == 0) {
-						printf("  → Folding...\n");
-						retval = player_write_betting_action(table_id, "fold", 0.0);
-					} else if (strcmp(action_str, "check") == 0 || strcmp(action_str, "x") == 0) {
-						if (min_amount > 0.0) {
-							printf("  ⚠ Cannot check, must call %.4f or fold\n", min_amount);
-							printf("  Enter action: ");
-							fflush(stdout);
-							// Re-read
-							if (fgets(input, sizeof(input), stdin) != NULL) {
-								input[strcspn(input, "\n")] = 0;
-								if (strcmp(input, "call") == 0 || strcmp(input, "c") == 0) {
-									printf("  → Calling %.4f CHIPS...\n", min_amount);
-									retval = player_write_betting_action(table_id, "call", min_amount);
-								} else {
-									printf("  → Folding...\n");
-									retval = player_write_betting_action(table_id, "fold", 0.0);
-								}
+				if (strcmp(input, "fold") == 0 || strcmp(input, "f") == 0) {
+					printf("  → Folding...\n");
+					retval = player_write_betting_action(table_id, "fold", 0.0);
+					
+				} else if (strcmp(input, "check") == 0 || strcmp(input, "x") == 0) {
+					if (min_amount > 0.0) {
+						printf("  ⚠ Cannot check, must call %.4f CHIPS or fold\n", min_amount);
+						printf("  Enter action (call/fold): ");
+						fflush(stdout);
+						if (fgets(input, sizeof(input), stdin) != NULL) {
+							input[strcspn(input, "\n")] = 0;
+							if (strcmp(input, "call") == 0 || strcmp(input, "c") == 0) {
+								printf("  → Calling %.4f CHIPS...\n", min_amount);
+								retval = player_write_betting_action(table_id, "call", min_amount);
+							} else {
+								printf("  → Folding...\n");
+								retval = player_write_betting_action(table_id, "fold", 0.0);
 							}
-						} else {
-							printf("  → Checking...\n");
-							retval = player_write_betting_action(table_id, "check", 0.0);
 						}
-					} else if (strcmp(action_str, "call") == 0 || strcmp(action_str, "c") == 0) {
-						printf("  → Calling %.4f CHIPS...\n", min_amount);
-						retval = player_write_betting_action(table_id, "call", min_amount);
-					} else if (strcmp(action_str, "raise") == 0 || strcmp(action_str, "r") == 0) {
-						if (raise_amount <= 0.0) {
-							printf("  Enter raise amount: ");
-							fflush(stdout);
-							if (scanf("%lf", &raise_amount) != 1) raise_amount = min_amount * 2;
-							// Clear input buffer
-							int ch; while ((ch = getchar()) != '\n' && ch != EOF);
-						}
-						printf("  → Raising to %.4f CHIPS...\n", raise_amount);
-						retval = player_write_betting_action(table_id, "raise", raise_amount);
-					} else if (strcmp(action_str, "allin") == 0 || strcmp(action_str, "a") == 0) {
-						// Get player funds
-						cJSON *pf = cJSON_GetObjectItem(betting_state, "player_funds");
-						double my_funds = 0.0;
-						if (pf && p_deck_info.player_id < cJSON_GetArraySize(pf)) {
-							my_funds = cJSON_GetArrayItem(pf, p_deck_info.player_id)->valuedouble;
-						}
-						printf("  → Going ALL-IN with %.4f CHIPS!\n", my_funds);
-						retval = player_write_betting_action(table_id, "allin", my_funds);
 					} else {
-						printf("  ⚠ Unknown action '%s'. Auto-checking/calling...\n", action_str);
-						if (min_amount > 0.0) {
-							retval = player_write_betting_action(table_id, "call", min_amount);
-						} else {
-							retval = player_write_betting_action(table_id, "check", 0.0);
+						printf("  → Checking...\n");
+						retval = player_write_betting_action(table_id, "check", 0.0);
+					}
+					
+				} else if (strcmp(input, "call") == 0 || strcmp(input, "c") == 0) {
+					printf("  → Calling %.4f CHIPS...\n", min_amount);
+					retval = player_write_betting_action(table_id, "call", min_amount);
+					
+				} else if (strcmp(input, "raise") == 0 || strcmp(input, "r") == 0) {
+					// Step 2: Get raise amount
+					double raise_amount = 0.0;
+					printf("  Enter raise amount (min %.4f): ", min_amount * 2);
+					fflush(stdout);
+					if (fgets(input, sizeof(input), stdin) != NULL) {
+						input[strcspn(input, "\n")] = 0;
+						raise_amount = atof(input);
+						if (raise_amount <= 0.0) {
+							raise_amount = min_amount * 2;  // Default to min raise
 						}
 					}
-				} else {
+					printf("  → Raising to %.4f CHIPS...\n", raise_amount);
+					retval = player_write_betting_action(table_id, "raise", raise_amount);
+					
+				} else if (strcmp(input, "bet") == 0 || strcmp(input, "b") == 0) {
+					// Step 2: Get bet amount
+					double bet_amt = 0.0;
+					printf("  Enter bet amount: ");
+					fflush(stdout);
+					if (fgets(input, sizeof(input), stdin) != NULL) {
+						input[strcspn(input, "\n")] = 0;
+						bet_amt = atof(input);
+						if (bet_amt <= 0.0) {
+							bet_amt = min_amount > 0.0 ? min_amount : 0.01;
+						}
+					}
+					printf("  → Betting %.4f CHIPS...\n", bet_amt);
+					retval = player_write_betting_action(table_id, "bet", bet_amt);
+					
+				} else if (strcmp(input, "allin") == 0 || strcmp(input, "a") == 0) {
+					// Get player funds and go all-in
+					cJSON *pf = cJSON_GetObjectItem(betting_state, "player_funds");
+					double my_funds = 0.0;
+					if (pf && p_deck_info.player_id < cJSON_GetArraySize(pf)) {
+						my_funds = cJSON_GetArrayItem(pf, p_deck_info.player_id)->valuedouble;
+					}
+					printf("  → Going ALL-IN with %.4f CHIPS!\n", my_funds);
+					retval = player_write_betting_action(table_id, "allin", my_funds);
+					
+				} else if (strlen(input) == 0) {
 					// Empty input - auto check/call
 					if (min_amount > 0.0) {
 						printf("  → Auto-calling %.4f CHIPS...\n", min_amount);
@@ -491,6 +506,12 @@ int32_t player_handle_betting(char *table_id)
 						printf("  → Auto-checking...\n");
 						retval = player_write_betting_action(table_id, "check", 0.0);
 					}
+					
+				} else {
+					printf("  ⚠ Unknown action '%s'.\n", input);
+					printf("  Valid actions: fold, check, call, raise, bet, allin\n");
+					// Don't send anything, let timeout handle it or user can retry
+					return OK;
 				}
 			}
 		}
