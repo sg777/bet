@@ -17,7 +17,7 @@ void send_init_state_to_gui(int32_t state);
 
 // GUI Message builders
 cJSON *gui_build_backend_status(int32_t status);
-cJSON *gui_build_wallet_info(double balance, const char *addr, double stack_amount, int32_t max_players);
+cJSON *gui_build_wallet_info(double balance, const char *addr, double table_min_stake, double small_blind, double big_blind, int32_t max_players);
 cJSON *gui_build_seats_info(int32_t num_players, double *chips, int32_t *connected);
 cJSON *gui_build_blinds_info(double small_blind, double big_blind);
 cJSON *gui_build_dealer_info(int32_t dealer_seat);

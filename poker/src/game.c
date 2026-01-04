@@ -63,14 +63,14 @@ const char *game_state_str(int32_t game_state)
 	}
 }
 
-cJSON *append_game_state(char *table_id, int32_t game_state, cJSON *game_state_info)
+cJSON *append_game_state(const char *id, int32_t game_state, cJSON *game_state_info)
 {
 	char *game_id_str = NULL;
 	cJSON *t_game_info = NULL, *out = NULL;
 
-	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(id, T_GAME_ID_KEY);
 	if (!game_id_str) {
-		dlg_warn("Porbabaly the table is not initialized");
+		dlg_warn("Probably the ID is not initialized");
 		return NULL;
 	}
 	t_game_info = cJSON_CreateObject();
@@ -78,12 +78,12 @@ cJSON *append_game_state(char *table_id, int32_t game_state, cJSON *game_state_i
 	if (game_state_info)
 		cJSON_AddItemToObject(t_game_info, "game_state_info", game_state_info);
 
-	out = poker_append_key_json(table_id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str),
-						t_game_info, true);
+	out = poker_append_key_json(id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str),
+					t_game_info, true);
 	return out;
 }
 
-int32_t get_game_state(char *table_id)
+int32_t get_game_state(const char *id)
 {
 	int32_t game_state = G_ZEROIZED_STATE;
 	char *game_id_str = NULL;
@@ -97,15 +97,15 @@ int32_t get_game_state(char *table_id)
 	}
 
 	// Use getidentitycontent to get COMBINED view of all CMM updates from height_start
-	game_id_str = get_str_from_id_key_from_height(table_id, T_GAME_ID_KEY, height_start);
+	game_id_str = get_str_from_id_key_from_height(id, T_GAME_ID_KEY, height_start);
 	if (!game_id_str) {
 		/*
-			Game ID is NULL, it probably mean the table hasn't been started yet, so game state is in zeroized state.
+			Game ID is NULL, it probably mean the ID hasn't been initialized yet, so game state is in zeroized state.
 		*/
 		return game_state;
 	}
 
-	t_game_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, 
+	t_game_info = get_cJSON_from_id_key_vdxfid_from_height(id, 
 		get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str), height_start);
 	if (!t_game_info)
 		return game_state;
@@ -114,16 +114,16 @@ int32_t get_game_state(char *table_id)
 	return game_state;
 }
 
-cJSON *get_game_state_info(char *table_id)
+cJSON *get_game_state_info(const char *id)
 {
 	char *game_id_str = NULL;
 	cJSON *t_game_info = NULL, *game_state_info = NULL;
 
-	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	game_id_str = poker_get_key_str(id, T_GAME_ID_KEY);
 	if (!game_id_str)
 		return NULL;
 
-	t_game_info = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str), g_start_block);
+	t_game_info = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str), g_start_block);
 	if (!t_game_info)
 		return NULL;
 

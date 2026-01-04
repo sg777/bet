@@ -80,7 +80,7 @@ cJSON *gui_build_backend_status(int32_t status)
     return msg;
 }
 
-cJSON *gui_build_wallet_info(double balance, const char *addr, double stack_amount, int32_t max_players)
+cJSON *gui_build_wallet_info(double balance, const char *addr, double table_min_stake, double small_blind, double big_blind, int32_t max_players)
 {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "method", "walletInfo");
@@ -89,7 +89,9 @@ cJSON *gui_build_wallet_info(double balance, const char *addr, double stack_amou
     if (addr) {
         cJSON_AddStringToObject(msg, "addr", addr);
     }
-    cJSON_AddNumberToObject(msg, "table_stack_in_chips", stack_amount);
+    cJSON_AddNumberToObject(msg, "table_min_stake", table_min_stake);
+    cJSON_AddNumberToObject(msg, "small_blind", small_blind);
+    cJSON_AddNumberToObject(msg, "big_blind", big_blind);
     cJSON_AddNumberToObject(msg, "max_players", max_players);
     return msg;
 }

@@ -277,6 +277,12 @@ bool is_players_shuffled_deck(char *table_id)
 	return false;
 }
 
+static bool is_cashier_shuffled_deck(char *cashier_id)
+{
+	int32_t game_state = get_game_state(cashier_id);
+	return (game_state == G_DECK_SHUFFLING_B);
+}
+
 int32_t dealer_shuffle_deck(char *id)
 {
 	int32_t retval = OK;
@@ -456,6 +462,13 @@ int32_t handle_game_state(struct table *t)
 		retval = dealer_shuffle_deck(t->table_id);
 		if (!retval)
 			append_game_state(t->table_id, G_DECK_SHUFFLING_D, NULL);
+		break;
+	case G_DECK_SHUFFLING_D:
+		// Wait for cashier to finish shuffling
+		if (is_cashier_shuffled_deck(t->cashier_id)) {
+			dlg_info("Cashier shuffle complete, updating table state");
+			append_game_state(t->table_id, G_DECK_SHUFFLING_B, NULL);
+		}
 		break;
 	case G_DECK_SHUFFLING_B:
 		dlg_info("Its time for game");

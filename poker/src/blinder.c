@@ -1,5 +1,6 @@
 #include "bet.h"
 #include "blinder.h"
+#include "config.h"
 #include "deck.h"
 #include "cards.h"
 #include "err.h"
@@ -273,10 +274,10 @@ static int32_t cashier_process_settlement(char *table_id)
 		return ERR_GAME_STATE_UPDATE;
 	}
 	
-	dlg_info("Settlement complete - updating game state");
+	dlg_info("Settlement complete - updating cashier game state");
 	
-	// Update game state to complete
-	append_game_state(table_id, G_SETTLEMENT_COMPLETE, NULL);
+	// Update cashier's game state to complete
+	append_game_state(bet_get_cashiers_id_fqn(), G_SETTLEMENT_COMPLETE, NULL);
 	
 	cJSON_Delete(updated_settlement);
 	return retval;
@@ -303,7 +304,7 @@ int32_t handle_game_state_cashier(char *table_id)
 	case G_DECK_SHUFFLING_D:
 		retval = cashier_shuffle_deck(table_id);
 		if (!retval)
-			append_game_state(table_id, G_DECK_SHUFFLING_B, NULL);
+			append_game_state(bet_get_cashiers_id_fqn(), G_DECK_SHUFFLING_B, NULL);
 		break;
 	case G_REVEAL_CARD:
 		retval = handle_bv_reveal_card(table_id);

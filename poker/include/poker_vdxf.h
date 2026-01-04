@@ -35,7 +35,7 @@
  * @param key The poker key name (e.g., T_TABLE_INFO_KEY)
  * @return String value or NULL
  */
-char *poker_get_key_str(char *id, char *key);
+char *poker_get_key_str(const char *id, const char *key);
 
 /**
  * Get cJSON value from a poker key stored in an identity
@@ -76,7 +76,7 @@ cJSON *poker_append_key_hex(char *id, char *key, char *hex_data, bool is_key_vdx
  * @param is_key_vdxf_id true if key is already a vdxfid
  * @return Updated CMM or NULL on error
  */
-cJSON *poker_append_key_json(char *id, char *key, cJSON *data, bool is_key_vdxf_id);
+cJSON *poker_append_key_json(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id);
 
 /**
  * Update (replace) data for a key in an identity's CMM

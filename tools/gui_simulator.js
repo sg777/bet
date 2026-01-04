@@ -115,7 +115,7 @@ ws.on('message', function incoming(data) {
       console.log(`[${timestamp}] 💰 Balance: ${parsed.chips_bal} CHIPS`);
       
     } else if (parsed.method === 'walletInfo') {
-      console.log(`[${timestamp}] 👛 Wallet: ${parsed.balance} CHIPS, Table: ${parsed.table_stack_in_chips}`);
+      console.log(`[${timestamp}] 👛 Wallet: ${parsed.balance} CHIPS, Stake: ${parsed.table_min_stake}, Blinds: ${parsed.small_blind}/${parsed.big_blind}`);
       
     } else if (parsed.method === 'join_ack') {
       console.log(`[${timestamp}] ✅ Join Approved: ${parsed.message}`);

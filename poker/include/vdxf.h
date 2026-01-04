@@ -286,7 +286,7 @@ char *get_key_data_vdxf_id(char *key_name, char *data);
 /* ============================================================================
  * Identity CMM (ContentMultiMap) Operations
  * ============================================================================ */
-cJSON *update_cmm(char *id, cJSON *cmm);
+cJSON *update_cmm(const char *id, cJSON *cmm);
 cJSON *get_cmm(const char *id, int16_t full_id);
 
 /* ============================================================================
@@ -306,13 +306,13 @@ cJSON *getaddressutxos(char verus_addresses[][100], int n);
  * Poker Key Data Access (internal - use poker_vdxf.h for public API)
  * ============================================================================ */
 char *get_str_from_id_key(char *id, char *key);
-char *get_str_from_id_key_from_height(char *id, char *key, int32_t height_start);
+char *get_str_from_id_key_from_height(const char *id, const char *key, int32_t height_start);
 cJSON *get_cJSON_from_id_key(const char *id, const char *key, int32_t is_full_id);
 cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid);
-cJSON *get_cJSON_from_id_key_vdxfid_from_height(char *id, char *key_vdxfid, int32_t height_start);
-cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id);
-cJSON *append_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool is_key_vdxf_id);
-cJSON *update_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool is_key_vdxf_id);
+cJSON *get_cJSON_from_id_key_vdxfid_from_height(const char *id, const char *key_vdxfid, int32_t height_start);
+cJSON *append_cmm_from_id_key_data_hex(const char *id, const char *key, char *hex_data, bool is_key_vdxf_id);
+cJSON *append_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id);
+cJSON *update_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id);
 
 /* ============================================================================
  * Poker Table Operations (internal - use poker_vdxf.h for public API)

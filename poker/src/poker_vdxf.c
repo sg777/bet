@@ -22,7 +22,7 @@
  * Poker Key Data Access - Wrappers around vdxf.c functions
  * ============================================================================ */
 
-char *poker_get_key_str(char *id, char *key)
+char *poker_get_key_str(const char *id, const char *key)
 {
 	extern int32_t g_start_block;
 	int32_t height_start = (g_start_block > 0) ? g_start_block : chips_get_block_count() - 100;
@@ -48,7 +48,7 @@ cJSON *poker_append_key_hex(char *id, char *key, char *hex_data, bool is_key_vdx
 	return append_cmm_from_id_key_data_hex(id, key, hex_data, is_key_vdxf_id);
 }
 
-cJSON *poker_append_key_json(char *id, char *key, cJSON *data, bool is_key_vdxf_id)
+cJSON *poker_append_key_json(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id)
 {
 	return append_cmm_from_id_key_data_cJSON(id, key, data, is_key_vdxf_id);
 }

@@ -107,7 +107,14 @@ void bet_dcv_lws_write(cJSON *data)
 				sleep(1);
 		}
 		memset(dcv_gui_data, 0, sizeof(dcv_gui_data));
-		strncpy(dcv_gui_data, cJSON_Print(data), strlen(cJSON_Print(data)));
+		char *json_str = cJSON_Print(data);
+		size_t len = strlen(json_str);
+		if (len >= sizeof(dcv_gui_data)) {
+			len = sizeof(dcv_gui_data) - 1;
+		}
+		memcpy(dcv_gui_data, json_str, len);
+		dcv_gui_data[len] = '\0';  // Ensure null termination
+		free(json_str);
 		dcv_data_exists = 1;
 		lws_callback_on_writable(wsi_global_host);
 		dlg_info("Data pushed to GUI\n");
@@ -943,15 +950,15 @@ static int32_t bet_dcv_poker_winner(struct privatebet_info *bet, struct privateb
 	for (int32_t i = 0; i < bet->maxplayers; i++) {
 		if (vars->win_funds[i] > 0) {
 			double c_dcv, c_dev;
-			c_dcv = ((dcv_commission_percentage * vars->win_funds[i]) / 100) * SB_in_chips;
-			c_dev = ((dev_fund_commission * vars->win_funds[i]) / 100) * SB_in_chips;
+			c_dcv = (dcv_commission_percentage * vars->win_funds[i]) / 100;
+			c_dev = (dev_fund_commission * vars->win_funds[i]) / 100;
 
 			dcv_commission += c_dcv;
 			dev_commission += c_dev;
-			player_amounts[i] = (vars->win_funds[i] * SB_in_chips) - (c_dev + c_dcv);
-			player_amounts[i] += (vars->funds[i] * SB_in_chips);
+			player_amounts[i] = vars->win_funds[i] - (c_dev + c_dcv);
+			player_amounts[i] += vars->funds[i];
 		} else {
-			player_amounts[i] = (vars->funds[i] * SB_in_chips);
+			player_amounts[i] = vars->funds[i];
 		}
 	}
 
@@ -1442,8 +1449,8 @@ static int32_t bet_dcv_process_tx(cJSON *argjson, struct privatebet_info *bet, s
 	rand_str = jstr(argjson, "id");
 	for (int i = 0; i < no_of_rand_str; i++) {
 		if (strcmp(tx_rand_str[i], rand_str) == 0) {
-			vars->funds[i] = payin_tx_amount / SB_in_chips;
-			vars->ini_funds[i] = payin_tx_amount / SB_in_chips;
+			vars->funds[i] = payin_tx_amount;      // Direct CHIPS value
+			vars->ini_funds[i] = payin_tx_amount;  // Direct CHIPS value
 			vars->win_funds[i] = 0;
 			vars->winners[i] = 0;
 		}
@@ -1466,7 +1473,7 @@ static int32_t bet_dcv_process_tx(cJSON *argjson, struct privatebet_info *bet, s
 	cJSON_AddStringToObject(tx_status, "method", "tx_status");
 	cJSON_AddStringToObject(tx_status, "id", jstr(argjson, "id"));
 	cJSON_AddNumberToObject(tx_status, "tx_validity", retval);
-	cJSON_AddNumberToObject(tx_status, "player_funds", (payin_tx_amount / SB_in_chips));
+	cJSON_AddNumberToObject(tx_status, "player_funds", payin_tx_amount);  // Direct CHIPS value
 
 	// Nanomsg removed - no longer used
 	retval = OK;

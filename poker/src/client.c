@@ -101,13 +101,20 @@ void write_to_GUI(void *ptr)
 {
 	cJSON *data = ptr;
 
-	dlg_info("%s\n", cJSON_Print(data));
+	char *json_str = cJSON_Print(data);
+	dlg_info("%s\n", json_str);
 	if (ws_connection_status == 1) {
 		memset(player_gui_data, 0, sizeof(player_gui_data));
-		strncpy(player_gui_data, cJSON_Print(data), strlen(cJSON_Print(data)));
+		size_t len = strlen(json_str);
+		if (len >= sizeof(player_gui_data)) {
+			len = sizeof(player_gui_data) - 1;
+		}
+		memcpy(player_gui_data, json_str, len);
+		player_gui_data[len] = '\0';  // Ensure null termination
 		data_exists = 1;
 		lws_callback_on_writable(wsi_global_client);
 	}
+	free(json_str);
 }
 
 void player_lws_write(cJSON *data)
@@ -136,7 +143,13 @@ void player_lws_write(cJSON *data)
 		memset(player_gui_data, 0, sizeof(player_gui_data));
 		char *json_str = cJSON_Print(data);
 		dlg_info("\033[34m[► TO GUI]\033[0m %s", json_str);
-		strncpy(player_gui_data, json_str, strlen(json_str));
+		size_t len = strlen(json_str);
+		if (len >= sizeof(player_gui_data)) {
+			len = sizeof(player_gui_data) - 1;
+		}
+		memcpy(player_gui_data, json_str, len);
+		player_gui_data[len] = '\0';  // Ensure null termination
+		free(json_str);
 		data_exists = 1;
 		lws_callback_on_writable(wsi_global_client);
 		} else {
@@ -852,7 +865,9 @@ static void bet_player_table_info()
 	cJSON_AddNumberToObject(table_info, "balance", chips_get_balance());
 	cJSON_AddNumberToObject(table_info, "backend_status", backend_status);
 	cJSON_AddNumberToObject(table_info, "max_players", max_players);
-	cJSON_AddNumberToObject(table_info, "table_stack_in_chips", (table_stake_in_chips / SB_in_chips));
+	cJSON_AddNumberToObject(table_info, "table_min_stake", table_min_stake);  // Payin amount in CHIPS
+	cJSON_AddNumberToObject(table_info, "small_blind", SB_in_chips);
+	cJSON_AddNumberToObject(table_info, "big_blind", BB_in_chips);
 	cJSON_AddStringToObject(table_info, "table_id", player_config.table_id);
 	cJSON_AddStringToObject(table_info, "dealer_id", player_config.dealer_id);
 	
@@ -926,9 +941,32 @@ void send_init_state_to_gui(int32_t state)
 	cJSON_AddNumberToObject(state_msg, "state", state);
 	cJSON_AddStringToObject(state_msg, "state_name", player_init_state_str(state));
 	
-	// Add player_id (Verus ID) for JOINED state - can be used as player name
+	// Add player_id and payin info for JOINED state
 	if (state == P_INIT_JOINED) {
 		cJSON_AddStringToObject(state_msg, "player_id", player_config.verus_pid);
+		
+		// Get payin amount from blockchain t_player_info
+		extern cJSON *get_t_player_info(char *table_id);
+		cJSON *t_player_info = get_t_player_info(player_config.table_id);
+		if (t_player_info) {
+			cJSON *payin_amounts = cJSON_GetObjectItem(t_player_info, "payin_amounts");
+			cJSON *player_info_arr = cJSON_GetObjectItem(t_player_info, "player_info");
+			
+			// Find this player's index and get their payin amount
+			if (payin_amounts && player_info_arr) {
+				for (int i = 0; i < cJSON_GetArraySize(player_info_arr); i++) {
+					char *entry = cJSON_GetArrayItem(player_info_arr, i)->valuestring;
+					if (entry && strstr(entry, player_config.verus_pid)) {
+						cJSON *amount = cJSON_GetArrayItem(payin_amounts, i);
+						if (amount) {
+							cJSON_AddNumberToObject(state_msg, "payin_amount", amount->valuedouble);
+						}
+						break;
+					}
+				}
+			}
+			cJSON_Delete(t_player_info);
+		}
 	}
 	
 	dlg_info("\033[34m[► TO GUI]\033[0m Player state: %s", player_init_state_str(state));

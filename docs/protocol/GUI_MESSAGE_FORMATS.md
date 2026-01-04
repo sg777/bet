@@ -379,7 +379,9 @@ These messages are supported by **all node types** (Dealer, Player, Cashier).
   "balance": 123.45678900,
   "backend_status": 1,
   "max_players": 9,
-  "table_stack_in_chips": 200,
+  "table_min_stake": 0.5,
+  "small_blind": 0.01,
+  "big_blind": 0.02,
   "table_id": "abc123...",
   "tx_fee": 0.00010000
 }
@@ -390,7 +392,9 @@ These messages are supported by **all node types** (Dealer, Player, Cashier).
 - `balance` (number, required): Current balance
 - `backend_status` (number, required): Backend status (0 or 1)
 - `max_players` (number, required): Maximum players at table
-- `table_stack_in_chips` (number, required): Table stack size in chips
+- `table_min_stake` (number, required): Payin amount in CHIPS (default 0.5)
+- `small_blind` (number, required): Small blind in CHIPS (default 0.01)
+- `big_blind` (number, required): Big blind in CHIPS (default 0.02)
 - `table_id` (string, required): Current table ID
 - `tx_fee` (number, required): Transaction fee
 

@@ -126,7 +126,7 @@ static cJSON *update_with_retry(const char *method, cJSON *params)
 	return result;
 }
 
-cJSON *update_cmm(char *id, cJSON *cmm)
+cJSON *update_cmm(const char *id, cJSON *cmm)
 {
 	cJSON *id_info = NULL, *params = NULL, *result = NULL;
 
@@ -964,7 +964,7 @@ char *get_str_from_id_key(char *id, char *key)
 }
 
 /* Get string from id key using height-filtered reading (COMBINED view) */
-char *get_str_from_id_key_from_height(char *id, char *key, int32_t height_start)
+char *get_str_from_id_key_from_height(const char *id, const char *key, int32_t height_start)
 {
 	cJSON *cmm = NULL;
 	cJSON *item = NULL;
@@ -1111,7 +1111,7 @@ cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid)
  * @param key_vdxfid The VDXF ID of the key
  * @param height_start Block height to start reading from (table's start_block)
  */
-cJSON *get_cJSON_from_id_key_vdxfid_from_height(char *id, char *key_vdxfid, int32_t height_start)
+cJSON *get_cJSON_from_id_key_vdxfid_from_height(const char *id, const char *key_vdxfid, int32_t height_start)
 {
 	cJSON *cmm = NULL;
 	cJSON *item = NULL;
@@ -1148,9 +1148,10 @@ cJSON *get_cJSON_from_id_key_vdxfid_from_height(char *id, char *key_vdxfid, int3
 }
 
 // Update a single key in CMM - Verus merges automatically, no need to read entire CMM
-cJSON *append_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id)
+cJSON *append_cmm_from_id_key_data_hex(const char *id, const char *key, char *hex_data, bool is_key_vdxf_id)
 {
-	char *data_type = NULL, *data_key = NULL;
+	char *data_type = NULL;
+	const char *data_key = NULL;
 	cJSON *data_obj = NULL, *cmm_obj = NULL;
 
 	// Just send the single key - Verus will merge it with existing CMM
@@ -1195,7 +1196,7 @@ cJSON *replace_cmm_with_key_data_hex(char *id, char *key, char *hex_data, bool i
 	return update_cmm(id, cmm_obj);
 }
 
-cJSON *append_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool is_key_vdxf_id)
+cJSON *append_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id)
 {
 	char *hex_data = NULL;
 
@@ -1209,7 +1210,7 @@ cJSON *append_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool 
 	return append_cmm_from_id_key_data_hex(id, key, hex_data, is_key_vdxf_id);
 }
 
-cJSON *update_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool is_key_vdxf_id)
+cJSON *update_cmm_from_id_key_data_hex(const char *id, const char *key, char *hex_data, bool is_key_vdxf_id)
 {
 	if (!id || !key || !hex_data) {
 		dlg_error("%s: Invalid input parameters", __func__);
@@ -1217,7 +1218,7 @@ cJSON *update_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool
 	}
 
 	char *data_type = get_vdxf_id(BYTEVECTOR_VDXF_ID);
-	char *data_key = is_key_vdxf_id ? key : get_vdxf_id(key);
+	const char *data_key = is_key_vdxf_id ? key : get_vdxf_id(key);
 
 	if (!data_type || !data_key) {
 		dlg_error("%s: Failed to determine data type or key", __func__);
@@ -1250,7 +1251,7 @@ cJSON *update_cmm_from_id_key_data_hex(char *id, char *key, char *hex_data, bool
 	return result;
 }
 
-cJSON *update_cmm_from_id_key_data_cJSON(char *id, char *key, cJSON *data, bool is_key_vdxf_id)
+cJSON *update_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id)
 {
 	if (!id || !key || !data) {
 		dlg_error("%s: Invalid input parameters", __func__);

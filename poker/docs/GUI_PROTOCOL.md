@@ -44,7 +44,9 @@ Response to GUI's `table_info` request. Provides player wallet info and configur
     "balance": 132.52420000,
     "backend_status": 1,
     "max_players": 2,
-    "table_stack_in_chips": 50,
+    "table_min_stake": 0.5,
+    "small_blind": 0.01,
+    "big_blind": 0.02,
     "table_id": "t1",
     "dealer_id": "d1",
     "occupied_seats": [
@@ -61,7 +63,9 @@ Response to GUI's `table_info` request. Provides player wallet info and configur
 | `balance` | number | Current CHIPS balance |
 | `backend_status` | number | `1` = ready, `0` = not ready |
 | `max_players` | number | Maximum players allowed at table |
-| `table_stack_in_chips` | number | Table stake in CHIPS |
+| `table_min_stake` | number | Payin amount in CHIPS (default 0.5) |
+| `small_blind` | number | Small blind in CHIPS (default 0.01) |
+| `big_blind` | number | Big blind in CHIPS (default 0.02) |
 | `table_id` | string | Configured table ID from INI file |
 | `dealer_id` | string | Configured dealer ID from INI file |
 | `occupied_seats` | array | Array of occupied seat objects |
@@ -85,7 +89,8 @@ Progress updates during player initialization. Sent at each stage of the join/ga
     "method": "player_init_state",
     "state": 5,
     "state_name": "JOINED",
-    "player_id": "p1.sg777z.chips.vrsc@"
+    "player_id": "p1.sg777z.chips.vrsc@",
+    "payin_amount": 0.5
 }
 ```
 
@@ -95,6 +100,7 @@ Progress updates during player initialization. Sent at each stage of the join/ga
 | `state` | number | Numeric state code (see table below) |
 | `state_name` | string | Human-readable state name |
 | `player_id` | string | *(Only for JOINED state)* Player's Verus ID |
+| `payin_amount` | number | *(Only for JOINED state)* Payin amount in CHIPS |
 
 #### State Codes
 
@@ -106,7 +112,7 @@ All states are sent to GUI via `player_init_state` messages.
 | `TABLE_FOUND` | 2 | ✅ Yes | - | Table found on blockchain |
 | `WAIT_JOIN` | 3 | ✅ Yes | - | Waiting for user to click join |
 | `JOINING` | 4 | ✅ Yes | - | Payin TX executing (10-30s) |
-| `JOINED` | 5 | ✅ Yes | `player_id` | Player has seat |
+| `JOINED` | 5 | ✅ Yes | `player_id`, `payin_amount` | Player has seat |
 | `DECK_READY` | 6 | ✅ Yes | - | Deck shuffling complete |
 | `IN_GAME` | 7 | ✅ Yes | - | Game loop active |
 
@@ -141,9 +147,11 @@ All states are sent to GUI via `player_init_state` messages.
 ##### 5. JOINED (state=5)
 - **When sent**: After payin TX confirmed and player added to table
 - **GUI receives?**: YES
-- **Extra field**: `player_id` - Player's Verus ID (use as display name)
+- **Extra fields**: 
+  - `player_id` - Player's Verus ID (use as display name)
+  - `payin_amount` - Actual payin in CHIPS (e.g., 0.5)
 - **What happens next**: Deck initialization begins
-- **GUI action**: Show seat assignment, display player name
+- **GUI action**: Show seat assignment, display player name and stack
 
 ##### 6. DECK_READY (state=6)
 - **When sent**: After player's deck shuffling data stored on blockchain
@@ -184,7 +192,7 @@ JOINING (4) ───────── Sent to GUI ✓
       │
       ▼ [Payin TX executing... 10-30 seconds]
       │
-JOINED (5) ────────── Sent to GUI ✓ (includes player_id)
+JOINED (5) ────────── Sent to GUI ✓ (includes player_id, payin_amount)
       │
       ▼ [Deck initialization...]
       │
@@ -328,7 +336,7 @@ Submit a betting action during gameplay.
 9. Backend → GUI: join_ack {status: "approved"}
 10. Backend → GUI: player_init_state {state: 4, state_name: "JOINING"}
 11. [~10-30 seconds for blockchain transaction]
-12. Backend → GUI: player_init_state {state: 5, state_name: "JOINED", player_id: "p1@"}
+12. Backend → GUI: player_init_state {state: 5, state_name: "JOINED", player_id: "p1@", payin_amount: 0.5}
 13. Backend → GUI: player_init_state {state: 6, state_name: "DECK_READY"}
 14. Backend → GUI: player_init_state {state: 7, state_name: "IN_GAME"}
 15. [Game loop - betting actions, card reveals, etc.]
