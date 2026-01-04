@@ -283,8 +283,8 @@ static int32_t cashier_process_settlement(char *table_id)
 	// Ensure cashier's game_id is set before updating game state
 	ensure_cashier_game_id_initialized(table_id);
 	
-	// Update cashier's game state to complete
-	append_game_state(bet_get_cashiers_id_fqn(), G_SETTLEMENT_COMPLETE, NULL);
+	// Update cashier's game state to complete (use short name for identity functions)
+	append_game_state(bet_get_cashier_short_name(), G_SETTLEMENT_COMPLETE, NULL);
 	
 	cJSON_Delete(updated_settlement);
 	return retval;
@@ -340,8 +340,10 @@ int32_t handle_game_state_cashier(char *table_id)
 		if (retval) break;
 		
 		retval = cashier_shuffle_deck(table_id);
-		if (!retval)
-			append_game_state(bet_get_cashiers_id_fqn(), G_DECK_SHUFFLING_B, NULL);
+		if (!retval) {
+			dlg_info("Cashier shuffle complete, updating game state to G_DECK_SHUFFLING_B");
+			append_game_state(bet_get_cashier_short_name(), G_DECK_SHUFFLING_B, NULL);
+		}
 		break;
 	case G_REVEAL_CARD:
 		retval = handle_bv_reveal_card(table_id);
