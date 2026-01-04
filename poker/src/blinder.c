@@ -6,8 +6,12 @@
 #include "err.h"
 #include "game.h"
 #include "poker_vdxf.h"
+#include <stdbool.h>
 
 extern int32_t g_start_block;
+
+// Forward declaration - defined later in file
+static int32_t ensure_cashier_game_id_initialized(char *table_id);
 
 char all_t_b_p_keys[all_t_b_p_keys_no][128] = { T_B_P1_DECK_KEY, T_B_P2_DECK_KEY, T_B_P3_DECK_KEY, T_B_P4_DECK_KEY,
 						T_B_P5_DECK_KEY, T_B_P6_DECK_KEY, T_B_P7_DECK_KEY, T_B_P8_DECK_KEY,
@@ -276,11 +280,40 @@ static int32_t cashier_process_settlement(char *table_id)
 	
 	dlg_info("Settlement complete - updating cashier game state");
 	
+	// Ensure cashier's game_id is set before updating game state
+	ensure_cashier_game_id_initialized(table_id);
+	
 	// Update cashier's game state to complete
 	append_game_state(bet_get_cashiers_id_fqn(), G_SETTLEMENT_COMPLETE, NULL);
 	
 	cJSON_Delete(updated_settlement);
 	return retval;
+}
+
+// Ensure cashier's ID has T_GAME_ID_KEY set (required for append_game_state to work)
+static int32_t ensure_cashier_game_id_initialized(char *table_id)
+{
+	static bool initialized = false;
+	if (initialized) return OK;
+	
+	// Get game_id from the table
+	char *game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	if (!game_id_str) {
+		dlg_error("Cannot initialize cashier game_id - table has no game_id");
+		return ERR_GAME_ID_NOT_FOUND;
+	}
+	
+	// Set T_GAME_ID_KEY on the cashier's ID
+	dlg_info("Initializing cashier's T_GAME_ID_KEY: %s", game_id_str);
+	cJSON *out = poker_append_key_hex((char *)bet_get_cashiers_id_fqn(), T_GAME_ID_KEY, game_id_str, false);
+	if (!out) {
+		dlg_error("Failed to set game_id on cashier's ID");
+		return ERR_GAME_STATE_UPDATE;
+	}
+	
+	initialized = true;
+	dlg_info("Cashier game_id initialized successfully");
+	return OK;
 }
 
 int32_t handle_game_state_cashier(char *table_id)
@@ -302,6 +335,10 @@ int32_t handle_game_state_cashier(char *table_id)
 	case G_DECK_SHUFFLING_B:
 		break;
 	case G_DECK_SHUFFLING_D:
+		// Ensure cashier's game_id is set before updating game state
+		retval = ensure_cashier_game_id_initialized(table_id);
+		if (retval) break;
+		
 		retval = cashier_shuffle_deck(table_id);
 		if (!retval)
 			append_game_state(bet_get_cashiers_id_fqn(), G_DECK_SHUFFLING_B, NULL);

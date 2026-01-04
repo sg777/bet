@@ -852,7 +852,7 @@ static void bet_player_handle_invalid_method(char *method)
 
 // bet_player_withdraw_request and bet_player_withdraw removed - now using common wallet handler bet_wallet_withdraw_request() and bet_wallet_withdraw()
 
-static void bet_player_table_info()
+void bet_player_table_info(void)
 {
 	cJSON *table_info = NULL;
 	cJSON *occupied_seats = NULL;
@@ -878,11 +878,12 @@ static void bet_player_table_info()
 		t_player_info = get_t_player_info(player_config.table_id);
 		if (t_player_info) {
 			player_info_array = cJSON_GetObjectItem(t_player_info, "player_info");
+			cJSON *payin_amounts = cJSON_GetObjectItem(t_player_info, "payin_amounts");
 			if (player_info_array && player_info_array->type == cJSON_Array) {
 				int array_size = cJSON_GetArraySize(player_info_array);
 				for (int i = 0; i < array_size; i++) {
 					char *player_entry = cJSON_GetArrayItem(player_info_array, i)->valuestring;
-					// Format: "verus_pid_txid_amount_slot"
+					// Format: "verus_pid_txid_slot"
 					// Extract slot number (last part after last underscore)
 					char *last_underscore = strrchr(player_entry, '_');
 					if (last_underscore) {
@@ -899,6 +900,15 @@ static void bet_player_table_info()
 								cJSON *seat_obj = cJSON_CreateObject();
 								cJSON_AddNumberToObject(seat_obj, "seat", seat_num);
 								cJSON_AddStringToObject(seat_obj, "player_id", player_id);
+								
+								// Add payin amount (stack) from parallel array
+								if (payin_amounts && i < cJSON_GetArraySize(payin_amounts)) {
+									cJSON *amount = cJSON_GetArrayItem(payin_amounts, i);
+									if (amount) {
+										cJSON_AddNumberToObject(seat_obj, "stack", amount->valuedouble);
+									}
+								}
+								
 								cJSON_AddItemToArray(occupied_seats, seat_obj);
 							}
 						}

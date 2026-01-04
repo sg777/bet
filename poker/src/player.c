@@ -13,6 +13,7 @@
 #include "vdxf.h"
 #include "gui.h"
 #include <time.h>
+#include <errno.h>
 
 extern int32_t g_start_block;
 struct p_deck_info_struct p_deck_info;
@@ -740,11 +741,23 @@ int32_t handle_verus_player()
 		send_init_state_to_gui(P_INIT_WAIT_JOIN);
 		dlg_info("Player init state: %s - waiting for GUI approval...", player_init_state_str(P_INIT_WAIT_JOIN));
 		
-		// Wait for GUI to send join_table message
+		// Wait for GUI to send join_table message, refreshing table info every 5 seconds
+		extern void bet_player_table_info(void);
+		struct timespec ts;
+		
 		pthread_mutex_lock(&gui_join_mutex);
 		dlg_info("Waiting for GUI join signal (gui_join_approved=%d)...", gui_join_approved);
 		while (gui_join_approved == 0) {
-			pthread_cond_wait(&gui_join_cond, &gui_join_mutex);
+			clock_gettime(CLOCK_REALTIME, &ts);
+			ts.tv_sec += 5;  // 5 second timeout
+			
+			int wait_result = pthread_cond_timedwait(&gui_join_cond, &gui_join_mutex, &ts);
+			if (wait_result == ETIMEDOUT && gui_join_approved == 0) {
+				// Timeout - refresh table info for GUI
+				pthread_mutex_unlock(&gui_join_mutex);
+				bet_player_table_info();
+				pthread_mutex_lock(&gui_join_mutex);
+			}
 		}
 		// Reset for next join
 		gui_join_approved = 0;
@@ -768,6 +781,20 @@ int32_t handle_verus_player()
 		// State 5: Successfully joined (have seat)
 		send_init_state_to_gui(P_INIT_JOINED);
 		dlg_info("Player init state: %s", player_init_state_str(P_INIT_JOINED));
+	}
+
+	// In GUI mode, wait for all players to join (G_PLAYERS_JOINED state)
+	// Periodically send table_info updates so GUI can show who else has joined
+	if (g_betting_mode == BET_MODE_GUI) {
+		extern void bet_player_table_info(void);
+		int32_t game_state;
+		
+		dlg_info("Waiting for all players to join...");
+		while ((game_state = get_game_state(player_config.table_id)) < G_PLAYERS_JOINED) {
+			bet_player_table_info();  // Send updated table info to GUI
+			sleep(5);  // Check every 5 seconds
+		}
+		dlg_info("All players joined, game state: %s", game_state_str(game_state));
 	}
 
 	// Get player ID
