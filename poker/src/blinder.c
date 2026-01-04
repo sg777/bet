@@ -303,9 +303,9 @@ static int32_t ensure_cashier_game_id_initialized(char *table_id)
 		return ERR_GAME_ID_NOT_FOUND;
 	}
 	
-	// Set T_GAME_ID_KEY on the cashier's ID
+	// Set T_GAME_ID_KEY on the cashier's ID (use short name for update_cmm)
 	dlg_info("Initializing cashier's T_GAME_ID_KEY: %s", game_id_str);
-	cJSON *out = poker_append_key_hex((char *)bet_get_cashiers_id_fqn(), T_GAME_ID_KEY, game_id_str, false);
+	cJSON *out = poker_append_key_hex((char *)bet_get_cashier_short_name(), T_GAME_ID_KEY, game_id_str, false);
 	if (!out) {
 		dlg_error("Failed to set game_id on cashier's ID");
 		return ERR_GAME_STATE_UPDATE;

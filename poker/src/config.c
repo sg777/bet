@@ -734,6 +734,24 @@ const char *bet_get_cashiers_id_fqn(void)
 	return CASHIERS_ID_FQN;
 }
 
+const char *bet_get_cashier_short_name(void)
+{
+	// Return just the short name (e.g., "cashier") for use with update_cmm
+	// which adds the parent automatically
+	if (verus_config.initialized && verus_config.cashier_id[0] != '\0') {
+		// Extract short name from FQN (e.g., "cashier.sg777z.chips.vrsc@" -> "cashier")
+		static char short_name[64];
+		strncpy(short_name, verus_config.cashier_id, sizeof(short_name) - 1);
+		short_name[sizeof(short_name) - 1] = '\0';
+		char *dot = strchr(short_name, '.');
+		if (dot) {
+			*dot = '\0';  // Truncate at first dot
+		}
+		return short_name;
+	}
+	return "cashier";
+}
+
 const char *bet_get_dealers_id_fqn(void)
 {
 	if (verus_config.initialized) {
