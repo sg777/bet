@@ -376,9 +376,6 @@ int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_i
 		return 0;
 	}
 
-	dlg_info("Checking %d cashier transactions since block %d", 
-		cJSON_GetArraySize(txids), start_block);
-
 	// Check known player identities for join requests
 	// For now, check a hardcoded list - in production this would be
 	// a dynamic player registry or discovery mechanism

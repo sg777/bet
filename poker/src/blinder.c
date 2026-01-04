@@ -285,9 +285,13 @@ static int32_t cashier_process_settlement(char *table_id)
 int32_t handle_game_state_cashier(char *table_id)
 {
 	int32_t game_state, retval = OK;
+	static int32_t last_logged_state = -1;
 
 	game_state = get_game_state(table_id);
-	dlg_info("%s", game_state_str(game_state));
+	if (game_state != last_logged_state) {
+		dlg_info("%s", game_state_str(game_state));
+		last_logged_state = game_state;
+	}
 	switch (game_state) {
 	case G_ZEROIZED_STATE:
 	case G_TABLE_ACTIVE:

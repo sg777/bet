@@ -636,9 +636,13 @@ int32_t player_handle_betting(char *table_id)
 int32_t handle_game_state_player(char *table_id)
 {
 	int32_t game_state, retval = OK;
+	static int32_t last_logged_state = -1;
 
 	game_state = get_game_state(table_id);
-	dlg_info("%s", game_state_str(game_state));
+	if (game_state != last_logged_state) {
+		dlg_info("%s", game_state_str(game_state));
+		last_logged_state = game_state;
+	}
 	switch (game_state) {
 	case G_REVEAL_CARD:
 		retval = handle_player_reveal_card(table_id);
