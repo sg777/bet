@@ -878,12 +878,11 @@ static void bet_player_table_info()
 		t_player_info = get_t_player_info(player_config.table_id);
 		if (t_player_info) {
 			player_info_array = cJSON_GetObjectItem(t_player_info, "player_info");
-			cJSON *payin_amounts = cJSON_GetObjectItem(t_player_info, "payin_amounts");
 			if (player_info_array && player_info_array->type == cJSON_Array) {
 				int array_size = cJSON_GetArraySize(player_info_array);
 				for (int i = 0; i < array_size; i++) {
 					char *player_entry = cJSON_GetArrayItem(player_info_array, i)->valuestring;
-					// Format: "verus_pid_txid_slot"
+					// Format: "verus_pid_txid_amount_slot"
 					// Extract slot number (last part after last underscore)
 					char *last_underscore = strrchr(player_entry, '_');
 					if (last_underscore) {
@@ -900,15 +899,6 @@ static void bet_player_table_info()
 								cJSON *seat_obj = cJSON_CreateObject();
 								cJSON_AddNumberToObject(seat_obj, "seat", seat_num);
 								cJSON_AddStringToObject(seat_obj, "player_id", player_id);
-								
-								// Add payin amount from parallel array
-								if (payin_amounts && i < cJSON_GetArraySize(payin_amounts)) {
-									cJSON *amount = cJSON_GetArrayItem(payin_amounts, i);
-									if (amount) {
-										cJSON_AddNumberToObject(seat_obj, "stack", amount->valuedouble);
-									}
-								}
-								
 								cJSON_AddItemToArray(occupied_seats, seat_obj);
 							}
 						}
@@ -954,9 +944,29 @@ void send_init_state_to_gui(int32_t state)
 	// Add player_id and payin info for JOINED state
 	if (state == P_INIT_JOINED) {
 		cJSON_AddStringToObject(state_msg, "player_id", player_config.verus_pid);
-		// Player knows their own payin amount - use config value directly
-		// (blockchain t_player_info may not be updated yet at this point)
-		cJSON_AddNumberToObject(state_msg, "payin_amount", table_min_stake);
+		
+		// Get payin amount from blockchain t_player_info
+		extern cJSON *get_t_player_info(char *table_id);
+		cJSON *t_player_info = get_t_player_info(player_config.table_id);
+		if (t_player_info) {
+			cJSON *payin_amounts = cJSON_GetObjectItem(t_player_info, "payin_amounts");
+			cJSON *player_info_arr = cJSON_GetObjectItem(t_player_info, "player_info");
+			
+			// Find this player's index and get their payin amount
+			if (payin_amounts && player_info_arr) {
+				for (int i = 0; i < cJSON_GetArraySize(player_info_arr); i++) {
+					char *entry = cJSON_GetArrayItem(player_info_arr, i)->valuestring;
+					if (entry && strstr(entry, player_config.verus_pid)) {
+						cJSON *amount = cJSON_GetArrayItem(payin_amounts, i);
+						if (amount) {
+							cJSON_AddNumberToObject(state_msg, "payin_amount", amount->valuedouble);
+						}
+						break;
+					}
+				}
+			}
+			cJSON_Delete(t_player_info);
+		}
 	}
 	
 	dlg_info("\033[34m[► TO GUI]\033[0m Player state: %s", player_init_state_str(state));

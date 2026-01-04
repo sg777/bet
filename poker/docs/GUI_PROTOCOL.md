@@ -50,8 +50,8 @@ Response to GUI's `table_info` request. Provides player wallet info and configur
     "table_id": "t1",
     "dealer_id": "d1",
     "occupied_seats": [
-        {"seat": 0, "player_id": "p1", "stack": 0.5},
-        {"seat": 1, "player_id": "p2", "stack": 0.5}
+        {"seat": 0, "player_id": "p1"},
+        {"seat": 1, "player_id": "p2"}
     ]
 }
 ```
@@ -75,7 +75,6 @@ Response to GUI's `table_info` request. Provides player wallet info and configur
 |-------|------|-------------|
 | `seat` | number | Seat number (0-indexed) |
 | `player_id` | string | Verus ID of player in that seat |
-| `stack` | number | Player's stack in CHIPS (payin amount) |
 
 **GUI Action**: Display table info, show available seats, enable "Join Table" button.
 
@@ -250,39 +249,6 @@ Sent when an error occurs during initialization.
 | `message` | string | Human-readable error context |
 
 **GUI Action**: Display error message to user, optionally offer retry.
-
----
-
-### 6. `players_update`
-
-Sent periodically while waiting for other players to join. Allows GUI to show real-time updates of who has joined the table.
-
-```json
-{
-    "method": "players_update",
-    "num_players": 1,
-    "max_players": 2,
-    "players": [
-        {
-            "player_id": "p1",
-            "seat": 0,
-            "stack": 0.5
-        }
-    ]
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `method` | string | Always `"players_update"` |
-| `num_players` | number | Current number of players at table |
-| `max_players` | number | Maximum players needed to start |
-| `players` | array | List of player objects |
-| `players[].player_id` | string | Player's Verus ID |
-| `players[].seat` | number | Seat number at table |
-| `players[].stack` | number | Player's payin amount in CHIPS |
-
-**GUI Action**: Update player list display, show waiting indicator (e.g., "Waiting for 1 more player...").
 
 ---
 
