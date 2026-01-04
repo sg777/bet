@@ -278,13 +278,15 @@ int32_t reveal_card(char *table_id)
 			// Send GUI message for each card reveal
 			{
 				// Hole cards: send when we have both (card 0 and 1)
-				if (card_type == 1) {
+				if (card_type == hole_card) {
 					// This is a hole card
 					if (card_id == 1) {
 						// Second hole card - now we have both
 						int32_t card1 = p_local_state.decoded_cards[0];
 						int32_t card2 = card_value;
 						if (card1 >= 0) {
+							dlg_info("Sending hole cards to GUI: %s, %s", 
+								get_card_name(card1), get_card_name(card2));
 							cJSON *deal_msg = gui_build_deal_holecards(card1, card2, 0.0);
 							gui_send_message(deal_msg);
 							cJSON_Delete(deal_msg);
