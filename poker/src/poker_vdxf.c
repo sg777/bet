@@ -397,3 +397,130 @@ int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_i
 	return processed;
 }
 
+/* ============================================================================
+ * Debug/Print API - Print table keys from blockchain
+ * ============================================================================ */
+
+/**
+ * Print all table keys for a given ID from a specific block height.
+ * Usage: ./bet print_keys <id> <block_height>
+ */
+void poker_print_table_keys(const char *id, int32_t block_height)
+{
+	if (!id || block_height < 0) {
+		printf("Error: Invalid parameters\n");
+		return;
+	}
+
+	// Strip trailing @ if present (internal functions add suffix automatically)
+	char clean_id[256] = { 0 };
+	strncpy(clean_id, id, sizeof(clean_id) - 1);
+	size_t len = strlen(clean_id);
+	if (len > 0 && clean_id[len - 1] == '@') {
+		clean_id[len - 1] = '\0';
+	}
+
+	printf("\n========================================\n");
+	printf("Table Keys for ID: %s\n", clean_id);
+	printf("From block height: %d\n", block_height);
+	printf("========================================\n\n");
+
+	// Key definitions with descriptions
+	struct {
+		const char *key;
+		const char *description;
+		int is_json;  // 1 = JSON, 0 = string
+	} keys[] = {
+		{ T_GAME_ID_KEY, "Game ID", 0 },
+		{ T_TABLE_INFO_KEY, "Table Info (max_players, BB, SB)", 1 },
+		{ T_PLAYER_INFO_KEY, "Player Info (players + payin amounts)", 1 },
+		{ T_GAME_INFO_KEY, "Game Info (state, round)", 1 },
+		{ T_BETTING_STATE_KEY, "Betting State", 1 },
+		{ T_D_DECK_KEY, "Dealer Deck", 1 },
+		{ T_B_DECK_KEY, "Blinder Deck", 1 },
+		{ T_BOARD_CARDS_KEY, "Board Cards", 1 },
+		{ T_SETTLEMENT_INFO_KEY, "Settlement Info", 1 },
+		{ NULL, NULL, 0 }
+	};
+
+	for (int i = 0; keys[i].key != NULL; i++) {
+		printf("--- %s ---\n", keys[i].description);
+		printf("Key: %s\n", keys[i].key);
+		
+		char *str_val = get_str_from_id_key_from_height(clean_id, keys[i].key, block_height);
+		if (str_val) {
+			if (keys[i].is_json) {
+				// Try to parse and pretty-print JSON
+				cJSON *json = cJSON_Parse(str_val);
+				if (json) {
+					char *pretty = cJSON_Print(json);
+					printf("Value:\n%s\n", pretty);
+					free(pretty);
+					cJSON_Delete(json);
+				} else {
+					printf("Value: %s\n", str_val);
+				}
+			} else {
+				printf("Value: %s\n", str_val);
+			}
+			free(str_val);
+		} else {
+			printf("Value: (not set)\n");
+		}
+		printf("\n");
+	}
+
+	// Also try to get game-specific keys if game_id exists
+	char *game_id = get_str_from_id_key_from_height(clean_id, T_GAME_ID_KEY, block_height);
+	if (game_id) {
+		printf("\n========================================\n");
+		printf("Game-specific keys for game_id: %s\n", game_id);
+		printf("========================================\n\n");
+
+		// T_PLAYER_INFO_KEY with game_id suffix
+		char *player_info_key = get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id);
+		if (player_info_key) {
+			cJSON *t_player_info = get_cJSON_from_id_key_vdxfid_from_height(clean_id, player_info_key, block_height);
+			if (t_player_info) {
+				printf("--- Player Info (game-specific) ---\n");
+				char *pretty = cJSON_Print(t_player_info);
+				printf("%s\n\n", pretty);
+				free(pretty);
+				cJSON_Delete(t_player_info);
+			}
+		}
+
+		// T_TABLE_INFO_KEY with game_id suffix
+		char *table_info_key = get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id);
+		if (table_info_key) {
+			cJSON *t_table_info = get_cJSON_from_id_key_vdxfid_from_height(clean_id, table_info_key, block_height);
+			if (t_table_info) {
+				printf("--- Table Info (game-specific) ---\n");
+				char *pretty = cJSON_Print(t_table_info);
+				printf("%s\n\n", pretty);
+				free(pretty);
+				cJSON_Delete(t_table_info);
+			}
+		}
+
+		// T_GAME_INFO_KEY with game_id suffix
+		char *game_info_key = get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id);
+		if (game_info_key) {
+			cJSON *t_game_info = get_cJSON_from_id_key_vdxfid_from_height(clean_id, game_info_key, block_height);
+			if (t_game_info) {
+				printf("--- Game State Info (game-specific) ---\n");
+				char *pretty = cJSON_Print(t_game_info);
+				printf("%s\n\n", pretty);
+				free(pretty);
+				cJSON_Delete(t_game_info);
+			}
+		}
+
+		free(game_id);
+	}
+
+	printf("========================================\n");
+	printf("End of table keys dump\n");
+	printf("========================================\n");
+}
+

@@ -633,6 +633,62 @@ int32_t player_handle_betting(char *table_id)
 	return retval;
 }
 
+// Declaration for get_t_player_info from vdxf.c
+extern cJSON *get_t_player_info(char *table_id);
+
+// Helper to push player info updates to GUI during waiting phase
+static void push_player_info_to_gui(char *table_id)
+{
+	extern int32_t g_betting_mode;
+	if (g_betting_mode != BET_MODE_GUI) return;
+	
+	cJSON *t_player_info = get_t_player_info(table_id);
+	if (t_player_info) {
+		cJSON *update_msg = cJSON_CreateObject();
+		cJSON_AddStringToObject(update_msg, "method", "players_update");
+		cJSON_AddNumberToObject(update_msg, "num_players", jint(t_player_info, "num_players"));
+		
+		// Use configured max_players
+		extern int32_t max_players;
+		cJSON_AddNumberToObject(update_msg, "max_players", max_players);
+		
+		// Add player list with payin amounts
+		cJSON *players = cJSON_CreateArray();
+		cJSON *player_info_arr = cJSON_GetObjectItem(t_player_info, "player_info");
+		cJSON *payin_amounts = cJSON_GetObjectItem(t_player_info, "payin_amounts");
+		
+		for (int i = 0; player_info_arr && i < cJSON_GetArraySize(player_info_arr); i++) {
+			cJSON *player_obj = cJSON_CreateObject();
+			char *entry = cJSON_GetArrayItem(player_info_arr, i)->valuestring;
+			
+			// Extract player_id from "player_id_txid_seat" format
+			if (entry) {
+				char temp[256];
+				strncpy(temp, entry, sizeof(temp) - 1);
+				temp[sizeof(temp) - 1] = '\0';
+				char *player_id = strtok(temp, "_");
+				char *txid = strtok(NULL, "_");
+				char *seat = strtok(NULL, "_");
+				
+				if (player_id) cJSON_AddStringToObject(player_obj, "player_id", player_id);
+				if (seat) cJSON_AddNumberToObject(player_obj, "seat", atoi(seat));
+				
+				// Add payin amount if available
+				if (payin_amounts && i < cJSON_GetArraySize(payin_amounts)) {
+					cJSON *amount = cJSON_GetArrayItem(payin_amounts, i);
+					if (amount) cJSON_AddNumberToObject(player_obj, "stack", amount->valuedouble);
+				}
+			}
+			cJSON_AddItemToArray(players, player_obj);
+		}
+		cJSON_AddItemToObject(update_msg, "players", players);
+		
+		player_lws_write(update_msg);
+		cJSON_Delete(update_msg);
+		cJSON_Delete(t_player_info);
+	}
+}
+
 int32_t handle_game_state_player(char *table_id)
 {
 	int32_t game_state, retval = OK;
@@ -642,8 +698,18 @@ int32_t handle_game_state_player(char *table_id)
 	if (game_state != last_logged_state) {
 		dlg_info("%s", game_state_str(game_state));
 		last_logged_state = game_state;
+		
+		// Push player info updates to GUI when state changes during waiting phase
+		if (game_state >= G_TABLE_STARTED && game_state <= G_PLAYERS_JOINED) {
+			push_player_info_to_gui(table_id);
+		}
 	}
 	switch (game_state) {
+	case G_TABLE_STARTED:
+	case G_PLAYERS_JOINED:
+		// Waiting for more players - push updates to GUI periodically
+		push_player_info_to_gui(table_id);
+		break;
 	case G_REVEAL_CARD:
 		retval = handle_player_reveal_card(table_id);
 		break;

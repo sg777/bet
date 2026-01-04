@@ -237,5 +237,22 @@ int32_t poker_verify_setup();
 int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_id, 
                                       const char *dealer_id, int32_t start_block);
 
+/* ============================================================================
+ * Debug/Print API
+ * ============================================================================ */
+
+/**
+ * Print all table keys for debugging/inspection
+ * 
+ * This function prints all poker-related keys stored in an identity,
+ * formatted as JSON for easy inspection.
+ * 
+ * Usage: ./bet print_keys <id> <block_height>
+ * 
+ * @param id The identity to inspect (e.g., "t1@", "d1@", "p1@")
+ * @param block_height Starting block height to search from
+ */
+void poker_print_table_keys(const char *id, int32_t block_height);
+
 #endif /* __POKER_VDXF_H__ */
 

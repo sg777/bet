@@ -562,6 +562,25 @@ void bet_start(int argc, char **argv)
 		print_id_info(argc, argv);
 	} else if (strcmp(cmd, "print_table_key") == 0 && argc >= 3) {
 		print_table_key_info(argc, argv);
+	} else if (strcmp(cmd, "print_keys") == 0) {
+		// Print all table keys for an ID from a specific block height
+		// Usage: ./bet print_keys <id> <block_height>
+		if (argc >= 4) {
+			const char *id = argv[2];
+			int32_t block_height = atoi(argv[3]);
+			poker_print_table_keys(id, block_height);
+		} else if (argc == 3) {
+			// Default to current block - 100
+			const char *id = argv[2];
+			int32_t block_height = chips_get_block_count() - 100;
+			poker_print_table_keys(id, block_height);
+		} else {
+			printf("Usage: %s print_keys <id> [block_height]\n", argv[0]);
+			printf("  id           - Identity to inspect (e.g., t1@, d1@, p1@)\n");
+			printf("  block_height - Starting block height (default: current - 100)\n");
+			printf("\nExample:\n");
+			printf("  %s print_keys t1@ 1000\n", argv[0]);
+		}
 	}
 	// Identity management
 	else if (strcmp(cmd, "reset_id") == 0 && argc == 3) {

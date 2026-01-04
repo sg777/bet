@@ -78,12 +78,13 @@ void bet_command_info()
 		  {
 			  "  print_id <id_name> <type>         Print ID information",
 			  "  print <id_name> <key_name>        Print specific key information",
+			  "  print_keys <id> [block_height]    Print all table keys in JSON",
 			  "  add_dealer <dealer_id>            Add a dealer",
 			  "  list_dealers                       List all dealers",
 			  "  list_tables                        List all tables",
 			  "  reset_id                           Reset ID information",
 		  },
-		  6 },
+		  7 },
 		{ "Help", "Get detailed command help",
 		  {
 			  "  help <command>                    Get detailed help for a command",

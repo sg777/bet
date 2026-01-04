@@ -1370,18 +1370,28 @@ static cJSON *compute_updated_t_player_info(char *txid, cJSON *payin_tx_data)
 	
 	if (t_player_info) {
 		num_players = jint(t_player_info, "num_players");
-		player_info = cJSON_GetObjectItem(t_player_info, "player_info");
+		
+		// Copy existing player_info array (don't use reference to avoid memory issues)
+		cJSON *existing_player_info = cJSON_GetObjectItem(t_player_info, "player_info");
+		if (existing_player_info) {
+			for (int i = 0; i < cJSON_GetArraySize(existing_player_info); i++) {
+				cJSON *item = cJSON_GetArrayItem(existing_player_info, i);
+				if (item && item->valuestring) {
+					cJSON_AddItemToArray(player_info, cJSON_CreateString(item->valuestring));
+				}
+			}
+		} else {
+			dlg_error("Error with data on Key :: %s", T_PLAYER_INFO_KEY);
+			return NULL;
+		}
+		
+		// Copy existing payin_amounts array
 		cJSON *existing_amounts = cJSON_GetObjectItem(t_player_info, "payin_amounts");
 		if (existing_amounts) {
-			// Copy existing amounts
 			for (int i = 0; i < cJSON_GetArraySize(existing_amounts); i++) {
 				cJSON_AddItemToArray(payin_amounts, 
 					cJSON_CreateNumber(cJSON_GetArrayItem(existing_amounts, i)->valuedouble));
 			}
-		}
-		if (!player_info) {
-			dlg_error("Error with data on Key :: %s", T_PLAYER_INFO_KEY);
-			return NULL;
 		}
 	}
 	
