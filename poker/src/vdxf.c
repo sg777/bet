@@ -105,23 +105,34 @@ static cJSON *update_with_retry(const char *method, cJSON *params)
 			}
 			
 			if (txid) {
+				dlg_info("%s SUCCESS - txid: %s", method, txid);
 				wait_for_a_blocktime();
 				if (check_if_tx_exists(txid))
 					break;
 			} else {
 				// No txid to check, assume success
+				dlg_info("%s SUCCESS (no txid)", method);
 				break;
 			}
+		} else {
+			char *result_str = result ? cJSON_PrintUnformatted(result) : NULL;
+			dlg_error("%s FAILED (attempt %d/%d) - retval: %d, result: %s", 
+				method, i + 1, retries, retval, result_str ? result_str : "NULL");
+			if (result_str) free(result_str);
 		}
-		dlg_warn("Retrying %s", method);
+		dlg_warn("Retrying %s (attempt %d/%d)", method, i + 2, retries);
 		if (result) cJSON_Delete(result);
 		result = NULL;
 		sleep(1);
 		i++;
 	} while (i < retries);
 
-	if (result && jint(result, "error")) {
-		dlg_error("Error in %s", method);
+	if (!result) {
+		dlg_error("%s FAILED after %d retries", method, retries);
+	} else if (jint(result, "error")) {
+		char *result_str = cJSON_PrintUnformatted(result);
+		dlg_error("%s returned error: %s", method, result_str ? result_str : "NULL");
+		if (result_str) free(result_str);
 	}
 	return result;
 }
@@ -131,21 +142,29 @@ cJSON *update_cmm(const char *id, cJSON *cmm)
 	cJSON *id_info = NULL, *params = NULL, *result = NULL;
 
 	if ((NULL == id) || (NULL == verus_chips_cli)) {
+		dlg_error("update_cmm: invalid params - id=%s, cli=%s", id ? id : "NULL", verus_chips_cli ? "OK" : "NULL");
 		return NULL;
 	}
 
+	const char *parent_vdxfid = get_vdxf_id(bet_get_poker_id_fqn());
+	
 	id_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(id_info, "name", id);
-	cJSON_AddStringToObject(id_info, "parent", get_vdxf_id(bet_get_poker_id_fqn()));
+	cJSON_AddStringToObject(id_info, "parent", parent_vdxfid);
 	cJSON_AddItemToObject(id_info, "contentmultimap", cJSON_Duplicate(cmm, 1));
 
 	params = cJSON_CreateArray();
 	cJSON_AddItemToArray(params, id_info);
 
-	// Debug: print size of JSON being sent
+	// Print FULL updateidentity command for debugging
 	char *params_str = cJSON_PrintUnformatted(params);
 	if (params_str) {
-		dlg_info("updateidentity params size: %zu bytes", strlen(params_str));
+		dlg_info("=== UPDATEIDENTITY COMMAND ===");
+		dlg_info("ID name: %s", id);
+		dlg_info("Parent VDXFID: %s (from %s)", parent_vdxfid, bet_get_poker_id_fqn());
+		dlg_info("Full params (%zu bytes): %s", strlen(params_str), params_str);
+		dlg_info("CLI command: verus -chain=chips updateidentity '%s'", params_str);
+		dlg_info("==============================");
 		free(params_str);
 	}
 
@@ -196,12 +215,15 @@ cJSON *get_cmm_from_height(const char *id, int16_t full_id, int32_t height_start
 	cJSON *params = NULL, *result = NULL, *cmm = NULL;
 
 	if (NULL == id) {
+		dlg_error("get_cmm_from_height: id is NULL");
 		return NULL;
 	}
 
 	strncpy(id_param, id, sizeof(id_param) - 1);
+	dlg_info("get_cmm_from_height: input_id='%s', full_id=%d", id, full_id);
 	if (0 == full_id) {
 		snprintf(id_param + strlen(id_param), sizeof(id_param) - strlen(id_param), ".%s", bet_get_poker_id_fqn());
+		dlg_info("get_cmm_from_height: expanded to '%s'", id_param);
 	}
 	
 	// Use getidentitycontent with heightstart parameter
@@ -210,13 +232,19 @@ cJSON *get_cmm_from_height(const char *id, int16_t full_id, int32_t height_start
 	cJSON_AddItemToArray(params, cJSON_CreateNumber(height_start));  // heightstart
 	cJSON_AddItemToArray(params, cJSON_CreateNumber(-1));            // heightend (-1 = include mempool)
 	
+	dlg_info("=== GETIDENTITYCONTENT COMMAND ===");
+	dlg_info("CLI: verus -chain=chips getidentitycontent \"%s\" %d -1", id_param, height_start);
+	dlg_info("==================================");
+	
 	retval = chips_rpc("getidentitycontent", params, &result);
 	cJSON_Delete(params);
 	
 	if (retval != OK || !result) {
-		dlg_info("getidentitycontent failed: %s", bet_err_str(retval));
+		dlg_error("getidentitycontent FAILED for '%s': %s", id_param, bet_err_str(retval));
 		return NULL;
 	}
+	
+	dlg_info("getidentitycontent SUCCESS for '%s'", id_param);
 
 	// getidentitycontent returns contentmultimap directly or nested in result
 	cmm = cJSON_GetObjectItem(result, "contentmultimap");
