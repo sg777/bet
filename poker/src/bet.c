@@ -346,16 +346,64 @@ static char *bet_pick_dealer()
 	return NULL;
 }
 
+// Command line argument structure for subcommands
+struct bet_args {
+	const char *config_file;  // -c, --config: config file path
+	const char *table_id;     // -t, --table: table ID
+	const char *height;       // -h, --height: block height
+	int betting_mode;         // --gui, --cli, --auto
+	bool reset;               // --reset (for dealer)
+};
+
+// Parse flags starting from index 'start'
+static void parse_flags(int argc, char **argv, int start, struct bet_args *args)
+{
+	memset(args, 0, sizeof(*args));
+	args->betting_mode = BET_MODE_GUI; // default
+	args->table_id = "t1";             // default table
+	
+	for (int i = start; i < argc; i++) {
+		if ((strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--config") == 0) && i + 1 < argc) {
+			args->config_file = argv[++i];
+		} else if ((strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--table") == 0) && i + 1 < argc) {
+			args->table_id = argv[++i];
+		} else if ((strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--height") == 0) && i + 1 < argc) {
+			args->height = argv[++i];
+		} else if (strcmp(argv[i], "--gui") == 0) {
+			args->betting_mode = BET_MODE_GUI;
+		} else if (strcmp(argv[i], "--cli") == 0) {
+			args->betting_mode = BET_MODE_CLI;
+		} else if (strcmp(argv[i], "--auto") == 0) {
+			args->betting_mode = BET_MODE_AUTO;
+		} else if (strcmp(argv[i], "--reset") == 0) {
+			args->reset = true;
+		}
+	}
+}
+
+// Get subcommand argument (first non-flag after subcommand)
+static const char *get_subcmd_arg(int argc, char **argv, int start)
+{
+	for (int i = start; i < argc; i++) {
+		if (argv[i][0] != '-') {
+			return argv[i];
+		}
+	}
+	return NULL;
+}
+
 void bet_start(int argc, char **argv)
 {
 	int32_t retval = OK;
-	const char *cmd = (argc < 2) ? NULL : argv[1];
-
-	// No command provided - show help
+	struct bet_args args;
+	
+	// No arguments provided - show help
 	if (argc < 2) {
 		bet_command_info();
 		return;
 	}
+	
+	const char *cmd = argv[1];
 
 	// Handle newblock command (early return, no initialization needed)
 	if (strcmp(cmd, "newblock") == 0 && argc == 3) {
@@ -371,140 +419,157 @@ void bet_start(int argc, char **argv)
 	bet_parse_blockchain_config_ini_file();
 	bet_sqlite3_init();  // Initialize SQLite database for all node types
 
-	// Dealer management commands
-	if (strcmp(cmd, "add_dealer") == 0 && argc == 3) {
+	//==========================================================================
+	// START command: ./bet start <node_type> [options]
+	// Node types: player|p, dealer|d, cashier|c
+	//==========================================================================
+	if (strcmp(cmd, "start") == 0) {
+		if (argc < 3) {
+			dlg_error("Usage: %s start <player|dealer|cashier> [-c config] [options]", argv[0]);
+			return;
+		}
+		const char *node = argv[2];
+		parse_flags(argc, argv, 3, &args);
+		
+		// Start player node
+		if (strcmp(node, "player") == 0 || strcmp(node, "p") == 0) {
+			bet_node_type = player;
+			
+			if (args.config_file) {
+				strncpy(verus_player_config_file, args.config_file, PATH_MAX - 1);
+				verus_player_config_file[PATH_MAX - 1] = '\0';
+				dlg_info("Using player config: %s", verus_player_config_file);
+			}
+			
+			g_betting_mode = args.betting_mode;
+			const char *mode_str = (g_betting_mode == BET_MODE_CLI) ? "CLI" :
+			                       (g_betting_mode == BET_MODE_AUTO) ? "AUTO" : "GUI";
+			dlg_info("Starting player node (mode: %s)", mode_str);
+			
+			if ((retval = bet_parse_verus_player()) != OK) {
+				dlg_error("Failed to parse player configuration: %s", bet_err_str(retval));
+				return;
+			}
+			
+			extern int32_t backend_status;
+			backend_status = backend_ready;
+			dlg_info("Backend status: READY");
+			
+			pthread_t ws_thread;
+			if (g_betting_mode == BET_MODE_GUI) {
+				gui_ws_port = player_config.ws_port;
+				dlg_info("WebSocket server on port %d", gui_ws_port);
+				if (OS_thread_create(&ws_thread, NULL, (void *)bet_player_frontend_loop, NULL) != 0) {
+					dlg_error("Failed to start WebSocket thread");
+				}
+				sleep(1);
+			}
+			
+			bet_player_initialize(NULL);
+			retval = handle_verus_player();
+			
+			if (g_betting_mode == BET_MODE_GUI) {
+				pthread_join(ws_thread, NULL);
+			}
+		}
+		// Start dealer node
+		else if (strcmp(node, "dealer") == 0 || strcmp(node, "d") == 0) {
+			bet_node_type = dealer;
+			
+			if (args.config_file) {
+				strncpy(verus_dealer_config, args.config_file, PATH_MAX - 1);
+				verus_dealer_config[PATH_MAX - 1] = '\0';
+				dlg_info("Using dealer config: %s", verus_dealer_config);
+			}
+			
+			dlg_info("Starting dealer node%s", args.reset ? " (RESET)" : "");
+			retval = bet_parse_verus_dealer_with_reset(args.reset);
+			if (retval != OK) {
+				dlg_error("Dealer initialization failed: %s", bet_err_str(retval));
+			}
+		}
+		// Start cashier node
+		else if (strcmp(node, "cashier") == 0 || strcmp(node, "c") == 0) {
+			bet_node_type = cashier;
+			
+			if (args.config_file) {
+				strncpy(cashier_config_ini_file, args.config_file, PATH_MAX - 1);
+				cashier_config_ini_file[PATH_MAX - 1] = '\0';
+				dlg_info("Using cashier config: %s", cashier_config_ini_file);
+			}
+			
+			dlg_info("Starting cashier node (table: %s)", args.table_id);
+			cashier_game_init((char *)args.table_id);
+		}
+		else {
+			dlg_error("Unknown node type: %s (use player, dealer, or cashier)", node);
+		}
+	}
+	//==========================================================================
+	// RESET command: ./bet reset <id>
+	//==========================================================================
+	else if (strcmp(cmd, "reset") == 0) {
+		if (argc < 3) {
+			dlg_error("Usage: %s reset <id>", argv[0]);
+			return;
+		}
+		const char *id = argv[2];
+		if (id_cansignfor(id, 0, &retval)) {
+			cJSON *out = update_cmm(id, NULL);
+			dlg_info("Reset ID '%s': %s", id, cJSON_Print(out));
+		} else {
+			dlg_error("Cannot sign for ID: %s", id);
+		}
+	}
+	//==========================================================================
+	// SHOW command: ./bet show <id> [--height <block>]
+	//==========================================================================
+	else if (strcmp(cmd, "show") == 0) {
+		if (argc < 3) {
+			dlg_error("Usage: %s show <id> [--height <block>]", argv[0]);
+			return;
+		}
+		const char *id = argv[2];
+		parse_flags(argc, argv, 3, &args);
+		int32_t height = args.height ? atoi(args.height) : chips_get_block_count() - 100;
+		poker_print_table_keys(id, height);
+	}
+	//==========================================================================
+	// LIST command: ./bet list <dealers|tables>
+	//==========================================================================
+	else if (strcmp(cmd, "list") == 0) {
+		if (argc < 3) {
+			dlg_error("Usage: %s list <dealers|tables>", argv[0]);
+			return;
+		}
+		const char *what = argv[2];
+		if (strcmp(what, "dealers") == 0) {
+			cJSON *dealers = poker_list_dealers();
+			if (dealers) dlg_info("%s", cJSON_Print(dealers));
+		} else if (strcmp(what, "tables") == 0) {
+			poker_list_tables();
+		} else {
+			dlg_error("Unknown list type: %s (use dealers or tables)", what);
+		}
+	}
+	//==========================================================================
+	// Dealer registration commands (legacy format kept for compatibility)
+	//==========================================================================
+	else if (strcmp(cmd, "add_dealer") == 0 && argc == 3) {
 		retval = add_dealer(argv[2]);
 	} else if (strcmp(cmd, "register_dealer") == 0 && argc == 3) {
 		retval = register_dealer(argv[2]);
 	} else if (strcmp(cmd, "deregister_dealer") == 0 && argc == 3) {
 		retval = deregister_dealer(argv[2]);
-	} else if (strcmp(cmd, "raise_registration_dispute") == 0) {
-		if (argc != 4) {
-			dlg_error("Usage: %s raise_registration_dispute <dealer_id> <action>", argv[0]);
-			return;
-		}
+	} else if (strcmp(cmd, "raise_registration_dispute") == 0 && argc == 4) {
 		raise_dealer_registration_dispute(argv[2], argv[3]);
 	}
-	// Node type commands
-	else if (strcmp(cmd, "c") == 0 || strcmp(cmd, "cashier") == 0) {
-		dlg_info("Starting cashier node");
-		bet_node_type = cashier;
-		
-		// GUI thread disabled - focusing on backend implementation
-		// TODO: Re-enable GUI thread when ready
-		
-		// Backend initialization
-		if (retval == OK) {
-			// Use table from command line or default to t1
-			const char *table = (argc >= 3) ? argv[2] : "t1";
-			dlg_info("Cashier watching table: %s", table);
-			cashier_game_init((char *)table);
-		}
-	} else if (strcmp(cmd, "d") == 0 || strcmp(cmd, "dcv") == 0 || strcmp(cmd, "dealer") == 0) {
-		bet_node_type = dealer;
-		
-		// Check for reset flag: ./bet dealer reset
-		bool reset_table = false;
-		if (argc >= 3 && strcmp(argv[2], "reset") == 0) {
-			reset_table = true;
-			dlg_info("Starting dealer node with TABLE RESET");
-		} else {
-			dlg_info("Starting dealer node");
-		}
-		
-		// GUI thread disabled - focusing on backend implementation
-		// TODO: Re-enable GUI thread when ready
-		
-		// Backend initialization
-		if (retval == OK) {
-			retval = bet_parse_verus_dealer_with_reset(reset_table);
-			if (retval != OK) {
-				dlg_error("[Backend] Backend initialization failed: %s", bet_err_str(retval));
-			}
-		}
-	} else if (strcmp(cmd, "p") == 0 || strcmp(cmd, "player") == 0) {
-		bet_node_type = player;
-		
-		// Parse player arguments
-		// Usage: ./bet player [config_file] [--cli|--auto|--gui]
-		for (int i = 2; i < argc; i++) {
-			if (strcmp(argv[i], "--cli") == 0) {
-				g_betting_mode = BET_MODE_CLI;
-				dlg_info("Betting mode: CLI (interactive)");
-			} else if (strcmp(argv[i], "--auto") == 0) {
-				g_betting_mode = BET_MODE_AUTO;
-				dlg_info("Betting mode: AUTO (testing)");
-			} else if (strcmp(argv[i], "--gui") == 0) {
-				g_betting_mode = BET_MODE_GUI;
-				dlg_info("Betting mode: GUI (websocket)");
-			} else if (argv[i][0] != '-') {
-				// Config file path
-				strncpy(verus_player_config_file, argv[i], PATH_MAX - 1);
-				verus_player_config_file[PATH_MAX - 1] = '\0';
-				dlg_info("Using player config: %s", verus_player_config_file);
-			}
-		}
-		
-	dlg_info("Starting player node");
-	
-	// Parse player config to get ws_port and other settings
-	if ((retval = bet_parse_verus_player()) != OK) {
-		dlg_error("Failed to parse player configuration: %s", bet_err_str(retval));
-		return;
-	}
-	
-	// Backend initialization
-	if (retval == OK) {
-		// Set backend ready - wallet and ID accessible
-		extern int32_t backend_status;
-		backend_status = backend_ready;
-		dlg_info("Backend status set to READY (wallet + ID verified)");
-		
-		pthread_t ws_thread;  // Declare outside so it's accessible later
-		
-		if (g_betting_mode == BET_MODE_GUI) {
-			// Set player-specific WebSocket port from config
-			gui_ws_port = player_config.ws_port;
-			
-			dlg_info("Starting GUI WebSocket server on port %d...", gui_ws_port);
-			
-			// Start WebSocket thread for GUI communication
-			if (OS_thread_create(&ws_thread, NULL, (void *)bet_player_frontend_loop, NULL) != 0) {
-				dlg_error("Failed to start WebSocket thread");
-			}
-			
-			// Small delay to let WebSocket server start
-			sleep(1);
-			
-			dlg_info("Player node started. WebSocket server listening on port %d", gui_ws_port);
-			dlg_info("Backend will process game events and send updates to GUI");
-		}
-		
-		// Run backend - it will keep trying to find/join tables
-		retval = handle_verus_player();
-		
-		if (g_betting_mode == BET_MODE_GUI) {
-			// If backend exits, wait for WebSocket thread (keeps process alive)
-			dlg_info("Backend exited, WebSocket still running...");
-			pthread_join(ws_thread, NULL);
-		}
-		
-		if (retval != OK) {
-			dlg_error("[Backend] Backend initialization failed: %s", bet_err_str(retval));
-		}
-	}
-	}  // Close player block
-	// Game commands
+	//==========================================================================
+	// Game and legacy commands
+	//==========================================================================
 	else if (strcmp(cmd, "game") == 0) {
 		playing_nodes_init();
 		bet_handle_game(argc, argv);
-	} else if (strcmp(cmd, "list_dealers") == 0) {
-		cJSON *dealers = poker_list_dealers();
-		if (dealers) {
-			dlg_info("Dealers ::%s", cJSON_Print(dealers));
-		}
-	} else if (strcmp(cmd, "list_tables") == 0) {
-		poker_list_tables();
 	}
 	// Transaction commands
 	else if (strcmp(cmd, "consolidate") == 0) {

@@ -20,26 +20,25 @@
 #include "commands.h"
 #include "dealer.h"
 
-// Config file paths - will be initialized to absolute paths
-static char dealer_config_ini_file_buf[PATH_MAX];
-static char player_config_ini_file_buf[PATH_MAX];
-static char cashier_config_ini_file_buf[PATH_MAX];
-static char bets_config_ini_file_buf[PATH_MAX];
-static char blockchain_config_ini_file_buf[PATH_MAX];
-static char verus_dealer_config_buf[PATH_MAX];
-static char verus_player_config_file_buf[PATH_MAX];
-static char verus_ids_keys_config_buf[PATH_MAX];
-static char rpc_credentials_config_buf[PATH_MAX];
+// Config file paths - defaults initialized relative to executable, can be overridden with -c
+static char dealer_config_buf[PATH_MAX];
+static char player_config_buf[PATH_MAX];
+static char cashier_config_buf[PATH_MAX];
+static char blockchain_config_buf[PATH_MAX];
+static char keys_config_buf[PATH_MAX];
+static char rpc_credentials_buf[PATH_MAX];
 
-char *dealer_config_ini_file = dealer_config_ini_file_buf;
-char *rpc_credentials_file = rpc_credentials_config_buf;
-char *player_config_ini_file = player_config_ini_file_buf;
-char *cashier_config_ini_file = cashier_config_ini_file_buf;
-char *bets_config_ini_file = bets_config_ini_file_buf;
-char *blockchain_config_ini_file = blockchain_config_ini_file_buf;
-char *verus_dealer_config = verus_dealer_config_buf;
-char *verus_player_config_file = verus_player_config_file_buf;
-char *verus_ids_keys_config_file = verus_ids_keys_config_buf;
+// These are the main config paths used throughout the code
+char *verus_dealer_config = dealer_config_buf;           // dealer.ini
+char *verus_player_config_file = player_config_buf;      // player.ini (or p1.ini, p2.ini)
+char *cashier_config_ini_file = cashier_config_buf;      // cashier.ini
+char *blockchain_config_ini_file = blockchain_config_buf; // blockchain.ini
+char *verus_ids_keys_config_file = keys_config_buf;      // keys.ini
+char *rpc_credentials_file = rpc_credentials_buf;        // .rpccredentials
+
+// Legacy aliases (for backward compatibility in code that still uses old names)
+char *dealer_config_ini_file = dealer_config_buf;
+char *player_config_ini_file = player_config_buf;
 
 /**
  * Initialize config file paths relative to the executable location
@@ -78,15 +77,12 @@ void bet_init_config_paths(void)
 		snprintf(config_base, sizeof(config_base), "%s/config", exe_dir);
 	}
 
-	// Initialize all config paths
-	snprintf(dealer_config_ini_file, sizeof(dealer_config_ini_file_buf), "%s/dealer_config.ini", config_base);
-	snprintf(player_config_ini_file, sizeof(player_config_ini_file_buf), "%s/player_config.ini", config_base);
-	snprintf(cashier_config_ini_file, sizeof(cashier_config_ini_file_buf), "%s/cashier_config.ini", config_base);
-	snprintf(bets_config_ini_file, sizeof(bets_config_ini_file_buf), "%s/bets.ini", config_base);
-	snprintf(blockchain_config_ini_file, sizeof(blockchain_config_ini_file_buf), "%s/blockchain_config.ini", config_base);
-	snprintf(verus_dealer_config, sizeof(verus_dealer_config_buf), "%s/verus_dealer.ini", config_base);
-	snprintf(verus_player_config_file, sizeof(verus_player_config_file_buf), "%s/verus_player.ini", config_base);
-	snprintf(verus_ids_keys_config_file, sizeof(verus_ids_keys_config_buf), "%s/verus_ids_keys.ini", config_base);
+	// Initialize default config paths (can be overridden with -c flag)
+	snprintf(verus_dealer_config, sizeof(dealer_config_buf), "%s/dealer.ini", config_base);
+	snprintf(verus_player_config_file, sizeof(player_config_buf), "%s/player.ini", config_base);
+	snprintf(cashier_config_ini_file, sizeof(cashier_config_buf), "%s/cashier.ini", config_base);
+	snprintf(blockchain_config_ini_file, sizeof(blockchain_config_buf), "%s/blockchain.ini", config_base);
+	snprintf(verus_ids_keys_config_file, sizeof(keys_config_buf), "%s/keys.ini", config_base);
 	
 	// RPC credentials file is in poker/ directory (not config/) since it contains secrets
 	// Go up one level from config_base to get poker directory
@@ -98,7 +94,7 @@ void bet_init_config_paths(void)
 		// Executable is in poker/
 		snprintf(poker_base, sizeof(poker_base), "%s", exe_dir);
 	}
-	snprintf(rpc_credentials_file, sizeof(rpc_credentials_config_buf), "%s/.rpccredentials", poker_base);
+	snprintf(rpc_credentials_file, sizeof(rpc_credentials_buf), "%s/.rpccredentials", poker_base);
 }
 
 struct verus_player_config player_config = { 0 };
@@ -331,56 +327,6 @@ static int32_t ini_sec_exists(dictionary *ini, char *sec_name)
 			break;
 		}
 	}
-	return retval;
-}
-
-int32_t bet_parse_bets()
-{
-	int32_t retval = OK, bet_no = 0;
-	dictionary *ini = NULL;
-	char key_name[40];
-	cJSON *bets_info = NULL, *info = NULL;
-
-	ini = iniparser_load(bets_config_ini_file);
-	if (ini == NULL) {
-		retval = ERR_INI_PARSING;
-		dlg_error("error in parsing %s", bets_config_ini_file);
-		return retval;
-	}
-	info = cJSON_CreateObject();
-	cJSON_AddStringToObject(info, "method", "bets");
-	cJSON_AddNumberToObject(info, "balance", chips_get_balance());
-	bets_info = cJSON_CreateArray();
-	while (1) {
-		cJSON *bet = cJSON_CreateObject();
-
-		cJSON_AddNumberToObject(bet, "bet_id", bet_no);
-		memset(key_name, 0x00, sizeof(key_name));
-		sprintf(key_name, "bets:%d:desc", bet_no);
-		if (NULL != iniparser_getstring(ini, key_name, NULL)) {
-			cJSON_AddStringToObject(bet, "desc", iniparser_getstring(ini, key_name, NULL));
-		} else {
-			break;
-		}
-		memset(key_name, 0x00, sizeof(key_name));
-		sprintf(key_name, "bets:%d:predictions", bet_no);
-		if (NULL != iniparser_getstring(ini, key_name, NULL)) {
-			cJSON_AddStringToObject(bet, "predictions", iniparser_getstring(ini, key_name, NULL));
-		} else {
-			break;
-		}
-		memset(key_name, 0x00, sizeof(key_name));
-		sprintf(key_name, "bets:%d:range", bet_no);
-		if (NULL != iniparser_getstring(ini, key_name, NULL)) {
-			cJSON_AddStringToObject(bet, "range", iniparser_getstring(ini, key_name, NULL));
-		} else {
-			break;
-		}
-		cJSON_AddItemToArray(bets_info, bet);
-		bet_no++;
-	}
-	cJSON_AddItemToObject(info, "bets_info", bets_info);
-	dlg_info("\n%s", cJSON_Print(info));
 	return retval;
 }
 
