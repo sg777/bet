@@ -412,16 +412,18 @@ void bet_start(int argc, char **argv)
 		return;
 	}
 
-	// Initialize common components for other commands
-	bet_init_config_paths(); // Initialize config paths relative to executable
+	// Initialize config paths first (needed for logging path)
+	bet_init_config_paths();
+	
+	// Initialize logging BEFORE any dlg calls (default to debug.log, nodes override later)
+	bet_log_init(NULL);
+	
+	// Now initialize other components - all logs will go to file
 	bet_parse_verus_ids_keys_config(); // Load Verus IDs and Keys configuration
 	bet_parse_rpc_credentials(); // Load RPC credentials for REST API
 	bet_set_unique_id();
 	bet_parse_blockchain_config_ini_file();
 	bet_sqlite3_init();  // Initialize SQLite database for all node types
-	
-	// Initialize logging with default debug.log (nodes will override with their ID)
-	bet_log_init(NULL);
 
 	//==========================================================================
 	// START command: ./bet start <node_type> [options]
