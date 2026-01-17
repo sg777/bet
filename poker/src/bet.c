@@ -37,6 +37,7 @@
 #include "blinder.h"
 #include "dealer_registration.h"
 #include "poker_vdxf.h"
+#include "log.h"
 
 #include <string.h>
 #include <strings.h>
@@ -418,6 +419,9 @@ void bet_start(int argc, char **argv)
 	bet_set_unique_id();
 	bet_parse_blockchain_config_ini_file();
 	bet_sqlite3_init();  // Initialize SQLite database for all node types
+	
+	// Initialize logging with default debug.log (nodes will override with their ID)
+	bet_log_init(NULL);
 
 	//==========================================================================
 	// START command: ./bet start <node_type> [options]
@@ -438,6 +442,19 @@ void bet_start(int argc, char **argv)
 			if (args.config_file) {
 				strncpy(verus_player_config_file, args.config_file, PATH_MAX - 1);
 				verus_player_config_file[PATH_MAX - 1] = '\0';
+			}
+			
+			// Parse config first to get player_id for logging
+			if ((retval = bet_parse_verus_player()) != OK) {
+				dlg_error("Failed to parse player configuration: %s", bet_err_str(retval));
+				return;
+			}
+			
+			// Initialize logging with player ID
+			bet_log_init(player_config.verus_pid);
+			dlg_info("Log file: %s", bet_log_get_path());
+			
+			if (args.config_file) {
 				dlg_info("Using player config: %s", verus_player_config_file);
 			}
 			
@@ -445,11 +462,6 @@ void bet_start(int argc, char **argv)
 			const char *mode_str = (g_betting_mode == BET_MODE_CLI) ? "CLI" :
 			                       (g_betting_mode == BET_MODE_AUTO) ? "AUTO" : "GUI";
 			dlg_info("Starting player node (mode: %s)", mode_str);
-			
-			if ((retval = bet_parse_verus_player()) != OK) {
-				dlg_error("Failed to parse player configuration: %s", bet_err_str(retval));
-				return;
-			}
 			
 			extern int32_t backend_status;
 			backend_status = backend_ready;
@@ -479,6 +491,20 @@ void bet_start(int argc, char **argv)
 			if (args.config_file) {
 				strncpy(verus_dealer_config, args.config_file, PATH_MAX - 1);
 				verus_dealer_config[PATH_MAX - 1] = '\0';
+			}
+			
+			// Initialize logging - read dealer_id from config for log filename
+			dictionary *ini = iniparser_load(verus_dealer_config);
+			if (ini) {
+				const char *dealer_id = iniparser_getstring(ini, "verus:dealer_id", "dealer");
+				bet_log_init(dealer_id);
+				iniparser_freedict(ini);
+			} else {
+				bet_log_init("dealer");
+			}
+			dlg_info("Log file: %s", bet_log_get_path());
+			
+			if (args.config_file) {
 				dlg_info("Using dealer config: %s", verus_dealer_config);
 			}
 			
@@ -495,6 +521,13 @@ void bet_start(int argc, char **argv)
 			if (args.config_file) {
 				strncpy(cashier_config_ini_file, args.config_file, PATH_MAX - 1);
 				cashier_config_ini_file[PATH_MAX - 1] = '\0';
+			}
+			
+			// Initialize logging - use "cashier" as log filename
+			bet_log_init("cashier");
+			dlg_info("Log file: %s", bet_log_get_path());
+			
+			if (args.config_file) {
 				dlg_info("Using cashier config: %s", cashier_config_ini_file);
 			}
 			
