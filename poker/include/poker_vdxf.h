@@ -121,18 +121,6 @@ bool poker_is_table_full(char *table_id);
  */
 bool poker_is_table_registered(char *table_id, char *dealer_id);
 
-/**
- * Find an available table to join
- * @return OK on success, error code on failure
- */
-int32_t poker_find_table();
-
-/**
- * Choose a table from available options
- * @return OK on success, error code on failure
- */
-int32_t poker_choose_table();
-
 /* ============================================================================
  * Player Operations
  * ============================================================================ */

@@ -82,17 +82,6 @@ bool poker_is_table_registered(char *table_id, char *dealer_id)
 	return is_table_registered(table_id, dealer_id);
 }
 
-int32_t poker_find_table()
-{
-	return find_table();
-}
-
-int32_t poker_choose_table()
-{
-	/* chose_table is static in vdxf.c, but find_table calls it internally */
-	return find_table();
-}
-
 /* ============================================================================
  * Player Operations
  * ============================================================================ */

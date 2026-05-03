@@ -711,7 +711,7 @@ int32_t handle_verus_player()
 
 	// Find a table
 	bool already_joined = false;
-	if ((retval = poker_find_table()) != OK) {
+	if ((retval = find_table()) != OK) {
 		if (retval == ERR_DUPLICATE_PLAYERID) {
 			dlg_info("Player already exists in the table. Skipping join, proceeding to deck shuffling.");
 			already_joined = true;
