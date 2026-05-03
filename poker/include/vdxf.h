@@ -314,7 +314,7 @@ cJSON *get_cmm(const char *id, int16_t full_id);
  * ============================================================================ */
 bool is_id_exists(const char *id, int16_t full_id);
 int32_t id_canspendfor(char *id, int32_t full_id, int32_t *err_no);
-int32_t id_cansignfor(char *id, int32_t full_id, int32_t *err_no);
+int32_t id_cansignfor(const char *id, int32_t full_id, int32_t *err_no);
 
 /* ============================================================================
  * Currency/Transaction Operations

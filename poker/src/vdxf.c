@@ -1699,7 +1699,7 @@ int32_t id_canspendfor(char *id, int32_t full_id, int32_t *err_no)
 	return id_canspendfor_value;
 }
 
-int32_t id_cansignfor(char *id, int32_t full_id, int32_t *err_no)
+int32_t id_cansignfor(const char *id, int32_t full_id, int32_t *err_no)
 {
 	int32_t retval = OK, id_cansignfor_value = false;
 	char id_param[256] = { 0 };
