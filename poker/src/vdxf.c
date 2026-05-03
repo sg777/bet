@@ -841,6 +841,23 @@ static cJSON *get_available_t_of_d(char *dealer_id)
 	if (!t_table_info)
 		return NULL;
 
+	char *table_id = jstr(t_table_info, "table_id");
+	char *game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	if (game_id_str) {
+		cJSON *game_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+		if (game_table_info) {
+			extern int32_t g_start_block;
+			int32_t start_block = jint(game_table_info, "start_block");
+			if (start_block > 0) {
+				g_start_block = start_block;
+				cJSON_Delete(t_table_info);
+				t_table_info = game_table_info;
+			} else {
+				cJSON_Delete(game_table_info);
+			}
+		}
+	}
+
 	game_state = get_game_state(jstr(t_table_info, "table_id"));
 
 	if ((game_state == G_TABLE_STARTED) && (!is_table_full(jstr(t_table_info, "table_id"))) &&
@@ -859,13 +876,31 @@ static int32_t check_if_d_t_available(char *dealer_id, char *table_id, cJSON **t
 	if ((!dealer_id) || (!table_id) || (!is_dealer_registered(dealer_id)) || (!is_id_exists(table_id, 0))) {
 		return ERR_CONFIG_PLAYER_ARGS;
 	}
-
+	
 	*t_table_info = get_cJSON_from_id_key(dealer_id, T_TABLE_INFO_KEY, 0);
 	if (*t_table_info == NULL) {
 		return ERR_T_TABLE_INFO_NULL;
 	}
 
 	if ((0 == strcmp(jstr(*t_table_info, "table_id"), table_id))) {
+		// Read the actual active game_id from the table_id to find the current game's start_block
+		char *game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+		if (game_id_str) {
+			cJSON *game_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+			if (game_table_info) {
+				extern int32_t g_start_block;
+				int32_t start_block = jint(game_table_info, "start_block");
+				if (start_block > 0) {
+					g_start_block = start_block;
+					// Replace the advertisement table_info with the active game's table_info
+					cJSON_Delete(*t_table_info);
+					*t_table_info = game_table_info;
+				} else {
+					cJSON_Delete(game_table_info);
+				}
+			}
+		}
+
 		if (is_playerid_added(table_id)) {
 			return ERR_DUPLICATE_PLAYERID;
 		}
