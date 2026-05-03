@@ -843,20 +843,28 @@ static cJSON *get_available_t_of_d(char *dealer_id)
 
 	char *table_id = jstr(t_table_info, "table_id");
 	char *game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
-	if (game_id_str) {
-		cJSON *game_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
-		if (game_table_info) {
-			extern int32_t g_start_block;
-			int32_t start_block = jint(game_table_info, "start_block");
-			if (start_block > 0) {
-				g_start_block = start_block;
-				cJSON_Delete(t_table_info);
-				t_table_info = game_table_info;
-			} else {
-				cJSON_Delete(game_table_info);
-			}
-		}
+	if (!game_id_str) {
+		cJSON_Delete(t_table_info);
+		return NULL;
 	}
+
+	cJSON *game_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+	if (!game_table_info) {
+		cJSON_Delete(t_table_info);
+		return NULL;
+	}
+
+	extern int32_t g_start_block;
+	int32_t start_block = jint(game_table_info, "start_block");
+	if (start_block <= 0) {
+		cJSON_Delete(game_table_info);
+		cJSON_Delete(t_table_info);
+		return NULL;
+	}
+
+	g_start_block = start_block;
+	cJSON_Delete(t_table_info);
+	t_table_info = game_table_info;
 
 	game_state = get_game_state(jstr(t_table_info, "table_id"));
 
@@ -885,21 +893,26 @@ static int32_t check_if_d_t_available(char *dealer_id, char *table_id, cJSON **t
 	if ((0 == strcmp(jstr(*t_table_info, "table_id"), table_id))) {
 		// Read the actual active game_id from the table_id to find the current game's start_block
 		char *game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
-		if (game_id_str) {
-			cJSON *game_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
-			if (game_table_info) {
-				extern int32_t g_start_block;
-				int32_t start_block = jint(game_table_info, "start_block");
-				if (start_block > 0) {
-					g_start_block = start_block;
-					// Replace the advertisement table_info with the active game's table_info
-					cJSON_Delete(*t_table_info);
-					*t_table_info = game_table_info;
-				} else {
-					cJSON_Delete(game_table_info);
-				}
-			}
+		if (!game_id_str) {
+			return ERR_TABLE_IS_NOT_STARTED;
 		}
+
+		cJSON *game_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+		if (!game_table_info) {
+			return ERR_T_TABLE_INFO_NULL;
+		}
+
+		extern int32_t g_start_block;
+		int32_t start_block = jint(game_table_info, "start_block");
+		if (start_block <= 0) {
+			cJSON_Delete(game_table_info);
+			return ERR_TABLE_IS_NOT_STARTED;
+		}
+
+		g_start_block = start_block;
+		// Replace the advertisement table_info with the active game's table_info
+		cJSON_Delete(*t_table_info);
+		*t_table_info = game_table_info;
 
 		if (is_playerid_added(table_id)) {
 			return ERR_DUPLICATE_PLAYERID;

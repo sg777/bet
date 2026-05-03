@@ -41,7 +41,27 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 */
 #define DEALERS_KEY "chips.vrsc::poker.sg777z.dealers"
 
+/*
+* t_game_ids - Tracks the current active game ID
+* {
+*   "hexdata" (string representing the 256-bit game ID)
+* }
+*/
 #define T_GAME_ID_KEY "chips.vrsc::poker.sg777z.t_game_ids"
+
+/*
+* t_table_info - Stored on dealer identity (as advertisement) and table identity (for active game)
+* {
+*   max_players: maximum number of players allowed
+*   big_blind: big blind amount in CHIPS
+*   min_stake: minimum buy-in amount in CHIPS
+*   max_stake: maximum buy-in amount in CHIPS
+*   table_id: the table identity string
+*   dealer_id: the dealer identity string
+*   cashier_id: the cashier identity string
+*   start_block: block height when the table/game was initialized
+* }
+*/
 #define T_TABLE_INFO_KEY "chips.vrsc::poker.sg777z.t_table_info"
 /*
 * t_player_info {
