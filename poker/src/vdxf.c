@@ -617,6 +617,7 @@ cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 {
 	int32_t retval, minconf = 1;
 	double fee = 0.0001;
+	char id_fqn[256] = { 0 };
 	cJSON *currency_detail = NULL, *result = NULL, *tx_params = NULL, *params = NULL;
 
 	(void)data; // Data parameter currently unused - join info stored on player identity instead
@@ -629,9 +630,25 @@ cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 	if (amount == 0) {
 		amount = default_chips_tx_fee;
 	}
-	//Full ID needs to be provided for the sendcurrency command
-	if ((!id) || (!is_id_exists(id, 1))) {
-		dlg_error("Invalid ID provided");
+
+	if (!id || id[0] == '\0') {
+		dlg_error("Invalid ID provided (NULL or empty)");
+		return NULL;
+	}
+
+	/* sendcurrency requires a fully qualified identity. Match the convention
+	 * used by is_id_exists / get_cmm_from_height: if the caller passed a
+	 * short name (no '@' suffix), append the parent FQN. Callers that
+	 * already pass a full FQN (e.g. bet_get_cashiers_id_fqn(),
+	 * DEALERS_ID_FQN) are unaffected. */
+	if (strchr(id, '@')) {
+		snprintf(id_fqn, sizeof(id_fqn), "%s", id);
+	} else {
+		snprintf(id_fqn, sizeof(id_fqn), "%s.%s", id, bet_get_poker_id_fqn());
+	}
+
+	if (!is_id_exists(id_fqn, 1)) {
+		dlg_error("Invalid ID provided (%s does not resolve on chain)", id_fqn);
 		return NULL;
 	}
 
@@ -641,7 +658,7 @@ cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 	currency_detail = cJSON_CreateObject();
 	cJSON_AddStringToObject(currency_detail, "currency", CHIPS);
 	cJSON_AddNumberToObject(currency_detail, "amount", amount);
-	cJSON_AddStringToObject(currency_detail, "address", id);
+	cJSON_AddStringToObject(currency_detail, "address", id_fqn);
 	cJSON_AddItemToArray(tx_params, currency_detail);
 
 	// Build params array: [source, destinations, minconf, fee]

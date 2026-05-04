@@ -285,14 +285,16 @@ static int32_t cashier_process_settlement(char *table_id)
 		return ERR_GAME_STATE_UPDATE;
 	}
 	
-	dlg_info("Settlement complete - updating cashier game state");
-	
-	// Ensure cashier's game_id is set before updating game state
-	ensure_cashier_game_id_initialized(table_id);
-	
-	// Update cashier's game state to complete (use short name for identity functions)
-	append_game_state(bet_get_cashier_short_name(), G_SETTLEMENT_COMPLETE, NULL);
-	
+	dlg_info("Settlement complete - advancing table game state to G_SETTLEMENT_COMPLETE");
+
+	/* Write the terminal state to the TABLE identity, not the cashier's
+	 * own ID. The dealer (and players) poll get_game_state(table_id) and
+	 * stay in G_SETTLEMENT_PENDING forever if we only flip the cashier's
+	 * own state. The cashier already has signing rights on the table CMM
+	 * (the T_SETTLEMENT_INFO_KEY write above succeeded), so this write
+	 * uses the same auth path. */
+	append_game_state(table_id, G_SETTLEMENT_COMPLETE, NULL);
+
 	cJSON_Delete(updated_settlement);
 	return retval;
 }
