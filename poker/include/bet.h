@@ -112,19 +112,23 @@ struct privatebet_vars {
 	cJSON *actions[CARDS_MAXROUNDS][CARDS_MAXPLAYERS + 1];
 	int32_t mypermi[CARDS_MAXCARDS], permi[CARDS_MAXCARDS], turni, round, validperms, roundready, lastround,
 		numconsensus;
-	double small_blind, big_blind;  // Actual CHIPS values (e.g., 0.01, 0.02)
-	double betamount[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
+	/* All chip-denominated fields are integer "table chips" (1 CHIP = 100
+	 * table chips). Conversion happens only at the on-chain boundaries -
+	 * see chips_to_table_chips() / table_chips_to_chips() in common.h.
+	 * Default blinds: small_blind=1, big_blind=2 (i.e. 0.01 / 0.02 CHIPS). */
+	int64_t small_blind, big_blind;
+	int64_t betamount[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
 	int32_t bet_actions[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
 	int32_t dealer, last_turn;
-	double last_raise;
+	int64_t last_raise;
 	int64_t turn_start_time;    // Unix timestamp when current turn started
 	int32_t turn_start_block;   // Block height when current turn started
-	double pot;
-	double player_funds;
-	double funds[CARDS_MAXPLAYERS];       // Available funds in CHIPS
-	double funds_spent[CARDS_MAXPLAYERS]; // Total spent this game
-	double win_funds[CARDS_MAXPLAYERS];   // Winnings from pot
-	double ini_funds[CARDS_MAXPLAYERS];   // Initial funds (payin amount)
+	int64_t pot;
+	int64_t player_funds;
+	int64_t funds[CARDS_MAXPLAYERS];       // Available funds (table chips)
+	int64_t funds_spent[CARDS_MAXPLAYERS]; // Total spent this game
+	int64_t win_funds[CARDS_MAXPLAYERS];   // Winnings from pot
+	int64_t ini_funds[CARDS_MAXPLAYERS];   // Initial funds (payin amount)
 	int32_t winners[CARDS_MAXPLAYERS];
 	char player_chips_addrs[CARDS_MAXPLAYERS][64];
 	int32_t req_id_to_player_id_mapping[CARDS_MAXPLAYERS];

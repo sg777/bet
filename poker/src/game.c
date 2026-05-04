@@ -137,23 +137,25 @@ void init_struct_vars()
 
 	dcv_vars->turni = 0;
 	dcv_vars->round = 0;
-	dcv_vars->pot = 0.0;
+	dcv_vars->pot = 0;
 	dcv_vars->last_turn = 0;
-	dcv_vars->last_raise = 0.0;
-	dcv_vars->small_blind = 0.01;  // 0.01 CHIPS
-	dcv_vars->big_blind = 0.02;    // 0.02 CHIPS
+	dcv_vars->last_raise = 0;
+	/* Blinds come from the table-chip globals seeded by INI parse / cashier
+	 * defaults. Default = 1 / 2 table chips (0.01 / 0.02 CHIPS). */
+	dcv_vars->small_blind = SB_in_table_chips;
+	dcv_vars->big_blind = BB_in_table_chips;
 	dcv_vars->dealer = 0;  // Player 0 is dealer (SB), Player 1 is BB
 	dcv_vars->turn_start_time = 0;
 	dcv_vars->turn_start_block = 0;
 	for (int i = 0; i < CARDS_MAXPLAYERS; i++) {
-		dcv_vars->funds[i] = 0.0;  // Will be set from payin amounts
-		dcv_vars->ini_funds[i] = 0.0;
-		dcv_vars->win_funds[i] = 0.0;
-		dcv_vars->funds_spent[i] = 0.0;
+		dcv_vars->funds[i] = 0;  // Set from payin amounts in init_game_meta_info
+		dcv_vars->ini_funds[i] = 0;
+		dcv_vars->win_funds[i] = 0;
+		dcv_vars->funds_spent[i] = 0;
 		dcv_vars->winners[i] = 0;
 		for (int j = 0; j < CARDS_MAXROUNDS; j++) {
 			dcv_vars->bet_actions[i][j] = 0;
-			dcv_vars->betamount[i][j] = 0.0;
+			dcv_vars->betamount[i][j] = 0;
 		}
 	}
 	no_of_cards = 0;
@@ -179,7 +181,10 @@ int32_t init_game_meta_info(char *table_id)
 		}
 	}
 	
-	// Load player funds from payin_amounts (actual CHIPS values)
+	/* Load player funds from payin_amounts in the dealer's CMM.
+	 * The CMM stores payin amounts as integer table chips (vdxf.c
+	 * process_payin_tx_data converts CHIPS->table chips at write time),
+	 * so this is a straight integer load - no rounding needed. */
 	dlg_info("Loading player funds from t_player_info...");
 	if (t_player_info) {
 		payin_amounts = cJSON_GetObjectItem(t_player_info, "payin_amounts");
@@ -188,24 +193,31 @@ int32_t init_game_meta_info(char *table_id)
 			for (int32_t i = 0; i < cJSON_GetArraySize(payin_amounts) && i < CARDS_MAXPLAYERS; i++) {
 				cJSON *item = cJSON_GetArrayItem(payin_amounts, i);
 				if (item) {
-					double payin_chips = item->valuedouble;
-					dcv_vars->funds[i] = payin_chips;      // Direct CHIPS value
-					dcv_vars->ini_funds[i] = payin_chips;  // Track initial amount
-					dlg_info("Player %d (%s): payin %.4f CHIPS", i, player_ids[i], payin_chips);
+					int64_t payin_table_chips = (int64_t)item->valuedouble;
+					dcv_vars->funds[i] = payin_table_chips;
+					dcv_vars->ini_funds[i] = payin_table_chips;
+					dlg_info("Player %d (%s): payin %lld table chips (%.4f CHIPS)",
+						 i, player_ids[i],
+						 (long long)payin_table_chips,
+						 table_chips_to_chips(payin_table_chips));
 				}
 			}
 		} else {
-			dlg_warn("No payin_amounts found in t_player_info, using default 0.50 CHIPS");
+			int64_t default_tc = chips_to_table_chips(default_min_stake);
+			dlg_warn("No payin_amounts found in t_player_info, using default %lld table chips (%.4f CHIPS)",
+				 (long long)default_tc, default_min_stake);
 			for (int32_t i = 0; i < game_meta_info.num_players; i++) {
-				dcv_vars->funds[i] = 0.50;      // Default 0.50 CHIPS
-				dcv_vars->ini_funds[i] = 0.50;
+				dcv_vars->funds[i] = default_tc;
+				dcv_vars->ini_funds[i] = default_tc;
 			}
 		}
 	} else {
-		dlg_warn("t_player_info is NULL, using default 0.50 CHIPS");
+		int64_t default_tc = chips_to_table_chips(default_min_stake);
+		dlg_warn("t_player_info is NULL, using default %lld table chips (%.4f CHIPS)",
+			 (long long)default_tc, default_min_stake);
 		for (int32_t i = 0; i < game_meta_info.num_players; i++) {
-			dcv_vars->funds[i] = 0.50;
-			dcv_vars->ini_funds[i] = 0.50;
+			dcv_vars->funds[i] = default_tc;
+			dcv_vars->ini_funds[i] = default_tc;
 		}
 	}
 	
@@ -597,8 +609,8 @@ int32_t verus_small_blind(char *table_id, struct privatebet_vars *vars)
 	cJSON_AddStringToObject(smallBlindInfo, "action", "small_blind");
 	cJSON_AddNumberToObject(smallBlindInfo, "playerid", vars->turni);
 	cJSON_AddNumberToObject(smallBlindInfo, "round", vars->round);
-	cJSON_AddNumberToObject(smallBlindInfo, "pot", vars->pot);
-	cJSON_AddNumberToObject(smallBlindInfo, "min_amount", vars->small_blind);
+	cJSON_AddNumberToObject(smallBlindInfo, "pot", (double)vars->pot);
+	cJSON_AddNumberToObject(smallBlindInfo, "min_amount", (double)vars->small_blind);
 
 	out = append_game_state(table_id, G_ROUND_BETTING, smallBlindInfo);
 	dlg_info("═══════════════════════════════════════════");
@@ -627,7 +639,7 @@ int32_t verus_write_betting_state(char *table_id, struct privatebet_vars *vars, 
 	betting_state = cJSON_CreateObject();
 	cJSON_AddNumberToObject(betting_state, "current_turn", vars->turni);
 	cJSON_AddNumberToObject(betting_state, "round", vars->round);
-	cJSON_AddNumberToObject(betting_state, "pot", vars->pot);
+	cJSON_AddNumberToObject(betting_state, "pot", (double)vars->pot);
 	cJSON_AddStringToObject(betting_state, "action", action);
 	cJSON_AddNumberToObject(betting_state, "last_turn", vars->last_turn);
 	
@@ -639,36 +651,36 @@ int32_t verus_write_betting_state(char *table_id, struct privatebet_vars *vars, 
 	cJSON_AddNumberToObject(betting_state, "timeout_secs", BET_TURN_TIMEOUT_SECS);
 	cJSON_AddNumberToObject(betting_state, "timeout_blocks", BET_TURN_TIMEOUT_BLOCKS);
 	
-	// Calculate max bet and min amount (in CHIPS)
-	double maxbet = 0.0;
+	// Calculate max bet and min amount (table chips)
+	int64_t maxbet = 0;
 	for (int i = 0; i < num_of_players; i++) {
 		if (vars->betamount[i][vars->round] > maxbet)
 			maxbet = vars->betamount[i][vars->round];
 	}
 	
 	// For blinds use fixed blind amount, for regular betting calculate to call
-	double min_amount = 0.0;
+	int64_t min_amount = 0;
 	if (strcmp(action, "small_blind") == 0) {
-		min_amount = vars->small_blind;  // 0.01 CHIPS
+		min_amount = vars->small_blind;  // table chips (default 1)
 	} else if (strcmp(action, "big_blind") == 0) {
-		min_amount = vars->big_blind;    // 0.02 CHIPS
+		min_amount = vars->big_blind;    // table chips (default 2)
 	} else {
 		// Regular betting - calculate amount to call
 		min_amount = maxbet - vars->betamount[vars->turni][vars->round];
 	}
-	cJSON_AddNumberToObject(betting_state, "min_amount", min_amount);
+	cJSON_AddNumberToObject(betting_state, "min_amount", (double)min_amount);
 	
-	// Bet amounts per player
+	// Bet amounts per player (table chips)
 	bet_amounts = cJSON_CreateArray();
 	for (int i = 0; i < num_of_players; i++) {
-		cJSON_AddItemToArray(bet_amounts, cJSON_CreateNumber(vars->betamount[i][vars->round]));
+		cJSON_AddItemToArray(bet_amounts, cJSON_CreateNumber((double)vars->betamount[i][vars->round]));
 	}
 	cJSON_AddItemToObject(betting_state, "bet_amounts", bet_amounts);
 	
-	// Player funds
+	// Player funds (table chips)
 	player_funds = cJSON_CreateArray();
 	for (int i = 0; i < num_of_players; i++) {
-		cJSON_AddItemToArray(player_funds, cJSON_CreateNumber(vars->funds[i]));
+		cJSON_AddItemToArray(player_funds, cJSON_CreateNumber((double)vars->funds[i]));
 	}
 	cJSON_AddItemToObject(betting_state, "player_funds", player_funds);
 	
@@ -690,8 +702,9 @@ int32_t verus_write_betting_state(char *table_id, struct privatebet_vars *vars, 
 	}
 	cJSON_AddItemToObject(betting_state, "possibilities", possibilities);
 	
-	dlg_info("Writing betting state: turn=%d, round=%d, pot=%.4f CHIPS, action=%s",
-		vars->turni, vars->round, vars->pot, action);
+	dlg_info("Writing betting state: turn=%d, round=%d, pot=%lld table chips (%.4f CHIPS), action=%s",
+		vars->turni, vars->round, (long long)vars->pot,
+		table_chips_to_chips(vars->pot), action);
 	
 	out = poker_update_key_json(table_id, 
 		get_key_data_vdxf_id(T_BETTING_STATE_KEY, game_id_str), betting_state, true);
@@ -738,39 +751,47 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
 {
 	int32_t retval = OK;
 	const char *action = jstr(action_info, "action");
-	double amount = jdouble(action_info, "amount");  // Amount in CHIPS
+	/* action_info comes from the player's CMM (P_BETTING_ACTION_KEY) which
+	 * carries amounts as integer table chips - cast through valuedouble
+	 * because cJSON stores all numbers as double. */
+	int64_t amount = (int64_t)jdouble(action_info, "amount");
 	int32_t playerid = vars->turni;
-	double available = vars->funds[playerid];
+	int64_t available = vars->funds[playerid];
 	
 	dlg_info("═══════════════════════════════════════════");
-	dlg_info("  Player %d (%s): %s %.4f CHIPS (available: %.4f)", playerid, player_ids[playerid], action, amount, available);
+	dlg_info("  Player %d (%s): %s %lld table chips (available: %lld)",
+		 playerid, player_ids[playerid], action,
+		 (long long)amount, (long long)available);
 	dlg_info("═══════════════════════════════════════════");
 	
 	// Validate: if player tries to bet more than they have, treat as all-in
 	if (amount > available && strcmp(action, "fold") != 0 && strcmp(action, "check") != 0) {
-		dlg_info("  ⚠️ Bet %.4f exceeds available %.4f - converting to ALL-IN", amount, available);
+		dlg_info("  ⚠️ Bet %lld exceeds available %lld - converting to ALL-IN",
+			 (long long)amount, (long long)available);
 		amount = available;
 		// Force all-in action
 		vars->betamount[playerid][vars->round] += amount;
 		vars->pot += amount;
-		vars->funds[playerid] = 0.0;
+		vars->funds[playerid] = 0;
 		vars->bet_actions[playerid][vars->round] = allin;
-		dlg_info("  💰 Pot: %.4f CHIPS, Player funds: %.4f (ALL-IN)", vars->pot, vars->funds[playerid]);
+		dlg_info("  💰 Pot: %lld table chips, Player funds: %lld (ALL-IN)",
+			 (long long)vars->pot, (long long)vars->funds[playerid]);
 		return retval;
 	}
 	
 	if (strcmp(action, "fold") == 0) {
 		vars->bet_actions[playerid][vars->round] = fold;
 	} else if (strcmp(action, "call") == 0) {
-		double maxbet = 0.0;
+		int64_t maxbet = 0;
 		for (int i = 0; i < num_of_players; i++) {
 			if (vars->betamount[i][vars->round] > maxbet)
 				maxbet = vars->betamount[i][vars->round];
 		}
-		double to_call = maxbet - vars->betamount[playerid][vars->round];
+		int64_t to_call = maxbet - vars->betamount[playerid][vars->round];
 		// Cap call at available funds
 		if (to_call > available) {
-			dlg_info("  ⚠️ Call %.4f exceeds available %.4f - ALL-IN", to_call, available);
+			dlg_info("  ⚠️ Call %lld exceeds available %lld - ALL-IN",
+				 (long long)to_call, (long long)available);
 			to_call = available;
 			vars->bet_actions[playerid][vars->round] = allin;
 		} else {
@@ -782,7 +803,8 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
 	} else if (strcmp(action, "raise") == 0) {
 		// Cap raise at available funds
 		if (amount > available) {
-			dlg_info("  ⚠️ Raise %.4f exceeds available %.4f - ALL-IN", amount, available);
+			dlg_info("  ⚠️ Raise %lld exceeds available %lld - ALL-IN",
+				 (long long)amount, (long long)available);
 			amount = available;
 			vars->bet_actions[playerid][vars->round] = allin;
 		} else {
@@ -795,10 +817,10 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
 	} else if (strcmp(action, "check") == 0) {
 		vars->bet_actions[playerid][vars->round] = check;
 	} else if (strcmp(action, "allin") == 0) {
-		double allin_amount = vars->funds[playerid];
+		int64_t allin_amount = vars->funds[playerid];
 		vars->betamount[playerid][vars->round] += allin_amount;
 		vars->pot += allin_amount;
-		vars->funds[playerid] = 0.0;
+		vars->funds[playerid] = 0;
 		vars->bet_actions[playerid][vars->round] = allin;
 	} else if (strcmp(action, "small_blind") == 0 || strcmp(action, "bet") == 0) {
 		vars->betamount[playerid][vars->round] = amount;
@@ -812,7 +834,9 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
 		vars->bet_actions[playerid][vars->round] = big_blind;
 	}
 	
-	dlg_info("  💰 Pot: %.4f CHIPS, Player funds: %.4f", vars->pot, vars->funds[playerid]);
+	dlg_info("  💰 Pot: %lld table chips (%.4f CHIPS), Player funds: %lld",
+		 (long long)vars->pot, table_chips_to_chips(vars->pot),
+		 (long long)vars->funds[playerid]);
 	
 	return retval;
 }
@@ -823,7 +847,7 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
  */
 int32_t verus_next_turn(struct privatebet_vars *vars)
 {
-	int32_t maxamount = 0;
+	int64_t maxamount = 0;  /* table chips */
 	
 	// Find max bet this round
 	for (int i = 0; i < num_of_players; i++) {

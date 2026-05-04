@@ -80,23 +80,25 @@ cJSON *gui_build_backend_status(int32_t status)
     return msg;
 }
 
-cJSON *gui_build_wallet_info(double balance, const char *addr, double table_min_stake, double small_blind, double big_blind, int32_t max_players)
+cJSON *gui_build_wallet_info(double balance, const char *addr, int64_t table_min_stake, int64_t small_blind, int64_t big_blind, int32_t max_players)
 {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "method", "walletInfo");
     cJSON_AddNumberToObject(msg, "backend_status", 1);
+    /* balance stays in CHIPS - it's the on-chain wallet balance, not a
+     * game amount. The other fields are integer table chips. */
     cJSON_AddNumberToObject(msg, "balance", balance);
     if (addr) {
         cJSON_AddStringToObject(msg, "addr", addr);
     }
-    cJSON_AddNumberToObject(msg, "table_min_stake", table_min_stake);
-    cJSON_AddNumberToObject(msg, "small_blind", small_blind);
-    cJSON_AddNumberToObject(msg, "big_blind", big_blind);
+    cJSON_AddNumberToObject(msg, "table_min_stake", (double)table_min_stake);
+    cJSON_AddNumberToObject(msg, "small_blind", (double)small_blind);
+    cJSON_AddNumberToObject(msg, "big_blind", (double)big_blind);
     cJSON_AddNumberToObject(msg, "max_players", max_players);
     return msg;
 }
 
-cJSON *gui_build_seats_info(int32_t num_players, double *chips, int32_t *connected)
+cJSON *gui_build_seats_info(int32_t num_players, int64_t *chips, int32_t *connected)
 {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "method", "seats");
@@ -109,7 +111,7 @@ cJSON *gui_build_seats_info(int32_t num_players, double *chips, int32_t *connect
         cJSON_AddStringToObject(seat, "name", name);
         cJSON_AddNumberToObject(seat, "playing", 0);
         cJSON_AddNumberToObject(seat, "seat", i);
-        cJSON_AddNumberToObject(seat, "chips", chips ? chips[i] : 0);
+        cJSON_AddNumberToObject(seat, "chips", chips ? (double)chips[i] : 0);
         cJSON_AddBoolToObject(seat, "empty", connected ? !connected[i] : true);
         cJSON_AddItemToArray(seats, seat);
     }
@@ -117,12 +119,12 @@ cJSON *gui_build_seats_info(int32_t num_players, double *chips, int32_t *connect
     return msg;
 }
 
-cJSON *gui_build_blinds_info(double small_blind, double big_blind)
+cJSON *gui_build_blinds_info(int64_t small_blind, int64_t big_blind)
 {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "method", "blindsInfo");
-    cJSON_AddNumberToObject(msg, "small_blind", small_blind);
-    cJSON_AddNumberToObject(msg, "big_blind", big_blind);
+    cJSON_AddNumberToObject(msg, "small_blind", (double)small_blind);
+    cJSON_AddNumberToObject(msg, "big_blind", (double)big_blind);
     return msg;
 }
 
@@ -134,7 +136,7 @@ cJSON *gui_build_dealer_info(int32_t dealer_seat)
     return msg;
 }
 
-cJSON *gui_build_deal_holecards(int32_t card1, int32_t card2, double balance)
+cJSON *gui_build_deal_holecards(int32_t card1, int32_t card2, int64_t balance)
 {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "method", "deal");
@@ -151,7 +153,7 @@ cJSON *gui_build_deal_holecards(int32_t card1, int32_t card2, double balance)
     cJSON_AddItemToArray(holecards, cJSON_CreateString(c2));
     
     cJSON_AddItemToObject(deal, "holecards", holecards);
-    cJSON_AddNumberToObject(deal, "balance", balance);
+    cJSON_AddNumberToObject(deal, "balance", (double)balance);
     
     cJSON_AddItemToObject(msg, "deal", deal);
     return msg;
@@ -178,16 +180,16 @@ cJSON *gui_build_deal_board(int32_t *board_cards, int32_t count)
     return msg;
 }
 
-cJSON *gui_build_betting_round(int32_t playerid, double pot, double to_call, double min_raise,
-                               int32_t *possibilities, int32_t poss_count, double *player_funds, int32_t num_players)
+cJSON *gui_build_betting_round(int32_t playerid, int64_t pot, int64_t to_call, int64_t min_raise,
+                               int32_t *possibilities, int32_t poss_count, int64_t *player_funds, int32_t num_players)
 {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "method", "betting");
     cJSON_AddStringToObject(msg, "action", "round_betting");
     cJSON_AddNumberToObject(msg, "playerid", playerid);
-    cJSON_AddNumberToObject(msg, "pot", pot);
-    cJSON_AddNumberToObject(msg, "toCall", to_call);
-    cJSON_AddNumberToObject(msg, "minRaiseTo", min_raise);
+    cJSON_AddNumberToObject(msg, "pot", (double)pot);
+    cJSON_AddNumberToObject(msg, "toCall", (double)to_call);
+    cJSON_AddNumberToObject(msg, "minRaiseTo", (double)min_raise);
     
     // Possibilities array
     if (possibilities && poss_count > 0) {
@@ -202,7 +204,7 @@ cJSON *gui_build_betting_round(int32_t playerid, double pot, double to_call, dou
     if (player_funds && num_players > 0) {
         cJSON *funds = cJSON_CreateArray();
         for (int32_t i = 0; i < num_players; i++) {
-            cJSON_AddItemToArray(funds, cJSON_CreateNumber(player_funds[i]));
+            cJSON_AddItemToArray(funds, cJSON_CreateNumber((double)player_funds[i]));
         }
         cJSON_AddItemToObject(msg, "player_funds", funds);
     }
@@ -210,17 +212,17 @@ cJSON *gui_build_betting_round(int32_t playerid, double pot, double to_call, dou
     return msg;
 }
 
-cJSON *gui_build_betting_action(int32_t playerid, const char *action, double bet_amount)
+cJSON *gui_build_betting_action(int32_t playerid, const char *action, int64_t bet_amount)
 {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "method", "betting");
     cJSON_AddStringToObject(msg, "action", action);
     cJSON_AddNumberToObject(msg, "playerid", playerid);
-    cJSON_AddNumberToObject(msg, "bet_amount", bet_amount);
+    cJSON_AddNumberToObject(msg, "bet_amount", (double)bet_amount);
     return msg;
 }
 
-cJSON *gui_build_final_info(int32_t *winners, int32_t winner_count, double win_amount,
+cJSON *gui_build_final_info(int32_t *winners, int32_t winner_count, int64_t win_amount,
                             int32_t **all_holecards, int32_t *board_cards)
 {
     cJSON *msg = cJSON_CreateObject();
@@ -232,7 +234,7 @@ cJSON *gui_build_final_info(int32_t *winners, int32_t winner_count, double win_a
         cJSON_AddItemToArray(winners_arr, cJSON_CreateNumber(winners[i]));
     }
     cJSON_AddItemToObject(msg, "winners", winners_arr);
-    cJSON_AddNumberToObject(msg, "win_amount", win_amount);
+    cJSON_AddNumberToObject(msg, "win_amount", (double)win_amount);
     
     // Show info
     cJSON *show_info = cJSON_CreateObject();

@@ -367,9 +367,14 @@ int32_t join_table()
 	char *txid = NULL;
 
 	// Step 1: Send funds to cashier address
-	// Use the table's min_stake as the payin amount (default 0.5 CHIPS for testing)
-	double payin_amount = (table_min_stake > 0) ? table_min_stake : default_min_stake;
-	dlg_info("Sending payin to cashier: %s, amount: %.4f CHIPS", bet_get_cashiers_id_fqn(), payin_amount);
+	// table_min_stake_in_table_chips is in the integer table-chip unit;
+	// convert back to CHIPS at this on-chain boundary.
+	int64_t payin_table_chips = (table_min_stake_in_table_chips > 0)
+		? table_min_stake_in_table_chips
+		: chips_to_table_chips(default_min_stake);
+	double payin_amount = table_chips_to_chips(payin_table_chips);
+	dlg_info("Sending payin to cashier: %s, amount: %.4f CHIPS (%lld table chips)",
+		 bet_get_cashiers_id_fqn(), payin_amount, (long long)payin_table_chips);
 	op_id = verus_sendcurrency_data(bet_get_cashiers_id_fqn(), payin_amount, NULL);
 	if (op_id == NULL)
 		return ERR_SENDCURRENCY;
@@ -1533,9 +1538,15 @@ static cJSON *compute_updated_t_player_info(char *txid, cJSON *payin_tx_data)
 	if (!game_id_str)
 		return NULL;
 
-	// Get the actual payin amount from the transaction
+	/* Get the actual payin amount from the on-chain TX (CHIPS) and convert
+	 * to the integer table-chip unit used by the dealer/player game state.
+	 * This is one of the only two CHIPS->table-chips boundaries in the
+	 * codebase (the other is settlement -> sendcurrency in blinder.c).
+	 * The payin_amounts CMM array stores integer table chips from here on. */
 	payin_amount = chips_get_balance_on_address_from_tx(get_vdxf_id(bet_get_cashiers_id_fqn()), txid);
-	dlg_info("Player %s payin amount: %.8f CHIPS", jstr(payin_tx_data, "verus_pid"), payin_amount);
+	int64_t payin_table_chips = chips_to_table_chips(payin_amount);
+	dlg_info("Player %s payin: %.8f CHIPS -> %lld table chips",
+		 jstr(payin_tx_data, "verus_pid"), payin_amount, (long long)payin_table_chips);
 
 	t_player_info = get_cJSON_from_id_key_vdxfid_from_height(jstr(payin_tx_data, "table_id"),
 					     get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), height_start);
@@ -1571,7 +1582,10 @@ static cJSON *compute_updated_t_player_info(char *txid, cJSON *payin_tx_data)
 	
 	sprintf(pa_tx_id, "%s_%s_%d", jstr(payin_tx_data, "verus_pid"), txid, num_players);
 	jaddistr(player_info, pa_tx_id);
-	cJSON_AddItemToArray(payin_amounts, cJSON_CreateNumber(payin_amount));
+	/* Store the new player's stake in table chips (game.c:init_game_meta_info
+	 * loads this back as int64). Existing entries copied above were
+	 * already in table chips since this CMM is dealer-internal. */
+	cJSON_AddItemToArray(payin_amounts, cJSON_CreateNumber((double)payin_table_chips));
 	num_players++;
 
 	updated_t_player_info = cJSON_CreateObject();

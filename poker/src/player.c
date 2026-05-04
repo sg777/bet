@@ -383,7 +383,7 @@ cJSON *player_read_betting_state(char *table_id)
  * Write betting action to player ID
  * Amount is in CHIPS (e.g., 0.01, 0.02)
  */
-int32_t player_write_betting_action(char *table_id, const char *action, double amount)
+int32_t player_write_betting_action(char *table_id, const char *action, int64_t amount)
 {
 	int32_t retval = OK;
 	char game_id_str[65];
@@ -393,10 +393,14 @@ int32_t player_write_betting_action(char *table_id, const char *action, double a
 	
 	action_obj = cJSON_CreateObject();
 	cJSON_AddStringToObject(action_obj, "action", action);
-	cJSON_AddNumberToObject(action_obj, "amount", amount);  // In CHIPS
+	/* amount is integer table chips. cJSON serializes integer-valued
+	 * doubles without a decimal point, so the on-chain CMM payload is
+	 * e.g. {"amount": 2} rather than {"amount": 0.02}. */
+	cJSON_AddNumberToObject(action_obj, "amount", (double)amount);
 	cJSON_AddNumberToObject(action_obj, "round", p_local_state.last_game_state);  // Use as round tracking
 	
-	dlg_info("Writing betting action: %s, amount=%.4f CHIPS", action, amount);
+	dlg_info("Writing betting action: %s, amount=%lld table chips (%.4f CHIPS)",
+		 action, (long long)amount, table_chips_to_chips(amount));
 	
 	out = poker_update_key_json(player_config.verus_pid,
 		get_key_data_vdxf_id(P_BETTING_ACTION_KEY, game_id_str),
@@ -427,13 +431,16 @@ int32_t player_handle_betting(char *table_id)
 	int32_t current_turn = jint(betting_state, "current_turn");
 	const char *action = jstr(betting_state, "action");
 	int32_t round = jint(betting_state, "round");
-	double pot = jdouble(betting_state, "pot");           // In CHIPS
-	double min_amount = jdouble(betting_state, "min_amount");  // In CHIPS
+	/* Dealer writes betting_state in integer table chips - cast through
+	 * jdouble because cJSON only stores numbers as double. */
+	int64_t pot = (int64_t)jdouble(betting_state, "pot");
+	int64_t min_amount = (int64_t)jdouble(betting_state, "min_amount");
 	
 	// Check if it's our turn
 	if (current_turn != p_deck_info.player_id) {
 		// Not our turn, just display status
-		dlg_info("Waiting for Player %d to act (pot: %.4f CHIPS)", current_turn, pot);
+		dlg_info("Waiting for Player %d to act (pot: %lld table chips / %.4f CHIPS)",
+			 current_turn, (long long)pot, table_chips_to_chips(pot));
 		return OK;
 	}
 	
@@ -451,8 +458,10 @@ int32_t player_handle_betting(char *table_id)
 	dlg_info("  ⏰ Time remaining: %lld seconds           ", (long long)remaining);
 	dlg_info("═══════════════════════════════════════════");
 	dlg_info("  Action: %s", action);
-	dlg_info("  Round: %d, Pot: %.4f CHIPS", round, pot);
-	dlg_info("  Minimum to call: %.4f CHIPS", min_amount);
+	dlg_info("  Round: %d, Pot: %lld table chips (%.4f CHIPS)",
+		 round, (long long)pot, table_chips_to_chips(pot));
+	dlg_info("  Minimum to call: %lld table chips (%.4f CHIPS)",
+		 (long long)min_amount, table_chips_to_chips(min_amount));
 	
 	// Display possibilities
 	cJSON *possibilities = cJSON_GetObjectItem(betting_state, "possibilities");
@@ -470,8 +479,9 @@ int32_t player_handle_betting(char *table_id)
 	// Display player funds
 	cJSON *player_funds = cJSON_GetObjectItem(betting_state, "player_funds");
 	if (player_funds && p_deck_info.player_id < cJSON_GetArraySize(player_funds)) {
-		double my_funds = cJSON_GetArrayItem(player_funds, p_deck_info.player_id)->valuedouble;
-		dlg_info("  Your funds: %.4f CHIPS", my_funds);
+		int64_t my_funds = (int64_t)cJSON_GetArrayItem(player_funds, p_deck_info.player_id)->valuedouble;
+		dlg_info("  Your funds: %lld table chips (%.4f CHIPS)",
+			 (long long)my_funds, table_chips_to_chips(my_funds));
 	}
 	
 	dlg_info("═══════════════════════════════════════════");
@@ -485,16 +495,18 @@ int32_t player_handle_betting(char *table_id)
 		int32_t poss_arr[8] = {0, 1, 2, 3, 4, 5, 6, 7};  // fold, call, raise, check, allin, bet
 		int32_t poss_count = 6;
 		
-		// Build player funds array
-		double funds_arr[CARDS_MAXPLAYERS];
+		// Build player funds array (table chips)
+		int64_t funds_arr[CARDS_MAXPLAYERS];
 		cJSON *player_funds_json = cJSON_GetObjectItem(betting_state, "player_funds");
 		int32_t num_players = player_funds_json ? cJSON_GetArraySize(player_funds_json) : 0;
 		for (int i = 0; i < num_players && i < CARDS_MAXPLAYERS; i++) {
-			funds_arr[i] = cJSON_GetArrayItem(player_funds_json, i)->valuedouble;
+			funds_arr[i] = (int64_t)cJSON_GetArrayItem(player_funds_json, i)->valuedouble;
 		}
 		
-		// Calculate min raise (typically 2x the call amount or big blind)
-		double min_raise = min_amount > 0 ? min_amount * 2 : 0.02;
+		/* Min raise: typically 2x the call amount, or one big blind if no
+		 * one has bet yet. BB_in_table_chips is the canonical fallback
+		 * (default 2 table chips = 0.02 CHIPS). */
+		int64_t min_raise = (min_amount > 0) ? (min_amount * 2) : BB_in_table_chips;
 		
 		cJSON *gui_msg = gui_build_betting_round(
 			p_deck_info.player_id,
@@ -519,11 +531,11 @@ int32_t player_handle_betting(char *table_id)
 	if (g_betting_mode == BET_MODE_CLI) {
 		// CLI mode - get input from user
 		char input[256] = {0};
-		double bet_amount = 0.0;
 		
 		// For blinds, auto-post (mandatory)
 		if (strcmp(action, "small_blind") == 0 || strcmp(action, "big_blind") == 0) {
-			printf("\n  [AUTO] Posting %s: %.4f CHIPS\n", action, min_amount);
+			printf("\n  [AUTO] Posting %s: %lld table chips (%.4f CHIPS)\n",
+			       action, (long long)min_amount, table_chips_to_chips(min_amount));
 			retval = player_write_betting_action(table_id, "bet", min_amount);
 		} else {
 			// Regular betting round - two-step input
@@ -542,80 +554,94 @@ int32_t player_handle_betting(char *table_id)
 				
 				if (strcmp(input, "fold") == 0 || strcmp(input, "f") == 0) {
 					printf("  → Folding...\n");
-					retval = player_write_betting_action(table_id, "fold", 0.0);
+					retval = player_write_betting_action(table_id, "fold", 0);
 					
 				} else if (strcmp(input, "check") == 0 || strcmp(input, "x") == 0) {
-					if (min_amount > 0.0) {
-						printf("  ⚠ Cannot check, must call %.4f CHIPS or fold\n", min_amount);
+					if (min_amount > 0) {
+						printf("  ⚠ Cannot check, must call %lld table chips (%.4f CHIPS) or fold\n",
+						       (long long)min_amount, table_chips_to_chips(min_amount));
 						printf("  Enter action (call/fold): ");
 						fflush(stdout);
 						if (fgets(input, sizeof(input), stdin) != NULL) {
 							input[strcspn(input, "\n")] = 0;
 							if (strcmp(input, "call") == 0 || strcmp(input, "c") == 0) {
-								printf("  → Calling %.4f CHIPS...\n", min_amount);
+								printf("  → Calling %lld table chips (%.4f CHIPS)...\n",
+								       (long long)min_amount, table_chips_to_chips(min_amount));
 								retval = player_write_betting_action(table_id, "call", min_amount);
 							} else {
 								printf("  → Folding...\n");
-								retval = player_write_betting_action(table_id, "fold", 0.0);
+								retval = player_write_betting_action(table_id, "fold", 0);
 							}
 						}
 					} else {
 						printf("  → Checking...\n");
-						retval = player_write_betting_action(table_id, "check", 0.0);
+						retval = player_write_betting_action(table_id, "check", 0);
 					}
 					
 				} else if (strcmp(input, "call") == 0 || strcmp(input, "c") == 0) {
-					printf("  → Calling %.4f CHIPS...\n", min_amount);
+					printf("  → Calling %lld table chips (%.4f CHIPS)...\n",
+					       (long long)min_amount, table_chips_to_chips(min_amount));
 					retval = player_write_betting_action(table_id, "call", min_amount);
 					
 				} else if (strcmp(input, "raise") == 0 || strcmp(input, "r") == 0) {
-					// Step 2: Get raise amount
-					double raise_amount = 0.0;
-					printf("  Enter raise amount (min %.4f): ", min_amount * 2);
+					/* Step 2: Get raise amount. CLI accepts CHIPS for human
+					 * convenience (player types "0.04" not "4"); we convert
+					 * to table chips before writing. */
+					int64_t raise_amount = 0;
+					printf("  Enter raise amount in CHIPS (min %.4f): ",
+					       table_chips_to_chips(min_amount * 2));
 					fflush(stdout);
 					if (fgets(input, sizeof(input), stdin) != NULL) {
 						input[strcspn(input, "\n")] = 0;
-						raise_amount = atof(input);
-						if (raise_amount <= 0.0) {
+						double raise_chips = atof(input);
+						if (raise_chips <= 0.0) {
 							raise_amount = min_amount * 2;  // Default to min raise
+						} else {
+							raise_amount = chips_to_table_chips(raise_chips);
 						}
 					}
-					printf("  → Raising to %.4f CHIPS...\n", raise_amount);
+					printf("  → Raising to %lld table chips (%.4f CHIPS)...\n",
+					       (long long)raise_amount, table_chips_to_chips(raise_amount));
 					retval = player_write_betting_action(table_id, "raise", raise_amount);
 					
 				} else if (strcmp(input, "bet") == 0 || strcmp(input, "b") == 0) {
-					// Step 2: Get bet amount
-					double bet_amt = 0.0;
-					printf("  Enter bet amount: ");
+					// Step 2: Get bet amount (CLI input in CHIPS, see raise above)
+					int64_t bet_amt = 0;
+					printf("  Enter bet amount in CHIPS: ");
 					fflush(stdout);
 					if (fgets(input, sizeof(input), stdin) != NULL) {
 						input[strcspn(input, "\n")] = 0;
-						bet_amt = atof(input);
-						if (bet_amt <= 0.0) {
-							bet_amt = min_amount > 0.0 ? min_amount : 0.01;
+						double bet_chips = atof(input);
+						if (bet_chips <= 0.0) {
+							bet_amt = (min_amount > 0) ? min_amount : SB_in_table_chips;
+						} else {
+							bet_amt = chips_to_table_chips(bet_chips);
 						}
 					}
-					printf("  → Betting %.4f CHIPS...\n", bet_amt);
+					printf("  → Betting %lld table chips (%.4f CHIPS)...\n",
+					       (long long)bet_amt, table_chips_to_chips(bet_amt));
 					retval = player_write_betting_action(table_id, "bet", bet_amt);
 					
 				} else if (strcmp(input, "allin") == 0 || strcmp(input, "a") == 0) {
 					// Get player funds and go all-in
 					cJSON *pf = cJSON_GetObjectItem(betting_state, "player_funds");
-					double my_funds = 0.0;
+					int64_t my_funds = 0;
 					if (pf && p_deck_info.player_id < cJSON_GetArraySize(pf)) {
-						my_funds = cJSON_GetArrayItem(pf, p_deck_info.player_id)->valuedouble;
+						my_funds = (int64_t)cJSON_GetArrayItem(pf, p_deck_info.player_id)->valuedouble;
 					}
-					printf("  → Going ALL-IN with %.4f CHIPS!\n", my_funds);
+					printf("  → Going ALL-IN with %lld table chips (%.4f CHIPS)!\n",
+					       (long long)my_funds, table_chips_to_chips(my_funds));
 					retval = player_write_betting_action(table_id, "allin", my_funds);
 					
 				} else if (strlen(input) == 0) {
 					// Empty input - auto check/call
-					if (min_amount > 0.0) {
-						printf("  → Auto-calling %.4f CHIPS...\n", min_amount);
+					if (min_amount > 0) {
+						printf("  → Auto-calling %lld table chips (%.4f CHIPS)...\n",
+						       (long long)min_amount, table_chips_to_chips(min_amount));
 						retval = player_write_betting_action(table_id, "call", min_amount);
 					} else {
 						printf("  → Auto-checking...\n");
-						retval = player_write_betting_action(table_id, "check", 0.0);
+						retval = player_write_betting_action(table_id, "check", 0);
 					}
 					
 				} else {
@@ -630,21 +656,24 @@ int32_t player_handle_betting(char *table_id)
 	} else {
 		// AUTO mode - auto-respond based on action type
 		if (strcmp(action, "small_blind") == 0) {
-			dlg_info("Posting small blind: %.4f CHIPS", min_amount);
+			dlg_info("Posting small blind: %lld table chips (%.4f CHIPS)",
+				 (long long)min_amount, table_chips_to_chips(min_amount));
 			retval = player_write_betting_action(table_id, "bet", min_amount);
 			p_local_state.last_game_state = round;
 		} else if (strcmp(action, "big_blind") == 0) {
-			dlg_info("Posting big blind: %.4f CHIPS", min_amount);
+			dlg_info("Posting big blind: %lld table chips (%.4f CHIPS)",
+				 (long long)min_amount, table_chips_to_chips(min_amount));
 			retval = player_write_betting_action(table_id, "bet", min_amount);
 			p_local_state.last_game_state = round;
 		} else {
 			// Regular betting - for testing, auto-call or check
-			if (min_amount > 0.0) {
-				dlg_info("Auto-calling %.4f CHIPS...", min_amount);
+			if (min_amount > 0) {
+				dlg_info("Auto-calling %lld table chips (%.4f CHIPS)...",
+					 (long long)min_amount, table_chips_to_chips(min_amount));
 				retval = player_write_betting_action(table_id, "call", min_amount);
 			} else {
 				dlg_info("Auto-checking...");
-				retval = player_write_betting_action(table_id, "check", 0.0);
+				retval = player_write_betting_action(table_id, "check", 0);
 			}
 			p_local_state.last_game_state = round;
 		}

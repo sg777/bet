@@ -865,9 +865,12 @@ void bet_player_table_info(void)
 	cJSON_AddNumberToObject(table_info, "balance", chips_get_balance());
 	cJSON_AddNumberToObject(table_info, "backend_status", backend_status);
 	cJSON_AddNumberToObject(table_info, "max_players", max_players);
-	cJSON_AddNumberToObject(table_info, "table_min_stake", table_min_stake);  // Payin amount in CHIPS
-	cJSON_AddNumberToObject(table_info, "small_blind", SB_in_chips);
-	cJSON_AddNumberToObject(table_info, "big_blind", BB_in_chips);
+	/* Wire format to GUI is integer table chips. The GUI's chip-stack
+	 * tokenizer was designed for integer denominations and breaks on
+	 * fractional CHIPS like 0.01. See common.h chips_to_table_chips() doc. */
+	cJSON_AddNumberToObject(table_info, "table_min_stake", (double)table_min_stake_in_table_chips);
+	cJSON_AddNumberToObject(table_info, "small_blind", (double)SB_in_table_chips);
+	cJSON_AddNumberToObject(table_info, "big_blind", (double)BB_in_table_chips);
 	cJSON_AddStringToObject(table_info, "table_id", player_config.table_id);
 	cJSON_AddStringToObject(table_info, "dealer_id", player_config.dealer_id);
 	
@@ -955,8 +958,9 @@ void send_init_state_to_gui(int32_t state)
 	if (state == P_INIT_JOINED) {
 		cJSON_AddStringToObject(state_msg, "player_id", player_config.verus_pid);
 		// Player knows their own payin amount - use config value directly
-		// (blockchain t_player_info may not be updated yet at this point)
-		cJSON_AddNumberToObject(state_msg, "payin_amount", table_min_stake);
+		// (blockchain t_player_info may not be updated yet at this point).
+		// Wire format is integer table chips (matches table_info above).
+		cJSON_AddNumberToObject(state_msg, "payin_amount", (double)table_min_stake_in_table_chips);
 	}
 	
 	dlg_info("\033[34m[► TO GUI]\033[0m Player state: %s", player_init_state_str(state));
@@ -1551,7 +1555,11 @@ static int32_t bet_do_player_checks(cJSON *argjson, struct privatebet_info *bet)
 		return retval;
 	}
 
-	if (0 == check_funds_for_poker(jdouble(argjson, "table_min_stake"))) {
+	/* Peer (host.c bet_dcv_stack_info_resp) sends amounts as integer
+	 * table chips; check_funds_for_poker compares against on-chain CHIPS
+	 * balance, so convert at the boundary. */
+	int64_t peer_min_stake_tc = (int64_t)jdouble(argjson, "table_min_stake");
+	if (0 == check_funds_for_poker(table_chips_to_chips(peer_min_stake_tc))) {
 		retval = ERR_CHIPS_INSUFFICIENT_FUNDS;
 		return retval;
 	}
@@ -1560,14 +1568,17 @@ static int32_t bet_do_player_checks(cJSON *argjson, struct privatebet_info *bet)
 
 static int32_t bet_player_initialize_table_params(cJSON *argjson, struct privatebet_info *bet)
 {
-	BB_in_chips = jdouble(argjson, "bb_in_chips");
-	SB_in_chips = BB_in_chips / 2;
-	table_stake_in_chips = table_stack_in_bb * BB_in_chips;
-	if (table_stake_in_chips < jdouble(argjson, "table_min_stake")) {
-		table_stake_in_chips = jdouble(argjson, "table_min_stake");
+	/* Peer-supplied chip amounts arrive as integer table chips on the wire. */
+	BB_in_table_chips = (int64_t)jdouble(argjson, "bb_in_chips");
+	SB_in_table_chips = BB_in_table_chips / 2;
+	table_stake_in_table_chips = (int64_t)(table_stack_in_bb * (double)BB_in_table_chips);
+	int64_t peer_min_stake_tc = (int64_t)jdouble(argjson, "table_min_stake");
+	int64_t peer_max_stake_tc = (int64_t)jdouble(argjson, "table_max_stake");
+	if (table_stake_in_table_chips < peer_min_stake_tc) {
+		table_stake_in_table_chips = peer_min_stake_tc;
 	}
-	if (table_stake_in_chips > jdouble(argjson, "table_max_stake")) {
-		table_stake_in_chips = jdouble(argjson, "table_max_stake");
+	if (table_stake_in_table_chips > peer_max_stake_tc) {
+		table_stake_in_table_chips = peer_max_stake_tc;
 	}
 	max_players = jint(argjson, "max_players");
 	chips_tx_fee = jdouble(argjson, "chips_tx_fee");
@@ -1638,7 +1649,9 @@ static int32_t bet_player_handle_stack_info_resp(cJSON *argjson, struct privateb
 		sleep(2);
 	}
 	*/
-	vout_addresses = add_tx_split_vouts(table_stake_in_chips, legacy_m_of_n_msig_addr);
+	/* On-chain TX construction needs CHIPS, not table chips. */
+	vout_addresses = add_tx_split_vouts(table_chips_to_chips(table_stake_in_table_chips),
+					    legacy_m_of_n_msig_addr);
 	txid = chips_transfer_funds_with_data1(vout_addresses, hex_data);
 	//txid = chips_transfer_funds_with_data(table_stake_in_chips, legacy_m_of_n_msig_addr, hex_data);
 	if (txid == NULL) {
@@ -1870,7 +1883,7 @@ int32_t bet_player_backend(cJSON *argjson, struct privatebet_info *bet, struct p
 			dlg_info("Player_stakes");
 			for (int32_t i = 0; i < bet->maxplayers; i++) {
 				vars->funds[i] = jinti(stakes, i);
-    dlg_info("player::%d, stake::%.8f", i, vars->funds[i]);
+				dlg_info("player::%d, stake::%lld table chips", i, (long long)vars->funds[i]);
 			}
 		} else if (strcmp(method, "signrawtransaction") == 0) {
 			if (jint(argjson, "playerid") == bet->myplayerid) {

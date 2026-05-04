@@ -57,13 +57,31 @@ int32_t live_notaries = 0;
 int32_t *notary_status = NULL;
 int32_t notary_response = 0;
 
-double BB_in_chips = default_bb_in_chips;  // 0.02 CHIPS
-double SB_in_chips = default_sb_in_chips;  // 0.01 CHIPS
+/* All chip-amount globals live in the integer "table chips" unit.
+ * default_bb_in_chips, default_min_stake, default_max_stake are CHIPS
+ * constants from common.h, so feed them through chips_to_table_chips()
+ * once at init. */
+int64_t BB_in_table_chips = 0;             /* set in initializer below */
+int64_t SB_in_table_chips = 0;
+int64_t table_stake_in_table_chips = 0;
+int64_t table_min_stake_in_table_chips = 0;
+int64_t table_max_stake_in_table_chips = 0;
+
 double table_stack_in_bb = default_min_stake_in_bb;
-double table_stake_in_chips = default_min_stake_in_bb * default_bb_in_chips;
 double chips_tx_fee = default_chips_tx_fee;
-double table_min_stake = default_min_stake_in_bb * default_bb_in_chips;
-double table_max_stake = default_max_stake_in_bb * default_bb_in_chips;
+
+/* Static initializer can't call chips_to_table_chips(), so seed the
+ * table-chip globals from common.h's CHIPS macros via a constructor that
+ * runs before main(). Keeps the "1 CHIP = 100 table chips" rule centralized
+ * in chips_to_table_chips() rather than hardcoded here. */
+__attribute__((constructor)) static void cashier_init_table_chip_globals(void)
+{
+	BB_in_table_chips = chips_to_table_chips(default_bb_in_chips);
+	SB_in_table_chips = chips_to_table_chips(default_sb_in_chips);
+	table_min_stake_in_table_chips = chips_to_table_chips(default_min_stake);
+	table_max_stake_in_table_chips = chips_to_table_chips(default_max_stake);
+	table_stake_in_table_chips = chips_to_table_chips(default_min_stake_in_bb * default_bb_in_chips);
+}
 
 char *legacy_m_of_n_msig_addr = NULL;
 

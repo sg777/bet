@@ -216,23 +216,30 @@ static int32_t cashier_process_settlement(char *table_id)
 	int num_players = cJSON_GetArraySize(settle_amounts);
 	payout_txs = cJSON_CreateArray();
 	
-	// Send funds to each player
+	/* Send funds to each player. settle_amounts is in integer table chips
+	 * (dealer wrote it that way in dealer_initiate_settlement). Convert
+	 * back to CHIPS for the on-chain sendcurrency call - this is one of
+	 * the only two table-chips -> CHIPS boundaries in the codebase
+	 * (the other is the payin in vdxf.c::process_payin_tx_data). */
 	for (int i = 0; i < num_players; i++) {
 		cJSON *amount_item = cJSON_GetArrayItem(settle_amounts, i);
 		cJSON *player_id_item = cJSON_GetArrayItem(player_ids, i);
 		
 		if (!amount_item || !player_id_item) continue;
 		
-		double amount = amount_item->valuedouble;
+		int64_t amount_table_chips = (int64_t)amount_item->valuedouble;
 		const char *player_id = player_id_item->valuestring;
 		
-		if (amount <= 0) {
-			dlg_info("Player %s has no payout (amount: %f)", player_id, amount);
+		if (amount_table_chips <= 0) {
+			dlg_info("Player %s has no payout (amount: %lld table chips)",
+				 player_id, (long long)amount_table_chips);
 			cJSON_AddItemToArray(payout_txs, cJSON_CreateString(""));
 			continue;
 		}
 		
-		dlg_info("Sending %f CHIPS to player %s", amount, player_id);
+		double amount_chips = table_chips_to_chips(amount_table_chips);
+		dlg_info("Sending %.8f CHIPS (%lld table chips) to player %s",
+			 amount_chips, (long long)amount_table_chips, player_id);
 		
 		// Create payout data
 		cJSON *payout_data = cJSON_CreateObject();
@@ -242,7 +249,7 @@ static int32_t cashier_process_settlement(char *table_id)
 		cJSON_AddNumberToObject(payout_data, "player_slot", i);
 		
 		// Send using sendcurrency
-		cJSON *tx_result = verus_sendcurrency_data(player_id, amount, payout_data);
+		cJSON *tx_result = verus_sendcurrency_data(player_id, amount_chips, payout_data);
 		
 		if (tx_result) {
 			const char *txid = NULL;

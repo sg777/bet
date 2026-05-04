@@ -40,7 +40,7 @@ void bet_dcv_publish_player_active_info(struct privatebet_info *bet)
 		cJSON_AddStringToObject(argjson, "method", "betting");
 		cJSON_AddNumberToObject(argjson, "playerid", vars->turni);
 		cJSON_AddNumberToObject(argjson, "round", vars->round);
-		cJSON_AddNumberToObject(argjson, "pot", vars->pot);
+		cJSON_AddNumberToObject(argjson, "pot", (double)vars->pot);
 		cJSON_AddNumberToObject(argjson, "min_amount", 0);
 		cJSON_AddStringToObject(argjson, "action", "fold");
 // Nanomsg removed - no longer used

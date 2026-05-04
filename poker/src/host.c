@@ -943,22 +943,29 @@ static cJSON *payout_tx_data_info(struct privatebet_info *bet, struct privatebet
 static int32_t bet_dcv_poker_winner(struct privatebet_info *bet, struct privatebet_vars *vars)
 {
 	int32_t retval = OK;
+	/* Legacy multisig payout path (dead in the Verus-only flow; the live
+	 * settlement runs in cashier_process_settlement / blinder.c). The
+	 * commissions are percentage doubles and the on-chain TX must carry
+	 * CHIPS, so we convert table-chip funds back to CHIPS at the function
+	 * boundary and do the rest of the math in CHIPS doubles. */
 	double dcv_commission = 0, dev_commission = 0, player_amounts[bet->maxplayers];
 	cJSON *payout_info = NULL, *dev_info = NULL, *dcv_info = NULL, *payout_tx_info = NULL, *data_info = NULL;
 	char *hex_str = NULL;
 
 	for (int32_t i = 0; i < bet->maxplayers; i++) {
-		if (vars->win_funds[i] > 0) {
+		double win_chips = table_chips_to_chips(vars->win_funds[i]);
+		double funds_chips = table_chips_to_chips(vars->funds[i]);
+		if (win_chips > 0) {
 			double c_dcv, c_dev;
-			c_dcv = (dcv_commission_percentage * vars->win_funds[i]) / 100;
-			c_dev = (dev_fund_commission * vars->win_funds[i]) / 100;
+			c_dcv = (dcv_commission_percentage * win_chips) / 100;
+			c_dev = (dev_fund_commission * win_chips) / 100;
 
 			dcv_commission += c_dcv;
 			dev_commission += c_dev;
-			player_amounts[i] = vars->win_funds[i] - (c_dev + c_dcv);
-			player_amounts[i] += vars->funds[i];
+			player_amounts[i] = win_chips - (c_dev + c_dcv);
+			player_amounts[i] += funds_chips;
 		} else {
-			player_amounts[i] = vars->funds[i];
+			player_amounts[i] = funds_chips;
 		}
 	}
 
@@ -1019,8 +1026,10 @@ static int32_t bet_dcv_poker_winner(struct privatebet_info *bet, struct privateb
 
 int32_t det_dcv_pot_split(struct privatebet_info *bet, struct privatebet_vars *vars)
 {
-	int32_t retval = OK, eval_players[CARDS_MAXPLAYERS] = { 0 }, min_win_amount, no_of_winners = 0, flag = 1,
-		total_init_amount = 0, total_win_amount = 0;
+	int32_t retval = OK, eval_players[CARDS_MAXPLAYERS] = { 0 }, no_of_winners = 0, flag = 1;
+	/* All chip-amount accumulators are int64 table chips to match
+	 * vars->funds/win_funds/ini_funds. */
+	int64_t min_win_amount = 0, total_init_amount = 0, total_win_amount = 0;
 	unsigned char h[7];
 	unsigned long scores[CARDS_MAXPLAYERS], max_score = 0;
 
@@ -1042,7 +1051,8 @@ int32_t det_dcv_pot_split(struct privatebet_info *bet, struct privatebet_vars *v
 	}
 	dlg_info("Funds spent");
 	for (int32_t i = 0; i < bet->maxplayers; i++) {
-  dlg_info("player id ::%d::funds_spent::%.8f", i, vars->funds_spent[i]);
+		dlg_info("player id ::%d::funds_spent::%lld table chips",
+			 i, (long long)vars->funds_spent[i]);
 	}
 	while (flag) {
 		max_score = 0;
@@ -1062,7 +1072,7 @@ int32_t det_dcv_pot_split(struct privatebet_info *bet, struct privatebet_vars *v
 					min_win_amount = vars->funds_spent[i];
 			}
 		}
-		int sub_pot = 0;
+		int64_t sub_pot = 0;
 		for (int i = 0; ((i < bet->maxplayers) && (eval_players[i] == 0)); i++) {
 			if (vars->funds_spent[i] >= min_win_amount) {
 				sub_pot += min_win_amount;
@@ -1080,7 +1090,7 @@ int32_t det_dcv_pot_split(struct privatebet_info *bet, struct privatebet_vars *v
 				eval_players[i] = 1;
 			}
 		}
-		dlg_info("sub_pot::%d", sub_pot);
+		dlg_info("sub_pot::%lld table chips", (long long)sub_pot);
 		flag = 0;
 		int32_t eval_players_left = 0, eval_player;
 		for (int i = 0; ((i < bet->maxplayers) && (eval_players[i] == 0)); i++) {
@@ -1094,8 +1104,9 @@ int32_t det_dcv_pot_split(struct privatebet_info *bet, struct privatebet_vars *v
 			flag = 0;
 		}
 		for (int i = 0; i < bet->maxplayers; i++) {
-   dlg_info("win_funds::%.8f, funds::%.8f, ini_funds::%.8f", vars->win_funds[i], vars->funds[i],
-     vars->ini_funds[i]);
+			dlg_info("win_funds::%lld, funds::%lld, ini_funds::%lld (table chips)",
+				 (long long)vars->win_funds[i], (long long)vars->funds[i],
+				 (long long)vars->ini_funds[i]);
 		}
 	}
 	for (int i = 0; i < bet->maxplayers; i++) {
@@ -1103,7 +1114,8 @@ int32_t det_dcv_pot_split(struct privatebet_info *bet, struct privatebet_vars *v
 		total_win_amount += (vars->win_funds[i] + vars->funds[i]);
 	}
 	if (total_init_amount != total_win_amount) {
-		dlg_error("Pay_in chips :: %d, Payout_chips :: %d", total_init_amount, total_win_amount);
+		dlg_error("Pay_in chips :: %lld, Payout_chips :: %lld",
+			  (long long)total_init_amount, (long long)total_win_amount);
 		retval = ERR_BET_AMOUNTS_MISMATCH;
 	}
 	return retval;
@@ -1232,9 +1244,13 @@ static int32_t bet_dcv_stack_info_resp(cJSON *argjson, struct privatebet_info *b
 		cJSON_AddStringToObject(stack_info_resp, "method", "stack_info_resp");
 		cJSON_AddStringToObject(stack_info_resp, "id", jstr(argjson, "id"));
 		cJSON_AddNumberToObject(stack_info_resp, "max_players", max_players);
-		cJSON_AddNumberToObject(stack_info_resp, "bb_in_chips", BB_in_chips);
-		cJSON_AddNumberToObject(stack_info_resp, "table_min_stake", table_min_stake);
-		cJSON_AddNumberToObject(stack_info_resp, "table_max_stake", table_max_stake);
+		/* Wire format between bet nodes is integer table chips.
+		 * Receiver (bet_player_initialize_table_params in client.c) reads
+		 * these back as table chips and only converts to CHIPS when
+		 * touching an on-chain API. */
+		cJSON_AddNumberToObject(stack_info_resp, "bb_in_chips", (double)BB_in_table_chips);
+		cJSON_AddNumberToObject(stack_info_resp, "table_min_stake", (double)table_min_stake_in_table_chips);
+		cJSON_AddNumberToObject(stack_info_resp, "table_max_stake", (double)table_max_stake_in_table_chips);
 		cJSON_AddNumberToObject(stack_info_resp, "dcv_commission", dcv_commission_percentage);
 		cJSON_AddNumberToObject(stack_info_resp, "chips_tx_fee", chips_tx_fee);
 		cJSON_AddStringToObject(stack_info_resp, "legacy_m_of_n_msig_addr", legacy_m_of_n_msig_addr);
@@ -1403,7 +1419,8 @@ static int32_t bet_dcv_process_join_req(cJSON *argjson, struct privatebet_info *
 			cJSON *stakes_info = cJSON_CreateObject();
 			cJSON *stakes = cJSON_CreateArray();
 			for (int i = 0; i < bet->maxplayers; i++) {
-    dlg_info("player::%d::funds::%.8f::ini_funds::%.8f", i, vars->funds[i], vars->ini_funds[i]);
+				dlg_info("player::%d::funds::%lld::ini_funds::%lld (table chips)",
+					 i, (long long)vars->funds[i], (long long)vars->ini_funds[i]);
 			}
 			for (int i = 0; i < bet->maxplayers; i++) {
 				vars->funds[i] = vars->ini_funds[vars->req_id_to_player_id_mapping[i]];
@@ -1412,7 +1429,8 @@ static int32_t bet_dcv_process_join_req(cJSON *argjson, struct privatebet_info *
 				vars->ini_funds[i] = vars->funds[i];
 			}
 			for (int i = 0; i < bet->maxplayers; i++) {
-    dlg_info("player::%d::funds::%.8f::ini_funds::%.8f", i, vars->funds[i], vars->ini_funds[i]);
+				dlg_info("player::%d::funds::%lld::ini_funds::%lld (table chips)",
+					 i, (long long)vars->funds[i], (long long)vars->ini_funds[i]);
 			}
 			cJSON_AddStringToObject(stakes_info, "method", "player_stakes_info");
 			for (int i = 0; i < bet->maxplayers; i++) {

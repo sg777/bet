@@ -170,15 +170,19 @@ void bet_parse_dealer_config_ini_file()
 			max_players = iniparser_getint(ini, "table:max_players", -1);
 		}
 		if (0 != iniparser_getdouble(ini, "table:big_blind", 0)) {
-			BB_in_chips = iniparser_getdouble(ini, "table:big_blind", 0);
-			SB_in_chips = BB_in_chips / 2;
+			/* INI value is in CHIPS (e.g. 0.02); store in table chips. */
+			BB_in_table_chips = chips_to_table_chips(
+				iniparser_getdouble(ini, "table:big_blind", 0));
+			SB_in_table_chips = BB_in_table_chips / 2;
 		}
-		// min_stake and max_stake are now in CHIPS directly (not in BB multiples)
+		// min_stake and max_stake are read in CHIPS, stored in table chips
 		if (0 != iniparser_getdouble(ini, "table:min_stake", 0)) {
-			table_min_stake = iniparser_getdouble(ini, "table:min_stake", 0);
+			table_min_stake_in_table_chips = chips_to_table_chips(
+				iniparser_getdouble(ini, "table:min_stake", 0));
 		}
 		if (0 != iniparser_getdouble(ini, "table:max_stake", 0)) {
-			table_max_stake = iniparser_getdouble(ini, "table:max_stake", 0);
+			table_max_stake_in_table_chips = chips_to_table_chips(
+				iniparser_getdouble(ini, "table:max_stake", 0));
 		}
 
 		if (0 != iniparser_getdouble(ini, "dealer:chips_tx_fee", 0)) {

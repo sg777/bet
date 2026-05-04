@@ -341,11 +341,13 @@ int32_t dealer_initiate_settlement(struct table *t, struct privatebet_vars *vars
 		return ERR_GAME_ID_NOT_FOUND;
 	}
 	
-	// Build settlement info
+	/* Build settlement info. All chip amounts on this CMM are integer
+	 * table chips - the cashier converts back to CHIPS at sendcurrency
+	 * time (see blinder.c::cashier_process_settlement). */
 	settlement_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(settlement_info, "game_id", game_id_str);
 	cJSON_AddStringToObject(settlement_info, "status", "pending");
-	cJSON_AddNumberToObject(settlement_info, "pot", vars->pot);  // Already in CHIPS
+	cJSON_AddNumberToObject(settlement_info, "pot", (double)vars->pot);
 	
 	// Winners array
 	winners_arr = cJSON_CreateArray();
@@ -356,12 +358,12 @@ int32_t dealer_initiate_settlement(struct table *t, struct privatebet_vars *vars
 	}
 	cJSON_AddItemToObject(settlement_info, "winners", winners_arr);
 	
-	// Settlement amounts per player (what each player gets back in CHIPS)
-	// settle_amount = remaining funds + winnings from pot
+	/* Settlement amount per player (table chips):
+	 * settle_amount = remaining stack + winnings from pot. */
 	amounts_arr = cJSON_CreateArray();
 	for (int32_t i = 0; i < num_of_players; i++) {
-		double amount = vars->win_funds[i] + vars->funds[i];  // Already in CHIPS
-		cJSON_AddItemToArray(amounts_arr, cJSON_CreateNumber(amount));
+		int64_t amount = vars->win_funds[i] + vars->funds[i];
+		cJSON_AddItemToArray(amounts_arr, cJSON_CreateNumber((double)amount));
 	}
 	cJSON_AddItemToObject(settlement_info, "settle_amounts", amounts_arr);
 	
@@ -541,14 +543,21 @@ int32_t handle_game_state(struct table *t)
 					active_players++;
 				}
 			}
-			// Split pot among winners (pot already in CHIPS)
+			/* Split pot among winners. Pot is in table chips; integer
+			 * division gives the per-winner share. Any remainder
+			 * (pot % active_players) is dropped here - typical poker
+			 * convention is to award the odd chip to the first winner
+			 * by table position, but this simplified path doesn't yet
+			 * implement that. */
 			if (active_players > 0) {
-				double share = dcv_vars->pot / active_players;
+				int64_t share = dcv_vars->pot / active_players;
 				for (int32_t i = 0; i < num_of_players; i++) {
 					if (dcv_vars->winners[i] == 1) {
 						dcv_vars->win_funds[i] = share;
-						dlg_info("Player %d (%s): wins %.4f CHIPS", 
-							i, player_ids[i], share);
+						dlg_info("Player %d (%s): wins %lld table chips (%.4f CHIPS)",
+							 i, player_ids[i],
+							 (long long)share,
+							 table_chips_to_chips(share));
 					}
 				}
 			}
