@@ -333,6 +333,18 @@ cJSON *get_cJSON_from_id_key_vdxfid_from_height(const char *id, const char *key_
 cJSON *append_cmm_from_id_key_data_hex(const char *id, const char *key, char *hex_data, bool is_key_vdxf_id);
 cJSON *append_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id);
 cJSON *update_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id);
+/*
+ * Merge-mode CMM writes: read combined view from `start_block`, fold in the
+ * supplied key/value, rewrite the whole snapshot in one updateidentity. Use
+ * this for table-id writes during the join phase so that fresh players (who
+ * do not have start_block yet) can still discover the full game-bootstrap
+ * state via plain getidentity. After all players have joined, switch back to
+ * the cheaper append_cmm_from_id_key_data_* writes.
+ */
+cJSON *merge_cmm_from_id_key_data_hex(const char *id, int32_t start_block,
+				      const char *key, char *hex_data, bool is_key_vdxf_id);
+cJSON *merge_cmm_from_id_key_data_cJSON(const char *id, int32_t start_block,
+					const char *key, cJSON *data, bool is_key_vdxf_id);
 
 /* ============================================================================
  * Poker Table Operations (internal - use poker_vdxf.h for public API)

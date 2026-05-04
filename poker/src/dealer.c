@@ -451,7 +451,27 @@ int32_t handle_game_state(struct table *t)
 		}
 		// Check if enough players have joined
 		if (poker_is_table_full(t->table_id)) {
-			append_game_state(t->table_id, G_PLAYERS_JOINED, NULL);
+			/* Final join-phase write to t1: do a merge-mode (full
+			 * snapshot) update so the table id ends G_TABLE_STARTED
+			 * with all four bootstrap keys (T_GAME_ID, T_TABLE_INFO,
+			 * T_GAME_INFO, T_PLAYER_INFO) visible in the latest
+			 * snapshot. After this, single-key append_game_state
+			 * writes are safe because every participant already
+			 * knows start_block.
+			 */
+			char *game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
+			if (game_id_str) {
+				cJSON *t_game_info = cJSON_CreateObject();
+				cJSON_AddNumberToObject(t_game_info, "game_state", G_PLAYERS_JOINED);
+				merge_cmm_from_id_key_data_cJSON(t->table_id, t->start_block,
+								 get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str),
+								 t_game_info, true);
+				cJSON_Delete(t_game_info);
+			} else {
+				dlg_warn("Could not read T_GAME_ID for merge-mode G_PLAYERS_JOINED write; "
+					 "falling back to append-mode");
+				append_game_state(t->table_id, G_PLAYERS_JOINED, NULL);
+			}
 		}
 		break;
 	case G_PLAYERS_JOINED:

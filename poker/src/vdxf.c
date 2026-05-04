@@ -1317,6 +1317,139 @@ cJSON *update_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON 
 	return result;
 }
 
+/*
+ * Merge-mode CMM write
+ * --------------------
+ * Verus merges historical CMM updates only when readers query via
+ * `getidentitycontent <id> <heightstart>`. Plain `getidentity <id>` (and the
+ * code paths that go through `get_cmm()`) returns ONLY the latest snapshot,
+ * i.e. exactly the keys submitted in the most recent `updateidentity`
+ * transaction.
+ *
+ * That is fine for any participant that already knows `start_block` (the
+ * dealer, the cashier, and players that have already joined). It is NOT fine
+ * for a fresh player trying to discover the table for the first time: that
+ * player has no `start_block` yet, so it can only do `getidentity` on the
+ * table id and must be able to see the full game-bootstrap state
+ * (T_GAME_ID_KEY, T_TABLE_INFO_KEY.<g>, T_GAME_INFO_KEY.<g>,
+ * T_PLAYER_INFO_KEY.<g>) in that single snapshot.
+ *
+ * `merge_cmm_from_id_key_data_*` reads the combined CMM from `start_block`
+ * via `get_cmm_from_height()`, takes the latest value of every existing key,
+ * folds in the new key/value, and rewrites the whole thing in one
+ * transaction. Use this for table-id writes during the join phase
+ * (G_TABLE_STARTED). After G_PLAYERS_JOINED, every reader has start_block,
+ * so cheap single-key `append_cmm_from_id_key_data_*` writes are sufficient.
+ */
+cJSON *merge_cmm_from_id_key_data_hex(const char *id, int32_t start_block,
+				      const char *key, char *hex_data, bool is_key_vdxf_id)
+{
+	char *data_type = NULL;
+	const char *data_key = NULL;
+	cJSON *combined = NULL, *merged = NULL, *out = NULL;
+	cJSON *data_obj = NULL, *key_iter = NULL;
+
+	if (!id || !key || !hex_data) {
+		dlg_error("%s: Invalid input parameters", __func__);
+		return NULL;
+	}
+
+	if (is_key_vdxf_id) {
+		data_type = get_vdxf_id(BYTEVECTOR_VDXF_ID);
+		data_key = key;
+	} else {
+		data_type = get_vdxf_id(get_key_data_type(key));
+		data_key = get_vdxf_id(key);
+	}
+
+	if (!data_type || !data_key) {
+		dlg_error("%s: Failed to determine data type or key", __func__);
+		return NULL;
+	}
+
+	merged = cJSON_CreateObject();
+	if (!merged) {
+		dlg_error("%s: Failed to allocate merged CMM", __func__);
+		return NULL;
+	}
+
+	if (start_block > 0) {
+		combined = get_cmm_from_height(id, 0, start_block);
+	}
+
+	/* Carry over each existing key as {bytevec_vdxfid: latest_hex}. The
+	 * key being updated is skipped because it is appended below.
+	 */
+	if (combined) {
+		for (key_iter = combined->child; key_iter != NULL; key_iter = key_iter->next) {
+			const char *key_name = key_iter->string;
+			int32_t n = 0;
+			cJSON *latest = NULL, *wrapper = NULL;
+
+			if (!key_name || strcmp(key_name, data_key) == 0)
+				continue;
+
+			n = cJSON_GetArraySize(key_iter);
+			if (n <= 0)
+				continue;
+
+			latest = cJSON_GetArrayItem(key_iter, n - 1);
+			if (!latest)
+				continue;
+
+			if (latest->type == cJSON_String && latest->valuestring) {
+				wrapper = cJSON_CreateObject();
+				if (wrapper) {
+					cJSON_AddStringToObject(wrapper,
+								get_vdxf_id(BYTEVECTOR_VDXF_ID),
+								latest->valuestring);
+				}
+			} else if (latest->type == cJSON_Object) {
+				wrapper = cJSON_Duplicate(latest, 1);
+			}
+
+			if (wrapper)
+				cJSON_AddItemToObject(merged, key_name, wrapper);
+		}
+		cJSON_Delete(combined);
+	}
+
+	data_obj = cJSON_CreateObject();
+	if (!data_obj) {
+		dlg_error("%s: Failed to create data JSON object", __func__);
+		cJSON_Delete(merged);
+		return NULL;
+	}
+	cJSON_AddStringToObject(data_obj, data_type, hex_data);
+	cJSON_AddItemToObject(merged, data_key, data_obj);
+
+	out = update_cmm(id, merged);
+	cJSON_Delete(merged);
+	return out;
+}
+
+cJSON *merge_cmm_from_id_key_data_cJSON(const char *id, int32_t start_block,
+					const char *key, cJSON *data, bool is_key_vdxf_id)
+{
+	char *hex_data = NULL;
+	cJSON *out = NULL;
+
+	if (!data) {
+		dlg_error("%s: Invalid input parameters", __func__);
+		return NULL;
+	}
+
+	cJSON_hex(data, &hex_data);
+	if (!hex_data) {
+		dlg_error("%s: Failed to convert cJSON to HEX", __func__);
+		return NULL;
+	}
+
+	out = merge_cmm_from_id_key_data_hex(id, start_block, key, hex_data, is_key_vdxf_id);
+	free(hex_data);
+	return out;
+}
+
 static int32_t do_payin_tx_checks(char *txid, cJSON *payin_tx_data)
 {
 	int32_t retval = OK, game_state;
@@ -1483,12 +1616,23 @@ int32_t process_payin_tx_data(char *txid, cJSON *payin_tx_data)
 		return ERR_T_PLAYER_INFO_UPDATE;
 	}
 
-	//Update the t_player_info.<game_id> key of the table id with newly join requested player details.
-	dlg_info("%s", cJSON_Print(updated_t_player_info));
-	out = append_cmm_from_id_key_data_cJSON(jstr(payin_tx_data, "table_id"),
-						get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str),
-						updated_t_player_info, true);
-	dlg_info("%s", cJSON_Print(out));
+	/* Merge-mode write: rewrite the full table-id snapshot so that the
+	 * latest CMM (visible via plain getidentity) carries T_GAME_ID,
+	 * T_TABLE_INFO.<g>, T_GAME_INFO.<g> AND the updated T_PLAYER_INFO.<g>.
+	 * This keeps the bootstrap state intact for any player still trying
+	 * to join during G_TABLE_STARTED. After G_PLAYERS_JOINED, the dealer
+	 * reverts to single-key append writes. See merge_cmm_from_id_key_data_*
+	 * for the rationale.
+	 */
+	{
+		extern int32_t g_start_block;
+		dlg_info("%s", cJSON_Print(updated_t_player_info));
+		out = merge_cmm_from_id_key_data_cJSON(jstr(payin_tx_data, "table_id"),
+						       g_start_block,
+						       get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str),
+						       updated_t_player_info, true);
+		dlg_info("%s", cJSON_Print(out));
+	}
 
 	return retval;
 }
