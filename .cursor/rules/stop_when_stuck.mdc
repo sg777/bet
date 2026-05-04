@@ -1,0 +1,10 @@
+---
+description: Stop when stuck or hallucinating
+alwaysApply: true
+---
+
+# Stop When Stuck
+
+- When stuck or encountering unexpected errors (like browser automation failing repeatedly), STOP immediately.
+- Ask the user for help or clarification instead of hallucinating or retrying blindly.
+- Do not waste tokens on repeated failed attempts.

@@ -1,0 +1,73 @@
+---
+description: Analyze and answer by default; only write code or run tests when explicitly asked
+alwaysApply: true
+---
+
+# Analyze-Only by Default
+
+Default mode is **read, analyze, and answer**. Do NOT write/edit code, run tests,
+or run game/build commands unless the user has explicitly asked for it in their
+most recent message.
+
+## What "explicit" means
+
+The user must use words like: `code`, `implement`, `write`, `edit`, `fix`, `add`,
+`refactor`, `change`, `apply`, `patch`, `test`, `run`, `build`, `compile`,
+`make`, `execute`, or an equivalent direct instruction.
+
+If they only say things like "explain", "analyze", "look into", "what is",
+"why", "how does", "go through", "understand", "review", "check", "tell me",
+or ask a question — STAY in analyze-only mode.
+
+## What is FORBIDDEN without explicit ask
+
+- Editing any file (`StrReplace`, `Write`, `EditNotebook`, `Delete`)
+- Running any code (`make`, `gcc`, `./bin/bet …`, scripts, tests)
+- Running any project tool (`verus -chain=chips …`, `chips-cli …`)
+- Creating new files of any kind (rules, docs, code)
+- Modifying configs (`.ini`, `.rpccredentials`, etc.)
+
+## What is ALLOWED without explicit ask
+
+- Reading files (`Read`, `Glob`, `Grep`, `SemanticSearch`)
+- Listing directories (`ls`)
+- `git status` / `git log` / `git diff` (read-only git)
+- Web research (`WebSearch`, `WebFetch`)
+- Writing answers in chat
+
+## If you're unsure
+
+Treat it as analyze-only. Ask the user:
+> "Do you want me to just analyze this, or also implement/test it?"
+
+## Interaction with other rules
+
+This rule layers on top of `interactive_testing_protocol.mdc` and
+`no_verus_id_creation.mdc`. Even when the user explicitly says "code" or
+"test", those rules still apply — for example, "test the dealer" still
+requires explicit approval before starting any node, touching the wallet,
+or modifying any Verus ID.
+
+## Example
+
+<example>
+User: "Go through the bet codebase and explain the flow."
+Assistant: [reads files, writes a written analysis — does NOT edit anything]
+</example>
+
+<example>
+User: "What does dealer_shuffle_deck do?"
+Assistant: [reads dealer.c, answers in chat — does NOT edit or run anything]
+</example>
+
+<example>
+User: "Fix the null check in dealer_shuffle_deck."
+Assistant: [reads context, then edits — explicit "fix" makes editing OK]
+</example>
+
+<example>
+User: "Test the player join flow."
+Assistant: [STOP — "test" is explicit, BUT running the player node touches the
+wallet/daemon. Per interactive_testing_protocol, present a plan and wait for
+"go ahead" before executing.]
+</example>

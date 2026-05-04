@@ -1,0 +1,31 @@
+---
+description: Restrict agent to only project-relevant commands. No system-level commands.
+alwaysApply: true
+---
+
+# No System Commands
+
+When working in this repo, only run commands that are directly required for this project.
+
+## NEVER Run
+
+- System administration commands: `reboot`, `shutdown`, `systemctl`, `service`, `init`
+- Process killers on arbitrary processes: `pkill`, `killall`, `kill` (unless user explicitly says which PID/process)
+- User/permission management: `chmod`, `chown`, `useradd`, `passwd`, etc.
+- Network configuration: `ifconfig`, `ip link`, `iptables`, `ufw`, etc.
+- Package management: `apt`, `apt-get`, `pip`, `npm install` (unless explicitly needed for project build)
+- Disk/filesystem operations: `mkfs`, `mount`, `umount`, `fdisk`, `dd`
+- Cron/scheduler: `crontab`, `at`
+- Any command not directly needed to build, test, or read this project
+
+## ONLY Run Commands That Are
+
+- Reading project files (`ls`, `cat` equivalents via tools)
+- Building the project (`make`, `gcc` as defined in project Makefile)
+- Running project binaries (`./bin/bet`) **after user approval**
+- Project-specific tools (`verus -chain=chips` RPC queries) **after user approval**
+- Tmux session management **when explicitly requested by user**
+
+## When in Doubt
+
+Do not run the command. Ask the user first.

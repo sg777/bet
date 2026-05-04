@@ -1,0 +1,19 @@
+# C Code Safety and State Management Rules
+
+To prevent unhandled null pointers, invalid state propagation, and flawed execution fall-throughs, the following rules must be strictly adhered to:
+
+1. **Strict Pointer Validation (Fail-Fast)**
+   - Every pointer returned from an external call, JSON extraction, or memory allocation must be immediately checked for `NULL`.
+   - If a pointer is `NULL`, the function must terminate immediately with an appropriate error code. Do not allow execution to fall through to downstream logic.
+
+2. **Explicit Precondition Enforcement**
+   - Never rely on downstream functions to handle uninitialized state.
+   - If a function relies on a global variable (e.g., `g_start_block`), that variable must be explicitly validated or initialized within the current execution branch before the dependent function is called.
+
+3. **Exhaustive Branch Analysis**
+   - Every conditional branch (both `if` and `else`) must be evaluated for its impact on global state and memory management.
+   - "Happy path" programming is forbidden. Failure paths must explicitly clean up allocated memory (`cJSON_Delete`, `free`) and return immediately.
+
+4. **Defensive External Data Handling**
+   - Treat all data read from the blockchain, network, or configuration files as potentially missing, malformed, or malicious.
+   - Validate data types and ranges before assignment.
