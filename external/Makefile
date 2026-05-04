@@ -123,8 +123,15 @@ external-clean:
 	$(RM) $(EXTERNAL_LIBS_CLEAN) $(TARGET_DIR)/*.la $(TARGET_DIR)/*.o
 	$(RM) $(TARGET_DIR)/jsmn-build/jsmn.o
 	$(RM) $(TARGET_DIR)/dlg-build/dlg.o
-	if [ -f ${TARGET_DIR}/libwebsockets-build/Makefile ]; then make -C ${TARGET_DIR}/libwebsockets-build clean; fi
-	if [ -f ${TARGET_DIR}/libnng-build/Makefile ]; then make -C ${TARGET_DIR}/libnng-build clean; fi
+	# Wipe the cmake build trees entirely (not just `make clean` inside them).
+	# `make clean` keeps CMakeCache.txt, which caches negative results from
+	# CHECK_FUNCTION_EXISTS probes (e.g. LWS_HAVE_HMAC_CTX_new). If the
+	# system OpenSSL changes between configures, the stale "not found" entry
+	# survives and the source falls through to the broken `HMAC_CTX ctx`
+	# branch in lws-genhash.h, breaking the build. Removing the build dir
+	# forces cmake to re-probe from scratch on the next make.
+	$(RM) -rf ${TARGET_DIR}/libwebsockets-build
+	$(RM) -rf ${TARGET_DIR}/libnng-build
 
 external-distclean:
 	$(RM) -rf ${TARGET_DIR}/jsmn-build
