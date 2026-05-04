@@ -277,20 +277,37 @@ int32_t reveal_card(char *table_id)
 
 			// Send GUI message for each card reveal
 			{
-				// Hole cards: send when we have both (card 0 and 1)
 				if (card_type == hole_card) {
-					// This is a hole card
-					if (card_id == 1) {
-						// Second hole card - now we have both
-						int32_t card1 = p_local_state.decoded_cards[0];
-						int32_t card2 = card_value;
-						if (card1 >= 0) {
-							dlg_info("Sending hole cards to GUI: %s, %s", 
-								get_card_name(card1), get_card_name(card2));
-							cJSON *deal_msg = gui_build_deal_holecards(card1, card2, 0.0);
-							gui_send_message(deal_msg);
-							cJSON_Delete(deal_msg);
-						}
+					/* Hole-card global card_id is (hole_index * num_players) + player_index,
+					 * which is NOT the same as the per-player slot. Store hole cards by
+					 * per-player slot in hole_cards[0..1] so the GUI deal message has both
+					 * cards regardless of which player we are. Fire the GUI emit only once,
+					 * when the second hole card lands.
+					 */
+					int32_t slot = -1;
+					if (p_local_state.hole_cards[0] < 0)
+						slot = 0;
+					else if (p_local_state.hole_cards[1] < 0)
+						slot = 1;
+
+					if (slot >= 0) {
+						p_local_state.hole_cards[slot] = card_value;
+						dlg_info("Stored hole card slot %d = %s (global card_id %d)",
+							slot, get_card_name(card_value), card_id);
+					} else {
+						dlg_warn("Both hole-card slots already filled; ignoring extra hole card_id %d",
+							card_id);
+					}
+
+					if (p_local_state.hole_cards[0] >= 0 && p_local_state.hole_cards[1] >= 0) {
+						dlg_info("Sending hole cards to GUI: %s, %s",
+							get_card_name(p_local_state.hole_cards[0]),
+							get_card_name(p_local_state.hole_cards[1]));
+						cJSON *deal_msg = gui_build_deal_holecards(p_local_state.hole_cards[0],
+											   p_local_state.hole_cards[1],
+											   0.0);
+						gui_send_message(deal_msg);
+						cJSON_Delete(deal_msg);
 					}
 				} else if (is_community_card(card_type)) {
 					// Board card - build array of all board cards revealed so far

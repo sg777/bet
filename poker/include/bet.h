@@ -178,6 +178,15 @@ struct p_local_state_struct {
 	int32_t cards_decoded_count;   // How many cards we've decoded
 	int32_t last_card_id;          // Last card_id we processed
 	int32_t last_game_state;       // Last known game state
+	/* Hole cards stored by per-player slot (0 = first hole, 1 = second hole),
+	 * not by global card_id. The global card_id encoding for hole cards is
+	 * (hole_index * num_players) + player_index, so a 2-player table puts
+	 * p1's hole cards at global ids 0,2 and p2's at 1,3 - which leaves holes
+	 * in decoded_cards[] when keyed by card_id. The hole_cards[] array is the
+	 * authoritative source for "what are my two hole cards" used to drive the
+	 * GUI deal message and showdown display. -1 = not yet decoded.
+	 */
+	int32_t hole_cards[2];
 };
 extern struct p_local_state_struct p_local_state;
 
