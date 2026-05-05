@@ -586,10 +586,75 @@ int32_t player_handle_betting(char *table_id)
 
 	// Send GUI message for betting round (always log for testing)
 	{
-		// Build possibilities array for GUI
-		int32_t poss_arr[8] = {0, 1, 2, 3, 4, 5, 6, 7};  // fold, call, raise, check, allin, bet
-		int32_t poss_count = 6;
-		
+		/* Translate the dealer's legal-action list (string array on
+		 * the chain, e.g. ["check","raise","fold","allin"] or
+		 * ["call","raise","fold","allin"]) into the integer codes the
+		 * GUI expects. The mapping is fixed by both sides:
+		 *
+		 *   backend  states.c::action_str    GUI  constants.ts::Possibilities
+		 *     1   small_blind                 1   smallBlind
+		 *     2   big_blind                   2   bigBlind
+		 *     3   check                       3   check
+		 *     4   raise                       4   raise
+		 *     5   call                        5   call
+		 *     6   allin                       6   allIn
+		 *     7   fold                        7   fold
+		 *
+		 * Same indices, so it's a plain lookup. "bet" is dealer-side
+		 * only - it appears for the SB/BB prompt which never reaches
+		 * this block (AUTO-BLIND returns above). Map it defensively
+		 * to raise(4) anyway since the GUI renders the Raise button
+		 * with label "Bet" when toCall is 0.
+		 *
+		 * Why this matters: previously the array was hardcoded to
+		 * [0,1,2,3,4,5] which meant processControls() in the GUI
+		 * always set canCheck=true. The user always saw a Check
+		 * button - even when there was a bet to face - and clicking
+		 * it produced an illegal "check" action that the dealer
+		 * rejected, leading to auto-fold. */
+		static const struct {
+			const char *str;
+			int32_t code;
+		} action_map[] = {
+			{ "small_blind", 1 },
+			{ "big_blind",   2 },
+			{ "check",       3 },
+			{ "raise",       4 },
+			{ "call",        5 },
+			{ "allin",       6 },
+			{ "fold",        7 },
+			{ "bet",         4 },  /* alias - see comment above */
+		};
+		const int32_t action_map_size =
+			(int32_t)(sizeof(action_map) / sizeof(action_map[0]));
+
+		int32_t poss_arr[8] = {0};
+		int32_t poss_count = 0;
+		if (possibilities) {
+			int32_t n = cJSON_GetArraySize(possibilities);
+			for (int32_t i = 0; i < n && poss_count < (int32_t)(sizeof(poss_arr) / sizeof(poss_arr[0])); i++) {
+				cJSON *opt = cJSON_GetArrayItem(possibilities, i);
+				if (!opt || !opt->valuestring) continue;
+				for (int32_t j = 0; j < action_map_size; j++) {
+					if (strcmp(opt->valuestring, action_map[j].str) == 0) {
+						poss_arr[poss_count++] = action_map[j].code;
+						break;
+					}
+				}
+			}
+		}
+		if (poss_count == 0) {
+			/* Dealer's possibilities was missing or contained only
+			 * unknown strings. Fall back to the conservative full set
+			 * so the GUI isn't completely locked out, but warn loudly
+			 * because something is wrong upstream. */
+			dlg_warn("betting_state.possibilities missing or unrecognised - "
+				 "GUI fallback to full action set");
+			poss_arr[0] = 3; poss_arr[1] = 4; poss_arr[2] = 5;
+			poss_arr[3] = 6; poss_arr[4] = 7;
+			poss_count = 5;
+		}
+
 		// Build player funds array (table chips)
 		int64_t funds_arr[CARDS_MAXPLAYERS];
 		cJSON *player_funds_json = cJSON_GetObjectItem(betting_state, "player_funds");
