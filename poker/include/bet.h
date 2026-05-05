@@ -191,6 +191,25 @@ struct p_local_state_struct {
 	 * GUI deal message and showdown display. -1 = not yet decoded.
 	 */
 	int32_t hole_cards[2];
+	/* Community cards stored by board position (0..2 = flop, 3 = turn,
+	 * 4 = river), not by global card_id. Like hole_cards[], this avoids
+	 * the decoded_cards[card_id] indexing which collides with hole-card
+	 * slots for multi-player games (community card_ids overlap slots
+	 * already filled by hole_cards under the global-id-as-slot scheme).
+	 * The board position is derived from card_type:
+	 *     position = card_type - flop_card_1
+	 * Used only by the GUI deal-board emit path. -1 = not yet decoded. */
+	int32_t community_cards[5];
+	/* Latest betting_state.turn_start_time observed by the player.
+	 * Echoed back in every betting action write so the dealer can
+	 * dedup: dealer's verus_poll_player_action ignores actions whose
+	 * turn_start_time != current vars->turn_start_time. Without this
+	 * the dealer reads the same stale on-chain action every 2 s poll
+	 * and re-applies it, causing the pot to leak by `amount` per poll.
+	 *
+	 * Not persisted - resets to 0 on restart and is repopulated by
+	 * the next betting_state read. */
+	int64_t last_betting_turn_start_time;
 };
 extern struct p_local_state_struct p_local_state;
 

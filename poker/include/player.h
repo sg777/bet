@@ -22,4 +22,15 @@ int32_t reveal_card(char *table_id);
 int32_t handle_game_state_player(char *table_id);
 int32_t handle_verus_player();
 
+/* Write a betting action to the player's Verus identity. The dealer
+ * polls P_BETTING_ACTION_KEY on this game_id and processes it. Used by
+ * --cli, --auto, and --gui modes. amount is in integer table chips.
+ *
+ * round MUST be the current betting round number (0=preflop, 1=flop,
+ * 2=turn, 3=river) as reported by the dealer in T_BETTING_STATE_KEY.
+ * The dealer's verus_poll_player_action() compares this against the
+ * round it expects and discards stale-round actions, so passing a
+ * stale value here causes the dealer to time-out and auto-fold. */
+int32_t player_write_betting_action(char *table_id, const char *action, int64_t amount, int32_t round);
+
 #endif /* PLAYER_H */

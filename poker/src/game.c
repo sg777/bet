@@ -502,6 +502,26 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 			dlg_info("  💰 INITIATING BETTING - ROUND %d          ", vars->round + 1);
 			dlg_info("═══════════════════════════════════════════");
 			retval = verus_write_betting_state(table_id, vars, "round_betting");
+			if (retval == OK) {
+				/* Advance dealer state machine to G_ROUND_BETTING so the
+				 * next handle_game_state() pass routes to
+				 * verus_handle_round_betting and polls for player action.
+				 * Without this advance, the dealer stays on G_REVEAL_CARD,
+				 * is_card_drawn() immediately returns OK on the already-
+				 * confirmed card, and verus_receive_card falls through to
+				 * deal_next_card() - silently skipping all post-flop /
+				 * post-turn / post-river betting rounds. The pre-flop path
+				 * gets this transition for free via verus_small_blind().
+				 *
+				 * append_game_state returns cJSON* (NULL on failure), not
+				 * an int32_t retval - same pattern used at line 291 for
+				 * the G_REVEAL_CARD advance. */
+				cJSON *out = append_game_state(table_id, G_ROUND_BETTING, NULL);
+				if (!out) {
+					dlg_error("Failed to advance dealer state to G_ROUND_BETTING");
+					retval = ERR_UPDATEIDENTITY;
+				}
+			}
 		}
 	} else {
 		retval = deal_next_card(table_id);
@@ -721,24 +741,47 @@ int32_t verus_write_betting_state(char *table_id, struct privatebet_vars *vars, 
 /**
  * Poll player's betting action from their ID
  * Returns: action string or NULL if not yet acted
+ *
+ * Two staleness gates apply:
+ *  1. round  - action.round must equal expected_round (defense against
+ *     a player having written an action for a previous betting round
+ *     that hasn't been overwritten yet).
+ *  2. turn_start_time - action.turn_start_time must equal
+ *     expected_turn_start_time (the dealer's current betting_state TST).
+ *     Without this gate the dealer re-reads and re-applies the same
+ *     on-chain action on every 2 s poll iteration, leaking pot. The
+ *     player echoes the TST it observed when it built the action; once
+ *     the dealer transitions to a new turn it stamps a fresh TST in
+ *     verus_write_betting_state, so all stale actions become invisible.
+ *
+ * expected_turn_start_time = 0 disables the TST gate (legacy callers
+ * that don't yet have a value to compare against).
  */
-cJSON *verus_poll_player_action(char *table_id, int32_t player_idx, int32_t expected_round)
+cJSON *verus_poll_player_action(char *table_id, int32_t player_idx,
+				int32_t expected_round,
+				int64_t expected_turn_start_time)
 {
 	char *game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 	if (!game_id_str) return NULL;
-	
+
 	cJSON *action = get_cJSON_from_id_key_vdxfid_from_height(
 		player_ids[player_idx],
 		get_key_data_vdxf_id(P_BETTING_ACTION_KEY, game_id_str),
 		g_start_block);
-	
+
 	if (!action) return NULL;
-	
-	// Check if action is for current round
+
 	if (jint(action, "round") != expected_round) {
 		return NULL;  // Old action from previous round
 	}
-	
+
+	if (expected_turn_start_time != 0) {
+		int64_t action_tst = (int64_t)jdouble(action, "turn_start_time");
+		if (action_tst != expected_turn_start_time) {
+			return NULL;  // Stale action from a previous turn
+		}
+	}
+
 	return action;
 }
 
@@ -822,7 +865,9 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
 		vars->pot += allin_amount;
 		vars->funds[playerid] = 0;
 		vars->bet_actions[playerid][vars->round] = allin;
-	} else if (strcmp(action, "small_blind") == 0 || strcmp(action, "bet") == 0) {
+	} else if (strcmp(action, "small_blind") == 0) {
+		/* Forced posting of SB. Assignment is safe because betamount
+		 * starts at 0 for a new round and SB is the very first action. */
 		vars->betamount[playerid][vars->round] = amount;
 		vars->funds[playerid] -= amount;
 		vars->pot += amount;
@@ -832,6 +877,25 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
 		vars->funds[playerid] -= amount;
 		vars->pot += amount;
 		vars->bet_actions[playerid][vars->round] = big_blind;
+	} else if (strcmp(action, "bet") == 0) {
+		/* Open bet (post-flop, no prior bet this round). Treated as
+		 * semantically a raise from 0 - bet_actions enum has no "bet"
+		 * value, raise covers it for next-turn / pot-split logic.
+		 * Use += so the dealer doesn't reset on a re-poll (defense in
+		 * depth; the turn_start_time dedup added separately also
+		 * prevents reprocessing). */
+		if (amount > available) {
+			dlg_info("  ⚠️ Bet %lld exceeds available %lld - ALL-IN",
+				 (long long)amount, (long long)available);
+			amount = available;
+			vars->bet_actions[playerid][vars->round] = allin;
+		} else {
+			vars->bet_actions[playerid][vars->round] = raise;
+		}
+		vars->betamount[playerid][vars->round] += amount;
+		vars->funds[playerid] -= amount;
+		vars->pot += amount;
+		vars->last_raise = amount;
 	}
 	
 	dlg_info("  💰 Pot: %lld table chips (%.4f CHIPS), Player funds: %lld",
@@ -908,7 +972,8 @@ int32_t verus_handle_round_betting(char *table_id, struct privatebet_vars *vars)
 	cJSON *player_action = NULL;
 	
 	// Poll current player for their action
-	player_action = verus_poll_player_action(table_id, vars->turni, vars->round);
+	player_action = verus_poll_player_action(table_id, vars->turni, vars->round,
+						 vars->turn_start_time);
 	
 	if (!player_action) {
 		// Player hasn't acted yet - check for timeout

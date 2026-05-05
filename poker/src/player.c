@@ -219,6 +219,14 @@ int32_t reveal_card(char *table_id)
 					if (card_id < hand_size) {
 						update_player_decoded_card(card_id, existing_value);
 					}
+					/* Mirror in community_cards[] keyed by board position
+					 * so the GUI emit path doesn't need to interpret the
+					 * global card_id (see comment on community_cards in
+					 * struct p_local_state_struct). */
+					int32_t pos = card_type - flop_card_1;
+					if (pos >= 0 && pos < 5) {
+						p_local_state.community_cards[pos] = existing_value;
+					}
 					return OK;
 				}
 			}
@@ -310,22 +318,41 @@ int32_t reveal_card(char *table_id)
 						cJSON_Delete(deal_msg);
 					}
 				} else if (is_community_card(card_type)) {
-					// Board card - build array of all board cards revealed so far
-					int32_t board[5] = {-1, -1, -1, -1, -1};
+					/* Store this card by board position (0..4 for
+					 * flop_1, flop_2, flop_3, turn, river) into the
+					 * dedicated community_cards[] mirror. We CANNOT
+					 * use decoded_cards[card_id] for the board because
+					 * card_id is a global id whose slots overlap with
+					 * hole-card slots for multi-player games (e.g. p1's
+					 * second hole card lands at decoded_cards[2], which
+					 * is also the implied "board slot 0" if you index
+					 * by card_id - 2). See community_cards docs in
+					 * struct p_local_state_struct. */
+					int32_t pos = card_type - flop_card_1;
+					if (pos >= 0 && pos < 5) {
+						p_local_state.community_cards[pos] = card_value;
+					}
+
+					/* Build board[] from contiguous prefix of
+					 * community_cards[]. The flop is dealt as three
+					 * cards in order (positions 0..2), then the turn
+					 * (3), then the river (4) - so we always emit a
+					 * dense prefix without holes, in the order the GUI
+					 * expects to render them on the felt. */
+					int32_t board[5];
 					int32_t board_count = 0;
-					for (int i = 2; i < 7 && i < hand_size; i++) {
-						if (p_local_state.decoded_cards[i] >= 0) {
-							board[board_count++] = p_local_state.decoded_cards[i];
+					for (int i = 0; i < 5; i++) {
+						if (p_local_state.community_cards[i] >= 0) {
+							board[board_count++] = p_local_state.community_cards[i];
+						} else {
+							break;
 						}
 					}
-					// Add current card if not already in local state
-					if (card_id >= 2 && card_id < 7) {
-						board[card_id - 2] = card_value;
-						board_count = card_id - 2 + 1;
+					if (board_count > 0) {
+						cJSON *deal_msg = gui_build_deal_board(board, board_count);
+						gui_send_message(deal_msg);
+						cJSON_Delete(deal_msg);
 					}
-					cJSON *deal_msg = gui_build_deal_board(board, board_count);
-					gui_send_message(deal_msg);
-					cJSON_Delete(deal_msg);
 				}
 			}
 
@@ -383,24 +410,46 @@ cJSON *player_read_betting_state(char *table_id)
  * Write betting action to player ID
  * Amount is in CHIPS (e.g., 0.01, 0.02)
  */
-int32_t player_write_betting_action(char *table_id, const char *action, int64_t amount)
+int32_t player_write_betting_action(char *table_id, const char *action, int64_t amount, int32_t round)
 {
 	int32_t retval = OK;
 	char game_id_str[65];
 	cJSON *action_obj = NULL, *out = NULL;
-	
+
+	(void)table_id;  /* writes go to player's own verus_pid, not the table */
+
 	bits256_str(game_id_str, p_deck_info.game_id);
-	
+
 	action_obj = cJSON_CreateObject();
+	if (!action_obj) {
+		dlg_error("cJSON_CreateObject failed for betting action");
+		return ERR_MEMORY_ALLOC;
+	}
 	cJSON_AddStringToObject(action_obj, "action", action);
 	/* amount is integer table chips. cJSON serializes integer-valued
 	 * doubles without a decimal point, so the on-chain CMM payload is
 	 * e.g. {"amount": 2} rather than {"amount": 0.02}. */
 	cJSON_AddNumberToObject(action_obj, "amount", (double)amount);
-	cJSON_AddNumberToObject(action_obj, "round", p_local_state.last_game_state);  // Use as round tracking
-	
-	dlg_info("Writing betting action: %s, amount=%lld table chips (%.4f CHIPS)",
-		 action, (long long)amount, table_chips_to_chips(amount));
+	/* round MUST come from the dealer's T_BETTING_STATE_KEY (caller
+	 * extracts it from betting_state.round). Previously this was set to
+	 * p_local_state.last_game_state which is only assigned AFTER the
+	 * action is written, so it always lagged by one round - the dealer
+	 * then dropped the action as "old round" and auto-folded the player
+	 * after 60 s. Pre-flop happened to work by accident because both
+	 * values were 0 on the first hand. */
+	cJSON_AddNumberToObject(action_obj, "round", round);
+
+	/* Echo turn_start_time the player observed when reading the prompt.
+	 * Dealer's verus_poll_player_action compares this against its current
+	 * vars->turn_start_time and ignores stale actions. Without this echo
+	 * the dealer would re-process the same on-chain action on every 2 s
+	 * poll, leaking the bet amount into the pot indefinitely. */
+	cJSON_AddNumberToObject(action_obj, "turn_start_time",
+				(double)p_local_state.last_betting_turn_start_time);
+
+	dlg_info("Writing betting action: %s, amount=%lld table chips (%.4f CHIPS), round=%d, tst=%lld",
+		 action, (long long)amount, table_chips_to_chips(amount), round,
+		 (long long)p_local_state.last_betting_turn_start_time);
 	
 	out = poker_update_key_json(player_config.verus_pid,
 		get_key_data_vdxf_id(P_BETTING_ACTION_KEY, game_id_str),
@@ -435,17 +484,44 @@ int32_t player_handle_betting(char *table_id)
 	 * jdouble because cJSON only stores numbers as double. */
 	int64_t pot = (int64_t)jdouble(betting_state, "pot");
 	int64_t min_amount = (int64_t)jdouble(betting_state, "min_amount");
-	
+	int64_t turn_start_time = (int64_t)jdouble(betting_state, "turn_start_time");
+
+	/* Change-detector gate: this function is called on every poll
+	 * iteration of the main game loop. Without this gate, every iteration
+	 * (a) re-prints the YOUR TURN / Waiting-for-Player block on the
+	 * console, (b) re-emits the betting prompt to the GUI WebSocket - and
+	 * the GUI then re-renders the betting controls every poll, causing
+	 * visible flicker and stale messages piling up in the WS write queue.
+	 *
+	 * The dealer stamps a fresh turn_start_time into betting_state every
+	 * time it writes a NEW prompt (verus_write_betting_state, game.c).
+	 * So a turn_start_time we have NOT yet emitted == new prompt; same
+	 * turn_start_time as last time == nothing changed, skip silently.
+	 *
+	 * Static is fine because player_handle_betting is called from a
+	 * single thread/loop. Reset to 0 on game end is unnecessary - a new
+	 * game will produce a strictly larger turn_start_time. */
+	static int64_t last_emit_turn_start_time = 0;
+	if (turn_start_time == last_emit_turn_start_time) {
+		return OK;
+	}
+	last_emit_turn_start_time = turn_start_time;
+
+	/* Cache for player_write_betting_action() to echo back. The dealer
+	 * uses this to dedup on-chain actions: an action whose
+	 * turn_start_time doesn't match the dealer's current betting_state
+	 * is treated as stale and ignored. */
+	p_local_state.last_betting_turn_start_time = turn_start_time;
+
 	// Check if it's our turn
 	if (current_turn != p_deck_info.player_id) {
-		// Not our turn, just display status
+		// Not our turn, just display status (once per dealer prompt)
 		dlg_info("Waiting for Player %d to act (pot: %lld table chips / %.4f CHIPS)",
 			 current_turn, (long long)pot, table_chips_to_chips(pot));
 		return OK;
 	}
 	
 	// Calculate remaining time
-	int64_t turn_start_time = (int64_t)jdouble(betting_state, "turn_start_time");
 	int32_t timeout_secs = jint(betting_state, "timeout_secs");
 	int64_t current_time = (int64_t)time(NULL);
 	int64_t elapsed = current_time - turn_start_time;
@@ -488,7 +564,26 @@ int32_t player_handle_betting(char *table_id)
 	
 	// Handle based on betting mode
 	extern int g_betting_mode;
-	
+
+	/* Blinds are forced bets - the only legal action is to post.
+	 * Auto-post in every mode (CLI/AUTO/GUI) so the GUI player is not
+	 * required to click anything for SB/BB; the GUI will see the next
+	 * betting_state push from the dealer with the updated pot.
+	 *
+	 * Write the LITERAL action name ("small_blind" / "big_blind") so the
+	 * dealer routes through the correct branch in
+	 * verus_process_betting_action - which assigns the right enum value
+	 * to bet_actions[playerid][round] (small_blind vs big_blind, not
+	 * conflated). Writing "bet" here would mis-route through the SB-or-
+	 * bet aliased branch and (a) label p2's BB as small_blind, (b) leak
+	 * pot via repeated assignment if the dedup gate failed. */
+	if (strcmp(action, "small_blind") == 0 || strcmp(action, "big_blind") == 0) {
+		dlg_info("[AUTO-BLIND] Posting %s: %lld table chips (%.4f CHIPS)",
+			 action, (long long)min_amount, table_chips_to_chips(min_amount));
+		retval = player_write_betting_action(table_id, action, min_amount, round);
+		return retval;
+	}
+
 	// Send GUI message for betting round (always log for testing)
 	{
 		// Build possibilities array for GUI
@@ -536,7 +631,7 @@ int32_t player_handle_betting(char *table_id)
 		if (strcmp(action, "small_blind") == 0 || strcmp(action, "big_blind") == 0) {
 			printf("\n  [AUTO] Posting %s: %lld table chips (%.4f CHIPS)\n",
 			       action, (long long)min_amount, table_chips_to_chips(min_amount));
-			retval = player_write_betting_action(table_id, "bet", min_amount);
+			retval = player_write_betting_action(table_id, "bet", min_amount, round);
 		} else {
 			// Regular betting round - two-step input
 			// Step 1: Get action
@@ -554,7 +649,7 @@ int32_t player_handle_betting(char *table_id)
 				
 				if (strcmp(input, "fold") == 0 || strcmp(input, "f") == 0) {
 					printf("  → Folding...\n");
-					retval = player_write_betting_action(table_id, "fold", 0);
+					retval = player_write_betting_action(table_id, "fold", 0, round);
 					
 				} else if (strcmp(input, "check") == 0 || strcmp(input, "x") == 0) {
 					if (min_amount > 0) {
@@ -567,21 +662,21 @@ int32_t player_handle_betting(char *table_id)
 							if (strcmp(input, "call") == 0 || strcmp(input, "c") == 0) {
 								printf("  → Calling %lld table chips (%.4f CHIPS)...\n",
 								       (long long)min_amount, table_chips_to_chips(min_amount));
-								retval = player_write_betting_action(table_id, "call", min_amount);
+								retval = player_write_betting_action(table_id, "call", min_amount, round);
 							} else {
 								printf("  → Folding...\n");
-								retval = player_write_betting_action(table_id, "fold", 0);
+								retval = player_write_betting_action(table_id, "fold", 0, round);
 							}
 						}
 					} else {
 						printf("  → Checking...\n");
-						retval = player_write_betting_action(table_id, "check", 0);
+						retval = player_write_betting_action(table_id, "check", 0, round);
 					}
 					
 				} else if (strcmp(input, "call") == 0 || strcmp(input, "c") == 0) {
 					printf("  → Calling %lld table chips (%.4f CHIPS)...\n",
 					       (long long)min_amount, table_chips_to_chips(min_amount));
-					retval = player_write_betting_action(table_id, "call", min_amount);
+					retval = player_write_betting_action(table_id, "call", min_amount, round);
 					
 				} else if (strcmp(input, "raise") == 0 || strcmp(input, "r") == 0) {
 					/* Step 2: Get raise amount. CLI accepts CHIPS for human
@@ -602,7 +697,7 @@ int32_t player_handle_betting(char *table_id)
 					}
 					printf("  → Raising to %lld table chips (%.4f CHIPS)...\n",
 					       (long long)raise_amount, table_chips_to_chips(raise_amount));
-					retval = player_write_betting_action(table_id, "raise", raise_amount);
+					retval = player_write_betting_action(table_id, "raise", raise_amount, round);
 					
 				} else if (strcmp(input, "bet") == 0 || strcmp(input, "b") == 0) {
 					// Step 2: Get bet amount (CLI input in CHIPS, see raise above)
@@ -620,7 +715,7 @@ int32_t player_handle_betting(char *table_id)
 					}
 					printf("  → Betting %lld table chips (%.4f CHIPS)...\n",
 					       (long long)bet_amt, table_chips_to_chips(bet_amt));
-					retval = player_write_betting_action(table_id, "bet", bet_amt);
+					retval = player_write_betting_action(table_id, "bet", bet_amt, round);
 					
 				} else if (strcmp(input, "allin") == 0 || strcmp(input, "a") == 0) {
 					// Get player funds and go all-in
@@ -631,17 +726,17 @@ int32_t player_handle_betting(char *table_id)
 					}
 					printf("  → Going ALL-IN with %lld table chips (%.4f CHIPS)!\n",
 					       (long long)my_funds, table_chips_to_chips(my_funds));
-					retval = player_write_betting_action(table_id, "allin", my_funds);
+					retval = player_write_betting_action(table_id, "allin", my_funds, round);
 					
 				} else if (strlen(input) == 0) {
 					// Empty input - auto check/call
 					if (min_amount > 0) {
 						printf("  → Auto-calling %lld table chips (%.4f CHIPS)...\n",
 						       (long long)min_amount, table_chips_to_chips(min_amount));
-						retval = player_write_betting_action(table_id, "call", min_amount);
+						retval = player_write_betting_action(table_id, "call", min_amount, round);
 					} else {
 						printf("  → Auto-checking...\n");
-						retval = player_write_betting_action(table_id, "check", 0);
+						retval = player_write_betting_action(table_id, "check", 0, round);
 					}
 					
 				} else {
@@ -658,22 +753,22 @@ int32_t player_handle_betting(char *table_id)
 		if (strcmp(action, "small_blind") == 0) {
 			dlg_info("Posting small blind: %lld table chips (%.4f CHIPS)",
 				 (long long)min_amount, table_chips_to_chips(min_amount));
-			retval = player_write_betting_action(table_id, "bet", min_amount);
+			retval = player_write_betting_action(table_id, "bet", min_amount, round);
 			p_local_state.last_game_state = round;
 		} else if (strcmp(action, "big_blind") == 0) {
 			dlg_info("Posting big blind: %lld table chips (%.4f CHIPS)",
 				 (long long)min_amount, table_chips_to_chips(min_amount));
-			retval = player_write_betting_action(table_id, "bet", min_amount);
+			retval = player_write_betting_action(table_id, "bet", min_amount, round);
 			p_local_state.last_game_state = round;
 		} else {
 			// Regular betting - for testing, auto-call or check
 			if (min_amount > 0) {
 				dlg_info("Auto-calling %lld table chips (%.4f CHIPS)...",
 					 (long long)min_amount, table_chips_to_chips(min_amount));
-				retval = player_write_betting_action(table_id, "call", min_amount);
+				retval = player_write_betting_action(table_id, "call", min_amount, round);
 			} else {
 				dlg_info("Auto-checking...");
-				retval = player_write_betting_action(table_id, "check", 0);
+				retval = player_write_betting_action(table_id, "check", 0, round);
 			}
 			p_local_state.last_game_state = round;
 		}

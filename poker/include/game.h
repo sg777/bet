@@ -39,7 +39,9 @@ int32_t verus_small_blind(char *table_id, struct privatebet_vars *vars);
 
 // Round betting - dealer writes state, polls player actions
 int32_t verus_write_betting_state(char *table_id, struct privatebet_vars *vars, const char *action);
-cJSON *verus_poll_player_action(char *table_id, int32_t player_idx, int32_t expected_round);
+cJSON *verus_poll_player_action(char *table_id, int32_t player_idx,
+				int32_t expected_round,
+				int64_t expected_turn_start_time);
 int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *vars, cJSON *action_info);
 int32_t verus_next_turn(struct privatebet_vars *vars);
 int32_t verus_check_turn_timeout(struct privatebet_vars *vars);

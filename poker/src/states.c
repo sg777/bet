@@ -19,6 +19,7 @@
 #include "host.h"
 #include "network.h"
 #include "payment.h"
+#include "player.h"
 #include "table.h"
 #include "err.h"
 
@@ -627,78 +628,99 @@ int32_t bet_player_big_blind(cJSON *argjson, struct privatebet_info *bet, struct
 	return retval;
 }
 
+/* Handle a betting action that arrived from the GUI (--gui mode).
+ *
+ * The GUI sends a message of shape:
+ *   {"method":"betting","action":"round_betting","playerid":N,
+ *    "pot":P,"toCall":T,"minRaiseTo":M,"player_funds":[..],
+ *    "possibilities":[CODE],"bet_amount":A}
+ *
+ * "possibilities" is overloaded - in the dealer->GUI direction it is the
+ * list of legal actions, in the GUI->backend direction the GUI puts the
+ * single chosen action code (matching enum action_type) in slot 0.
+ *
+ * All chip amounts (pot, toCall, minRaiseTo, player_funds, bet_amount)
+ * are integer table chips (post chip-scaling refactor). The amount we
+ * commit on this turn depends on the action:
+ *   raise            -> bet_amount    (absolute raise-to value)
+ *   call             -> toCall        (capped at remaining funds)
+ *   allin            -> player_funds  (everything left)
+ *   check / fold     -> 0
+ *   small/big_blind  -> bet_amount    (rare: GUI-driven blinds)
+ *
+ * The action is written to the player's Verus identity under
+ * P_BETTING_ACTION_KEY via player_write_betting_action(). The dealer
+ * polls that key and updates dcv_vars + the betting_state CMM.
+ *
+ * This is the same write path --cli and --auto already use from
+ * player_handle_betting() in player.c. The previous implementation
+ * called bet_player_log_bet_info() (a dead nanomsg/multisig-era code
+ * path) which always failed with "Address NULL", swallowed the error,
+ * and never wrote anything on chain - causing the dealer to time out
+ * and auto-fold the GUI player every hand.
+ */
 int32_t bet_player_round_betting(cJSON *argjson, struct privatebet_info *bet, struct privatebet_vars *vars)
 {
-	cJSON *possibilities = NULL, *action_response = NULL;
-	int retval = OK, playerid, round, min_amount, option, raise_amount = 0, invoice_amount = 0;
+	cJSON *possibilities = NULL;
+	int32_t retval = OK, playerid, round, action_code;
+	int64_t amount = 0, to_call;
+	const char *action_name = NULL;
+
+	(void)bet;  /* legacy multisig path removed - bet no longer needed */
 
 	playerid = jint(argjson, "playerid");
 	round = jint(argjson, "round");
-	min_amount = jint(argjson, "min_amount");
 
-	action_response = cJSON_CreateObject();
-	cJSON_AddStringToObject(action_response, "method", "betting");
-	cJSON_AddNumberToObject(action_response, "playerid", jint(argjson, "playerid"));
-	cJSON_AddNumberToObject(action_response, "round", jint(argjson, "round"));
-	cJSON_AddNumberToObject(action_response, "min_amount", min_amount);
 	possibilities = cJSON_GetObjectItem(argjson, "possibilities");
-
-	option = 1;
-	vars->bet_actions[playerid][round] = jinti(possibilities, (option - 1));
-
-	cJSON_AddStringToObject(action_response, "action", action_str[jinti(possibilities, (option - 1))]);
-
-	if (jinti(possibilities, (option - 1)) == raise) {
-		raise_amount = jint(argjson, "bet_amount");
-		invoice_amount = raise_amount - vars->betamount[playerid][round];
-
-		vars->betamount[playerid][round] += invoice_amount;
-		vars->player_funds -= invoice_amount;
-
-		if (vars->player_funds == 0) {
-			cJSON_DetachItemFromObject(action_response, "action");
-			cJSON_AddStringToObject(action_response, "action", "allin");
-		}
-		cJSON_AddNumberToObject(action_response, "bet_amount", jint(argjson, "bet_amount"));
-		cJSON_AddNumberToObject(action_response, "invoice_amount", invoice_amount);
-
-		// Lightning Network support removed - always use blockchain logging
-		retval = bet_player_log_bet_info(argjson, bet, invoice_amount, raise);
-	} else if (jinti(possibilities, (option - 1)) == call) {
-		if (min_amount > jint(argjson, "bet_amount")) {
-			vars->betamount[playerid][round] += vars->player_funds;
-			cJSON_AddNumberToObject(action_response, "invoice_amount", vars->player_funds);
-			vars->player_funds = 0;
-		} else {
-			vars->betamount[playerid][round] += min_amount;
-			vars->player_funds -= min_amount;
-			cJSON_AddNumberToObject(action_response, "invoice_amount", min_amount);
-		}
-		if (vars->player_funds == 0) {
-			cJSON_DetachItemFromObject(action_response, "action");
-			cJSON_AddStringToObject(action_response, "action", "allin");
-		}
-		cJSON_AddNumberToObject(action_response, "bet_amount", jint(argjson, "bet_amount"));
-		// Lightning Network support removed - always use blockchain logging
-		retval = bet_player_log_bet_info(argjson, bet, min_amount, call);
-	} else if (jinti(possibilities, (option - 1)) == allin) {
-		vars->betamount[playerid][round] += vars->player_funds;
-		cJSON_AddNumberToObject(action_response, "bet_amount", jint(argjson, "bet_amount"));
-		cJSON_AddNumberToObject(action_response, "invoice_amount", vars->player_funds);
-
-		// Lightning Network support removed - always use blockchain logging
-		retval = bet_player_log_bet_info(argjson, bet, vars->player_funds, allin);
-		vars->player_funds = 0;
-	} else {
-		// Lightning Network support removed - always use blockchain logging
-		retval = bet_player_log_bet_info(argjson, bet, 0, jinti(possibilities, (option - 1)));
+	if (!possibilities || cJSON_GetArraySize(possibilities) != 1) {
+		dlg_error("[GUI] betting message has no chosen action in possibilities[]");
+		return ERR_ARGS_NULL;
 	}
+	action_code = jinti(possibilities, 0);
+	if (action_code < small_blind || action_code > fold) {
+		dlg_error("[GUI] invalid action code %d (expected %d..%d)",
+			  action_code, small_blind, fold);
+		return ERR_ARGS_NULL;
+	}
+	action_name = action_str[action_code];
+
+	to_call = (int64_t)jint(argjson, "toCall");
+
+	switch (action_code) {
+	case raise:
+	case small_blind:
+	case big_blind:
+		amount = (int64_t)jint(argjson, "bet_amount");
+		break;
+	case call:
+		amount = (to_call < vars->player_funds) ? to_call : vars->player_funds;
+		break;
+	case allin:
+		amount = vars->player_funds;
+		break;
+	case check:
+	case fold:
+	default:
+		amount = 0;
+		break;
+	}
+
+	/* Mirror in local vars so subsequent dealer broadcasts arrive at a
+	 * consistent local view. Dealer is the source of truth and will
+	 * rebroadcast authoritative state via the betting_state CMM. */
+	vars->bet_actions[playerid][round] = action_code;
+	vars->betamount[playerid][round] += amount;
+	vars->player_funds -= amount;
+
+	dlg_info("[GUI->VRSC] action=%s amount=%lld table chips (%.4f CHIPS)",
+		 action_name, (long long)amount, table_chips_to_chips(amount));
+
+	retval = player_write_betting_action(player_config.table_id, action_name, amount, round);
 	if (retval != OK) {
-		dlg_error("%s", bet_err_str(retval));
+		dlg_error("[GUI] failed to write betting action to Verus ID: %s",
+			  bet_err_str(retval));
 	}
-	dlg_info("action response :: %s\n", cJSON_Print(action_response));
-	// Nanomsg removed - no longer used
-	retval = OK;
+
 	return retval;
 }
 
