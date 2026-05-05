@@ -656,7 +656,7 @@ cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 
 	// Output: currency to identity address
 	currency_detail = cJSON_CreateObject();
-	cJSON_AddStringToObject(currency_detail, "currency", CHIPS);
+	cJSON_AddStringToObject(currency_detail, "currency", bet_get_currency());
 	cJSON_AddNumberToObject(currency_detail, "amount", amount);
 	cJSON_AddStringToObject(currency_detail, "address", id_fqn);
 	cJSON_AddItemToArray(tx_params, currency_detail);

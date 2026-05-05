@@ -89,4 +89,5 @@ const char *bet_get_dealers_id_fqn(void);
 const char *bet_get_poker_id_fqn(void);
 const char *bet_get_key_prefix(void);
 const char *bet_get_full_key_name(const char *key_name);
+const char *bet_get_currency(void);
 #endif /* CONFIG_H */
