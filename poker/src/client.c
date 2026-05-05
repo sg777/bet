@@ -957,6 +957,13 @@ void send_init_state_to_gui(int32_t state)
 	// Add player_id and payin info for JOINED state
 	if (state == P_INIT_JOINED) {
 		cJSON_AddStringToObject(state_msg, "player_id", player_config.verus_pid);
+		/* Send the chain-assigned numeric seat index (0..maxplayers-1).
+		 * The GUI uses this to align its internal state.userSeat
+		 * ("player1"/"player2") with the slot the dealer addresses in
+		 * round_betting messages. Without this, if the user clicks the
+		 * right chair ("player2") but the backend joins first and gets
+		 * seat 0, the GUI drops round_betting prompts addressed to 0. */
+		cJSON_AddNumberToObject(state_msg, "gui_player_id", p_deck_info.player_id);
 		// Player knows their own payin amount - use config value directly
 		// (blockchain t_player_info may not be updated yet at this point).
 		// Wire format is integer table chips (matches table_info above).
