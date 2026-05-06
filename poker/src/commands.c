@@ -182,15 +182,18 @@ static int32_t chips_rpc_cli(const char *method, cJSON *params, cJSON **result)
 	strncpy(argv[0], blockchain_cli, arg_size - 1);
 	strncpy(argv[1], method, arg_size - 1);
 
-	// Add parameters
+	/* The CLI is dispatched via popen(), which goes through /bin/sh -c, so any
+	 * shell metacharacters in string params (e.g. "*" used as the wildcard
+	 * wallet address in sendcurrency) get glob-expanded before they reach the
+	 * verus CLI. Always single-quote string params so they survive the shell
+	 * verbatim, mirroring what we already do for object/array params. */
 	for (int i = 0; i < param_count; i++) {
 		cJSON *param = cJSON_GetArrayItem(params, i);
 		if (is_cJSON_String(param)) {
-			strncpy(argv[2 + i], param->valuestring, arg_size - 1);
+			snprintf(argv[2 + i], arg_size, "'%s'", param->valuestring);
 		} else if (is_cJSON_Number(param)) {
 			snprintf(argv[2 + i], arg_size, "%g", param->valuedouble);
 		} else {
-			// For objects/arrays, print as JSON string
 			char *json_str = cJSON_PrintUnformatted(param);
 			if (json_str) {
 				snprintf(argv[2 + i], arg_size, "'%s'", json_str);
@@ -199,7 +202,16 @@ static int32_t chips_rpc_cli(const char *method, cJSON *params, cJSON **result)
 		}
 	}
 
-	// Execute command
+	/* make_command's blockchain-cli branch (e.g. updateidentity, sendcurrency)
+	 * mutates *argjson via jaddstr/jaddnum, which silently no-op when the
+	 * target is NULL. The REST path (chips_rpc_rest) pre-allocates via
+	 * cJSON_Duplicate, but the CLI path historically did not, so the result
+	 * came back NULL and update_with_retry kept retrying forever. Allocate
+	 * an empty object up front, mirroring the REST contract. */
+	if (*result == NULL) {
+		*result = cJSON_CreateObject();
+	}
+
 	retval = make_command(argc, argv, result);
 	bet_dealloc_args(argc, &argv);
 
@@ -1419,27 +1431,35 @@ static int32_t find_address_in_addresses(char *address, cJSON *argjson)
 
 double chips_get_balance_on_address_from_tx(char *address, char *tx)
 {
-	cJSON *raw_tx = NULL, *decoded_raw_tx = NULL, *vout = NULL;
+	cJSON *params = NULL, *decoded_tx = NULL, *vout = NULL;
 	double balance = 0;
 
-	raw_tx = chips_get_raw_tx(tx);
-	if (raw_tx == NULL) {
+	/* Use chips_rpc("getrawtransaction", ["<txid>", 1], ...) which maps to
+	 * chips_rpc_cli and produces the correct single-quoted, verbose command:
+	 *   verus -chain=VRSCTEST getrawtransaction '<txid>' 1
+	 * The old bet_copy_args + make_command path silently drops the "1" arg
+	 * when bet_copy_args fails, causing a non-verbose response (hex string)
+	 * that cJSON_Parse fails to decode, returning balance 0. */
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(tx));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(1));
+
+	chips_rpc("getrawtransaction", params, &decoded_tx);
+	cJSON_Delete(params);
+
+	if (!decoded_tx) {
 		dlg_error("%s", bet_err_str(ERR_CHIPS_GET_RAW_TX));
 		return ERR_CHIPS_GET_RAW_TX;
 	}
-	decoded_raw_tx = chips_decode_raw_tx(raw_tx);
-	if (decoded_raw_tx == NULL) {
-		dlg_error("%s", bet_err_str(ERR_CHIPS_DECODE_TX));
-		return ERR_CHIPS_DECODE_TX;
-	}
 
-	vout = cJSON_GetObjectItem(decoded_raw_tx, "vout");
+	vout = cJSON_GetObjectItem(decoded_tx, "vout");
 
 	for (int i = 0; i < cJSON_GetArraySize(vout); i++) {
 		if (find_address_in_addresses(address, cJSON_GetArrayItem(vout, i)) == 1) {
 			balance += jdouble(cJSON_GetArrayItem(vout, i), "value");
 		}
 	}
+	cJSON_Delete(decoded_tx);
 	return balance;
 }
 
@@ -1851,7 +1871,7 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		strcat(command, argv[i]);
 		strcat(command, " ");
 	}
-	dlg_info("command :: %s\n", command);
+	// dlg_info("command :: %s\n", command);
 	// Lightning Network support removed - lightning-cli commands no longer supported
 	if (strcmp(argv[0], "lightning-cli") == 0) {
 		dlg_warn("Lightning Network support removed - lightning-cli command ignored: %s", command);
@@ -2017,7 +2037,17 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 				if (strstr(data, "error") != NULL) {
 					retval = ERR_NO_TX_INFO_AVAILABLE;
 				} else {
-					*argjson = cJSON_CreateString(data);
+					/* verbose=1 callers (e.g. get_tx_block_height) need a
+					 * parsed object so jint(result,"height") works. With
+					 * verbose=0 the daemon returns a hex string, which is
+					 * not valid JSON and we just wrap it. */
+					cJSON *parsed = cJSON_Parse(data);
+					if (parsed) {
+						cJSON_Delete(*argjson);
+						*argjson = parsed;
+					} else {
+						*argjson = cJSON_CreateString(data);
+					}
 				}
 			} else if (strcmp(argv[1], "getrawmempool") == 0) {
 				if (data[strlen(data) - 1] == '\n')
