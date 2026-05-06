@@ -96,18 +96,26 @@ static cJSON *update_with_retry(const char *method, cJSON *params)
 		retval = chips_rpc(method, params, &result);
 		if (retval == OK && result && jint(result, "error") == 0) {
 			// updateidentity returns txid directly as a string, not as {"tx": "txid"}
-			// Check if result is a string (direct txid) or object with "tx" field
 			const char *txid = NULL;
 			if (result->type == cJSON_String) {
 				txid = result->valuestring;
 			} else {
 				txid = jstr(result, "tx");
 			}
-			
+
 			if (txid) {
 				wait_for_a_blocktime();
-				if (check_if_tx_exists(txid))
+				if (check_if_tx_exists(txid)) {
+					/* The tx is confirmed but the wallet's in-memory UTXO
+					 * set takes a few seconds to re-index after a block.
+					 * Without this sleep the very next updateidentity call
+					 * tries to spend the OLD identity UTXO and hits
+					 * "bad-txns-inputs-spent". 3 s is safe on VRSCTEST
+					 * (block every ~2-3 s) and negligible on production
+					 * CHIPS (block ~30 s). */
+					sleep(3);
 					break;
+				}
 			} else {
 				// No txid to check, assume success
 				break;
