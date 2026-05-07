@@ -303,9 +303,10 @@ static cJSON *get_z_getoperationstatus(char *op_id)
 cJSON *update_cashiers(char *ip)
 {
 	cJSON *cashiers_info = NULL, *out = NULL, *ip_obj = NULL, *cashier_ips = NULL;
+	const char *cashiers_id = verus_config.initialized ? verus_config.cashiers_short : "cashiers";
 
 	cashiers_info = cJSON_CreateObject();
-	cashier_ips = get_cashiers_info("cashiers");
+	cashier_ips = get_cashiers_info((char *)cashiers_id);
 
 	ip_obj = cJSON_CreateObject();
 	cJSON_AddStringToObject(ip_obj, get_vdxf_id(STRING_VDXF_ID), ip);
@@ -324,7 +325,7 @@ cJSON *update_cashiers(char *ip)
 
 	cJSON_AddItemToArray(cashier_ips, ip_obj);
 	cJSON_AddItemToObject(cashiers_info, get_vdxf_id(verus_config.initialized ? verus_config.cashiers_key : CASHIERS_KEY), cashier_ips);
-	out = update_cmm("cashiers", cashiers_info);
+	out = update_cmm(cashiers_id, cashiers_info);
 
 end:
 	return out;
