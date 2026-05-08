@@ -189,6 +189,25 @@ int32_t reveal_card(char *table_id)
 
 		game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 
+		/* Resolve cashier_id once via T_TABLE_INFO_KEY on table_id (dealer
+		 * writes it at game setup). Used by both the BV read (item 1.2)
+		 * and the deck read (item 1.1) below — single-writer-per-identity
+		 * means both live on the cashier id, not on the table id. */
+		char cashier_id[128] = {0};
+		{
+			cJSON *t_table_info = get_cJSON_from_id_key_vdxfid_from_height(
+				table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str), g_start_block);
+			const char *cid = jstr(t_table_info, "cashier_id");
+			if (!cid) {
+				dlg_error("reveal_card: cashier_id missing in T_TABLE_INFO_KEY for game %s",
+					  game_id_str);
+				if (t_table_info) cJSON_Delete(t_table_info);
+				return ERR_GAME_STATE_UPDATE;
+			}
+			strncpy(cashier_id, cid, sizeof(cashier_id) - 1);
+			cJSON_Delete(t_table_info);
+		}
+
 		// For community cards, first check if already revealed on table ID
 		if (is_community_card(card_type)) {
 			cJSON *board_cards = get_cJSON_from_id_key_vdxfid_from_height(table_id,
@@ -232,9 +251,14 @@ int32_t reveal_card(char *table_id)
 			}
 		}
 
+		/* Read the BV for the current (player_id, card_id) directly from
+		 * the cashier id under C_CARD_BV_KEY.<gid>. The poll loop below
+		 * waits for the cashier's *latest* CMM entry on this key to match
+		 * the (player_id, card_id) the dealer is currently asking about
+		 * (single-writer-per-identity, docs/TODO.md item 1.2). */
 		while (1) {
-			bv_info = get_cJSON_from_id_key_vdxfid_from_height(table_id,
-							       get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str), g_start_block);
+			bv_info = get_cJSON_from_id_key_vdxfid_from_height(cashier_id,
+							       get_key_data_vdxf_id(C_CARD_BV_KEY, game_id_str), g_start_block);
 			if (!bv_info) {
 				dlg_info("BV INFO hasn't revealed its secret yet");
 				wait_for_a_blocktime();
@@ -253,24 +277,12 @@ int32_t reveal_card(char *table_id)
 		}
 
 		/* Read the blinded deck for this player slot directly from the
-		 * cashier id. Single-writer-per-identity (docs/TODO.md item 1.1):
-		 * the cashier owns C_B_P*_DECK_KEY.<game_id> on its own identity
-		 * and is the sole writer; the dealer and players read it directly,
-		 * no canonicalize-onto-table-id step. The cashier id comes from
-		 * T_TABLE_INFO_KEY on the table id, written by the dealer at game
-		 * setup. */
-		cJSON *t_table_info = get_cJSON_from_id_key_vdxfid_from_height(
-			table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str), g_start_block);
-		const char *cashier_id = jstr(t_table_info, "cashier_id");
-		if (!cashier_id) {
-			dlg_error("reveal_card: cashier_id missing in T_TABLE_INFO_KEY for game %s", game_id_str);
-			if (t_table_info) cJSON_Delete(t_table_info);
-			return ERR_GAME_STATE_UPDATE;
-		}
+		 * cashier id under C_B_P*_DECK_KEY.<gid> (docs/TODO.md item 1.1).
+		 * cashier_id was resolved once at the top of reveal_card. */
 		dlg_info("[DBG-PREAD] reading C_B_P%d_DECK_KEY from cashier_id=\"%s\" game_id=%s player_id=%d card_id=%d g_start_block=%d",
 			 player_id + 1, cashier_id, game_id_str, player_id, card_id, g_start_block);
 		b_blinded_deck = get_cJSON_from_id_key_vdxfid_from_height(
-			(char *)cashier_id,
+			cashier_id,
 			get_key_data_vdxf_id(all_c_b_p_keys[player_id], game_id_str),
 			g_start_block);
 		if (b_blinded_deck) {
@@ -282,7 +294,6 @@ int32_t reveal_card(char *table_id)
 		} else {
 			dlg_error("[DBG-PREAD] b_blinded_deck is NULL");
 		}
-		cJSON_Delete(t_table_info);
 		b_blinded_card = jbits256i(b_blinded_deck, card_id);
 		if (player_id == -1)
 			blinded_value = jbits256i(bv, player_id);

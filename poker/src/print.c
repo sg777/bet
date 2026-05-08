@@ -36,14 +36,21 @@ void print_cashiers_id(char *id)
 			dlg_info("%s :: %s", C_DISPUTE_RESULT_KEY, cJSON_Print(temp));
 
 		/* Cashier-owned blinded decks (docs/TODO.md item 1.1).
-		 * Cashier writes these on its own id; dealer copies them onto the
-		 * table id under T_B_P*_DECK_KEY for the player reader path. */
+		 * Cashier is the sole writer; players read directly from cashier id. */
 		for (int32_t i = 0; i < all_t_b_p_keys_no; i++) {
 			temp = get_cJSON_from_id_key_vdxfid_from_height(
 				id, get_key_data_vdxf_id(all_c_b_p_keys[i], game_id), 0);
 			if (temp)
 				dlg_info("%s :: %s", all_c_b_p_key_names[i], cJSON_Print(temp));
 		}
+
+		/* Cashier-owned BV (docs/TODO.md item 1.2).
+		 * Cashier publishes the latest (player_id, card_id, bv) here;
+		 * players poll directly. */
+		temp = get_cJSON_from_id_key_vdxfid_from_height(
+			id, get_key_data_vdxf_id(C_CARD_BV_KEY, game_id), 0);
+		if (temp)
+			dlg_info("%s :: %s", C_CARD_BV_KEY, cJSON_Print(temp));
 	}
 }
 
@@ -108,10 +115,9 @@ void print_table_id(char *id)
 			dlg_info("Game State: %s", game_state_str(game_state));
 		}
 
-		temp = NULL;
-		temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id), 0);
-		if (temp)
-			dlg_info("%s :: %s", T_CARD_BV_KEY, cJSON_Print(temp));
+		/* T_CARD_BV_KEY is no longer written to the table (docs/TODO.md
+		 * item 1.2: cashier owns BV on its own id under C_CARD_BV_KEY).
+		 * Inspect it via `print_id <cashier_id> cashiers`. */
 	}
 }
 

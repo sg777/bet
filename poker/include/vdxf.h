@@ -154,6 +154,18 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 #define C_B_P9_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p9_deck"
 
 /*
+ * Cashier-side mirror of T_CARD_BV_KEY (docs/TODO.md item 1.2).
+ *
+ * The cashier writes one entry per (player_id, card_id) reveal request to
+ * its OWN identity under C_CARD_BV_KEY.<game_id>. The player reader
+ * (player.c:reveal_card) reads directly from the cashier id resolved via
+ * T_TABLE_INFO_KEY — no canonicalize-onto-table-id step. Same payload
+ * shape as T_CARD_BV_KEY (`{player_id, card_id, bv: [...]}`); only the
+ * writer/storage location differ.
+ */
+#define C_CARD_BV_KEY "chips.vrsc::poker.sg777z.c_card_bv"
+
+/*
 * card_bv {
 * player_id : If player id is -1, then blinding values of all the players for that card to be revealed.
 * card_id

@@ -209,8 +209,14 @@ int32_t reveal_bv(char *table_id)
 			free(card_bv_str);
 		}
 	}
-	out = poker_append_key_json(table_id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str), card_bv,
-					true);
+	/* Single-writer-per-identity (docs/TODO.md item 1.2): cashier writes
+	 * each (player_id, card_id) BV to its OWN id under C_CARD_BV_KEY.<gid>.
+	 * Players read directly from cashier_id; no canonicalize step on
+	 * table_id. The handle_bv_reveal_card idempotency check below also
+	 * reads from cashier_id. */
+	out = poker_append_key_json((char *)bet_get_cashier_short_name(),
+				    get_key_data_vdxf_id(C_CARD_BV_KEY, game_id_str), card_bv,
+				    true);
 
 	if (!out) {
 		retval = ERR_BV_UPDATE;
@@ -226,7 +232,11 @@ static int32_t handle_bv_reveal_card(char *table_id)
 
 	game_state_info = get_game_state_info(table_id);
 	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
-	card_bv = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id_str), g_start_block);
+	/* Single-writer-per-identity (docs/TODO.md item 1.2): cashier reads its
+	 * own previously-published BV from its OWN id, not table_id. */
+	card_bv = get_cJSON_from_id_key_vdxfid_from_height((char *)bet_get_cashier_short_name(),
+							   get_key_data_vdxf_id(C_CARD_BV_KEY, game_id_str),
+							   g_start_block);
 
 	if (card_bv && ((jint(game_state_info, "player_id") == jint(card_bv, "player_id")) &&
 			(jint(game_state_info, "card_id") == jint(card_bv, "card_id")))) {
