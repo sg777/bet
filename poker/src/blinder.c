@@ -359,15 +359,17 @@ static int32_t cashier_process_settlement(char *table_id)
 		return ERR_GAME_STATE_UPDATE;
 	}
 	
-	dlg_info("Settlement complete - advancing table game state to G_SETTLEMENT_COMPLETE");
+	dlg_info("Settlement complete - signalling G_SETTLEMENT_COMPLETE_BY_CASHIER on cashier id");
 
-	/* Write the terminal state to the TABLE identity, not the cashier's
-	 * own ID. The dealer (and players) poll get_game_state(table_id) and
-	 * stay in G_SETTLEMENT_PENDING forever if we only flip the cashier's
-	 * own state. The cashier already has signing rights on the table CMM
-	 * (the T_SETTLEMENT_INFO_KEY write above succeeded), so this write
-	 * uses the same auth path. */
-	append_game_state(table_id, G_SETTLEMENT_COMPLETE, NULL);
+	/* Single-writer-per-identity (docs/TODO.md item 1.4): write the
+	 * cashier-side terminal-state signal on the cashier's OWN id.
+	 * dealer.c::handle_game_state polls cashier_id via
+	 * is_cashier_settlement_complete and, on observing this value, writes
+	 * the canonical G_SETTLEMENT_COMPLETE on table_id. Mirrors the
+	 * existing G_DECK_SHUFFLING_B handshake exactly — the table id
+	 * remains a dealer-only writer for game state. */
+	append_game_state((char *)bet_get_cashier_short_name(),
+			  G_SETTLEMENT_COMPLETE_BY_CASHIER, NULL);
 
 	cJSON_Delete(updated_settlement);
 	return retval;

@@ -58,6 +58,8 @@ const char *game_state_str(int32_t game_state)
 		return "Settlement pending - cashier processing payouts";
 	case G_SETTLEMENT_COMPLETE:
 		return "Settlement complete - game finished";
+	case G_SETTLEMENT_COMPLETE_BY_CASHIER:
+		return "Settlement complete (cashier-side signal)";
 	default:
 		return "Invalid game state...";
 	}

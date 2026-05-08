@@ -283,6 +283,18 @@ static bool is_cashier_shuffled_deck(char *cashier_id)
 	return (game_state == G_DECK_SHUFFLING_B);
 }
 
+/*
+ * Mirror of is_cashier_shuffled_deck for the settlement handshake
+ * (docs/TODO.md item 1.4). The cashier signals payout completion by
+ * writing G_SETTLEMENT_COMPLETE_BY_CASHIER on its own id; the dealer
+ * canonicalizes G_SETTLEMENT_COMPLETE on table_id once this fires.
+ */
+static bool is_cashier_settlement_complete(char *cashier_id)
+{
+	int32_t game_state = get_game_state(cashier_id);
+	return (game_state == G_SETTLEMENT_COMPLETE_BY_CASHIER);
+}
+
 int32_t dealer_shuffle_deck(char *id)
 {
 	int32_t retval = OK;
@@ -566,8 +578,13 @@ int32_t handle_game_state(struct table *t)
 		retval = dealer_initiate_settlement(t, dcv_vars);
 		break;
 	case G_SETTLEMENT_PENDING:
-		dlg_info("Waiting for cashier to process settlement...");
-		// Cashier will update game state to G_SETTLEMENT_COMPLETE when done
+		/* docs/TODO.md item 1.4: dealer canonicalizes G_SETTLEMENT_COMPLETE
+		 * on table_id once the cashier signals G_SETTLEMENT_COMPLETE_BY_CASHIER
+		 * on its own id. Mirrors the existing G_DECK_SHUFFLING_B handshake. */
+		if (is_cashier_settlement_complete(t->cashier_id)) {
+			dlg_info("Cashier settlement complete signal observed, advancing table to G_SETTLEMENT_COMPLETE");
+			append_game_state(t->table_id, G_SETTLEMENT_COMPLETE, NULL);
+		}
 		break;
 	case G_SETTLEMENT_COMPLETE:
 		dlg_info("Settlement complete - game finished!");

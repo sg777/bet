@@ -16,6 +16,17 @@
 #define G_SHOWDOWN 10
 #define G_SETTLEMENT_PENDING 11
 #define G_SETTLEMENT_COMPLETE 12
+/*
+ * Cashier-side terminal-state signal (docs/TODO.md item 1.4).
+ *
+ * The cashier writes G_SETTLEMENT_COMPLETE_BY_CASHIER on its OWN identity
+ * once cashier_process_settlement has issued all payouts. The dealer polls
+ * the cashier id (is_cashier_settlement_complete) and, on observing this
+ * value, writes the canonical G_SETTLEMENT_COMPLETE on table_id. Mirrors
+ * the existing G_DECK_SHUFFLING_B handshake — the only writers of game
+ * state on table_id are the dealer and the players' own table-bound writes.
+ */
+#define G_SETTLEMENT_COMPLETE_BY_CASHIER 13
 
 struct t_game_info_struct {
 	int32_t game_state;
