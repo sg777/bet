@@ -34,6 +34,16 @@ void print_cashiers_id(char *id)
 		cJSON *temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(C_DISPUTE_RESULT_KEY, game_id), 0);
 		if (temp)
 			dlg_info("%s :: %s", C_DISPUTE_RESULT_KEY, cJSON_Print(temp));
+
+		/* Cashier-owned blinded decks (docs/TODO.md item 1.1).
+		 * Cashier writes these on its own id; dealer copies them onto the
+		 * table id under T_B_P*_DECK_KEY for the player reader path. */
+		for (int32_t i = 0; i < all_t_b_p_keys_no; i++) {
+			temp = get_cJSON_from_id_key_vdxfid_from_height(
+				id, get_key_data_vdxf_id(all_c_b_p_keys[i], game_id), 0);
+			if (temp)
+				dlg_info("%s :: %s", all_c_b_p_key_names[i], cJSON_Print(temp));
+		}
 	}
 }
 
@@ -89,12 +99,9 @@ void print_table_id(char *id)
 			if (temp)
 				dlg_info("%s :: %s", all_t_d_p_key_names[i], cJSON_Print(temp));
 		}
-		for (int32_t i = 0; i < all_t_b_p_keys_no; i++) {
-			cJSON *temp =
-				get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(all_t_b_p_keys[i], game_id), 0);
-			if (temp)
-				dlg_info("%s :: %s", all_t_b_p_key_names[i], cJSON_Print(temp));
-		}
+		/* T_B_P*_DECK_KEY are no longer written to the table (docs/TODO.md
+		 * item 1.1: cashier owns blinded-deck keys on its own id under
+		 * C_B_P*_DECK_KEY). Inspect those via `print_id <cashier_id> cashiers`. */
 		temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id), 0);
 		if (temp) {
 			int game_state = jint(temp, "game_state");

@@ -252,8 +252,37 @@ int32_t reveal_card(char *table_id)
 				break;
 		}
 
-		b_blinded_deck = get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(all_t_b_p_keys[player_id],
-											     game_id_str), g_start_block);
+		/* Read the blinded deck for this player slot directly from the
+		 * cashier id. Single-writer-per-identity (docs/TODO.md item 1.1):
+		 * the cashier owns C_B_P*_DECK_KEY.<game_id> on its own identity
+		 * and is the sole writer; the dealer and players read it directly,
+		 * no canonicalize-onto-table-id step. The cashier id comes from
+		 * T_TABLE_INFO_KEY on the table id, written by the dealer at game
+		 * setup. */
+		cJSON *t_table_info = get_cJSON_from_id_key_vdxfid_from_height(
+			table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str), g_start_block);
+		const char *cashier_id = jstr(t_table_info, "cashier_id");
+		if (!cashier_id) {
+			dlg_error("reveal_card: cashier_id missing in T_TABLE_INFO_KEY for game %s", game_id_str);
+			if (t_table_info) cJSON_Delete(t_table_info);
+			return ERR_GAME_STATE_UPDATE;
+		}
+		dlg_info("[DBG-PREAD] reading C_B_P%d_DECK_KEY from cashier_id=\"%s\" game_id=%s player_id=%d card_id=%d g_start_block=%d",
+			 player_id + 1, cashier_id, game_id_str, player_id, card_id, g_start_block);
+		b_blinded_deck = get_cJSON_from_id_key_vdxfid_from_height(
+			(char *)cashier_id,
+			get_key_data_vdxf_id(all_c_b_p_keys[player_id], game_id_str),
+			g_start_block);
+		if (b_blinded_deck) {
+			char *deck_dbg = cJSON_PrintUnformatted(b_blinded_deck);
+			if (deck_dbg) {
+				dlg_info("[DBG-PREAD] b_blinded_deck=%s", deck_dbg);
+				free(deck_dbg);
+			}
+		} else {
+			dlg_error("[DBG-PREAD] b_blinded_deck is NULL");
+		}
+		cJSON_Delete(t_table_info);
 		b_blinded_card = jbits256i(b_blinded_deck, card_id);
 		if (player_id == -1)
 			blinded_value = jbits256i(bv, player_id);

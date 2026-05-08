@@ -132,6 +132,28 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 #define T_B_P9_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p9_deck"
 
 /*
+ * Cashier-side mirrors of T_B_*_DECK_KEY.
+ *
+ * Per the single-writer-per-identity rule (docs/TODO.md item 1.1), the cashier
+ * writes its blinded-deck output to its OWN identity under these C_B_* keys.
+ * The dealer polls the cashier id, sees them populated, and canonicalizes them
+ * onto the table id under the existing T_B_* keys (which players read from).
+ *
+ * Wire format and per-game scoping (`<game_id>` suffix) are identical to the
+ * T_B_* keys; only the writer + storage location differ.
+ */
+#define C_B_DECK_KEY "chips.vrsc::poker.sg777z.c_b_deck"
+#define C_B_P1_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p1_deck"
+#define C_B_P2_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p2_deck"
+#define C_B_P3_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p3_deck"
+#define C_B_P4_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p4_deck"
+#define C_B_P5_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p5_deck"
+#define C_B_P6_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p6_deck"
+#define C_B_P7_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p7_deck"
+#define C_B_P8_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p8_deck"
+#define C_B_P9_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p9_deck"
+
+/*
 * card_bv {
 * player_id : If player id is -1, then blinding values of all the players for that card to be revealed.
 * card_id
@@ -288,6 +310,11 @@ extern char all_t_d_p_key_names[all_t_d_p_keys_no][128];
 #define all_t_b_p_keys_no 10
 extern char all_t_b_p_keys[all_t_b_p_keys_no][128];
 extern char all_t_b_p_key_names[all_t_b_p_keys_no][128];
+
+/* Cashier-owned mirrors of all_t_b_p_keys[] / all_t_b_p_key_names[].
+ * Same indexing convention: index 0..8 = P1..P9, index 9 = bare deck. */
+extern char all_c_b_p_keys[all_t_b_p_keys_no][128];
+extern char all_c_b_p_key_names[all_t_b_p_keys_no][128];
 
 #define all_game_keys_no 1
 extern char all_game_keys[all_game_keys_no][128];

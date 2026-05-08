@@ -41,6 +41,19 @@ char all_t_b_p_key_names[all_t_b_p_keys_no][128] = { "t_b_p1_deck", "t_b_p2_deck
 						     "t_b_p5_deck", "t_b_p6_deck", "t_b_p7_deck", "t_b_p8_deck",
 						     "t_b_p9_deck", "t_b_deck" };
 
+/* Cashier-owned mirror of all_t_b_p_keys[] used by cashier_sb_deck to write
+ * blinded decks onto the cashier's own identity. The dealer's canonicalizer
+ * (canonicalize_cashier_blinded_decks in dealer.c) reads these and copies
+ * the values onto the corresponding T_B_P*_DECK_KEY.<gid> entries on the
+ * table id, preserving the existing player.c reader path. */
+char all_c_b_p_keys[all_t_b_p_keys_no][128] = { C_B_P1_DECK_KEY, C_B_P2_DECK_KEY, C_B_P3_DECK_KEY, C_B_P4_DECK_KEY,
+						C_B_P5_DECK_KEY, C_B_P6_DECK_KEY, C_B_P7_DECK_KEY, C_B_P8_DECK_KEY,
+						C_B_P9_DECK_KEY, C_B_DECK_KEY };
+
+char all_c_b_p_key_names[all_t_b_p_keys_no][128] = { "c_b_p1_deck", "c_b_p2_deck", "c_b_p3_deck", "c_b_p4_deck",
+						     "c_b_p5_deck", "c_b_p6_deck", "c_b_p7_deck", "c_b_p8_deck",
+						     "c_b_p9_deck", "c_b_deck" };
+
 struct b_deck_info_struct b_deck_info;
 
 int32_t cashier_sb_deck(char *id, bits256 *d_blinded_deck, int32_t player_id)
@@ -48,7 +61,15 @@ int32_t cashier_sb_deck(char *id, bits256 *d_blinded_deck, int32_t player_id)
 	int32_t retval = OK;
 	char str[65], *game_id_str = NULL;
 	cJSON *b_blinded_deck = NULL;
+	char dbg[65];
 
+	dlg_info("[DBG-SBDECK] player_id=%d, using cashier_r[%d][0].priv=%s",
+		 player_id, player_id, bits256_str(dbg, b_deck_info.cashier_r[player_id][0].priv));
+
+	/* `id` (the table id) is still the source of truth for the game_id.
+	 * The cashier published its own T_GAME_ID_KEY via
+	 * ensure_cashier_game_id_initialized but reading from the table id keeps
+	 * a single canonical source for which game we're shuffling for. */
 	game_id_str = poker_get_key_str(id, T_GAME_ID_KEY);
 	for (int32_t i = 0; i < CARDS_MAXCARDS; i++) {
 		dlg_info("%s", bits256_str(str, d_blinded_deck[i]));
@@ -66,8 +87,19 @@ int32_t cashier_sb_deck(char *id, bits256 *d_blinded_deck, int32_t player_id)
 		dlg_info("b_blinded_deck::%s", b_blinded_deck_str);
 		free(b_blinded_deck_str);
 	}
-	cJSON *out = poker_append_key_json(id, get_key_data_vdxf_id(all_t_b_p_keys[player_id], game_id_str),
-						       b_blinded_deck, true);
+
+	/* Single-writer-per-identity (docs/TODO.md item 1.1):
+	 * Cashier writes its blinded deck for this player slot to its OWN id
+	 * under C_B_P*_DECK_KEY.<game_id>. The dealer's canonicalizer copies
+	 * this onto T_B_P*_DECK_KEY.<game_id> on the table id before
+	 * transitioning the table to G_DECK_SHUFFLING_B, so the existing
+	 * player.c:255 reader path is unchanged. */
+	const char *write_id = bet_get_cashier_short_name();
+	dlg_info("[DBG-SBDECK] writing C_B_P%d_DECK_KEY to id=\"%s\" game_id=%s deck[0]=%s",
+		 player_id + 1, write_id, game_id_str, bits256_str(dbg, d_blinded_deck[0]));
+	cJSON *out = poker_append_key_json((char *)write_id,
+					   get_key_data_vdxf_id(all_c_b_p_keys[player_id], game_id_str),
+					   b_blinded_deck, true);
 
 	if (!out)
 		retval = ERR_DECK_BLINDING_CASHIER;
@@ -88,6 +120,11 @@ void cashier_init_deck(char *table_id)
 	int32_t num_players;
 	char *game_id_str = NULL;
 	cJSON *t_player_info = NULL;
+	static int32_t init_call_count = 0;
+	char dbg[65];
+
+	init_call_count++;
+	dlg_info("[DBG-INIT] cashier_init_deck call #%d for table_id=%s", init_call_count, table_id);
 
 	bet_permutation(b_deck_info.b_permi, CARDS_MAXCARDS);
 
@@ -96,6 +133,8 @@ void cashier_init_deck(char *table_id)
 	num_players = jint(t_player_info, "num_players");
 	for (int32_t i = 0; i < num_players; i++) {
 		gen_deck(b_deck_info.cashier_r[i], CARDS_MAXCARDS);
+		dlg_info("[DBG-INIT] regenerated cashier_r[%d][0].priv=%s (call #%d, game_id=%s)",
+			 i, bits256_str(dbg, b_deck_info.cashier_r[i][0].priv), init_call_count, game_id_str);
 	}
 }
 
@@ -147,9 +186,14 @@ int32_t reveal_bv(char *table_id)
 			get_cJSON_from_id_key_vdxfid_from_height(table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
 		num_players = jint(t_player_info, "num_players");
 		for (int32_t i = 0; i < num_players; i++) {
+			dlg_info("[DBG-BV] reveal_bv community: cashier_r[%d][%d].priv=%s",
+				 i, card_id, bits256_str(hexstr, b_deck_info.cashier_r[i][card_id].priv));
 			jaddistr(bv_info, bits256_str(hexstr, b_deck_info.cashier_r[i][card_id].priv));
 		}
 	} else {
+		dlg_info("[DBG-BV] reveal_bv hole: player_id=%d card_id=%d cashier_r[%d][%d].priv=%s",
+			 player_id, card_id, player_id, card_id,
+			 bits256_str(hexstr, b_deck_info.cashier_r[player_id][card_id].priv));
 		jaddistr(bv_info, bits256_str(hexstr, b_deck_info.cashier_r[player_id][card_id].priv));
 	}
 
@@ -492,7 +536,31 @@ int32_t handle_game_state_cashier(char *table_id)
 		// Ensure cashier's game_id is set before updating game state
 		retval = ensure_cashier_game_id_initialized(table_id);
 		if (retval) break;
-		
+
+		/* Idempotency gate (docs/TODO.md item 1.1, post-direct-read race fix):
+		 * if C_B_P1_DECK_KEY.<game_id> is already present on the cashier id,
+		 * the shuffle for THIS game has already completed. Re-running
+		 * cashier_shuffle_deck would re-call cashier_init_deck and regenerate
+		 * b_deck_info.cashier_r in memory; the deck on-chain is frozen at the
+		 * first shuffle's bytes, so BVs derived from the new cashier_r at
+		 * reveal time would not match → decode_card returns -1.
+		 *
+		 * The gate is keyed by <game_id> so it's automatically per-game and
+		 * self-resets when a new game_id is generated. */
+		{
+			char *gate_gid = poker_get_key_str(table_id, T_GAME_ID_KEY);
+			if (gate_gid) {
+				cJSON *existing = get_cJSON_from_id_key_vdxfid_from_height(
+					(char *)bet_get_cashier_short_name(),
+					get_key_data_vdxf_id(all_c_b_p_keys[0], gate_gid),
+					g_start_block);
+				if (existing) {
+					cJSON_Delete(existing);
+					break;
+				}
+			}
+		}
+
 		retval = cashier_shuffle_deck(table_id);
 		if (!retval) {
 			dlg_info("Cashier shuffle complete, updating game state to G_DECK_SHUFFLING_B");
