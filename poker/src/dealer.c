@@ -441,14 +441,15 @@ int32_t handle_game_state(struct table *t)
 	}
 	switch (game_state) {
 	case G_TABLE_STARTED:
-		// Poll cashier for pending join requests (from start_block onwards)
-		// If start_block is 0 (old data), poll from block 1
+		// Poll player identities for pending join requests (since start_block).
+		// The cashier id is passed as a verifier — used only to confirm that
+		// each player's claimed payin_tx actually landed on-chain.
 		if (t->cashier_id[0] != '\0') {
 			int32_t start = (t->start_block > 0) ? t->start_block : 1;
-			int32_t joins = poker_poll_cashier_for_joins(t->cashier_id, t->table_id, 
+			int32_t joins = poker_poll_players_for_joins(t->cashier_id, t->table_id, 
 			                                              t->dealer_id, start);
 			if (joins > 0) {
-				dlg_info("Processed %d join requests from cashier", joins);
+				dlg_info("Processed %d join requests", joins);
 			}
 		}
 		// Check if enough players have joined

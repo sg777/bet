@@ -208,21 +208,29 @@ int32_t poker_verify_setup();
  * ============================================================================ */
 
 /**
- * Poll cashier for pending join requests for a specific table
- * 
- * This function is called by the dealer to check for players who have sent
- * funds to the cashier with join request data. It:
- * 1. Gets the cashier's identity address
- * 2. Queries incoming transactions to that address
- * 3. Filters for transactions targeting this dealer's table
- * 4. Processes valid join requests
- * 
- * @param cashier_id The cashier's short ID (e.g., "cashier")
- * @param table_id The table ID to filter for
- * @param dealer_id The dealer ID to filter for
- * @return Number of join requests processed, or negative error code
+ * Poll player identities for pending join requests against a specific table.
+ *
+ * Called by the dealer. The cashier is queried only as a verifier — its txid
+ * list at start_block is fetched once per tick and used to confirm that each
+ * player's claimed payin_tx actually landed on-chain. The discovery target is
+ * the player identity itself (P_JOIN_REQUEST_KEY).
+ *
+ * Steps per tick:
+ * 1. Fetch txids at the cashier address since start_block (verification index).
+ * 2. For each known player short-name:
+ *    a. Read P_JOIN_REQUEST_KEY from that player's identity.
+ *    b. Match dealer_id / table_id; verify payin_tx is in the cashier txid list
+ *       and confirmed at or after start_block.
+ *    c. Skip if the player is already in t_player_info, otherwise process the
+ *       join (writes T_PLAYER_INFO_KEY on the table id).
+ *
+ * @param cashier_id  The cashier's short ID (e.g., "cashier") — used as a verifier.
+ * @param table_id    The table ID this dealer is seating for.
+ * @param dealer_id   This dealer's short ID.
+ * @param start_block Earliest block height accepted for a payin_tx.
+ * @return Number of join requests processed, or negative error code.
  */
-int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_id, 
+int32_t poker_poll_players_for_joins(const char *cashier_id, const char *table_id, 
                                       const char *dealer_id, int32_t start_block);
 
 /* ============================================================================

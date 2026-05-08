@@ -320,21 +320,26 @@ static int32_t check_player_join_request(const char *player_id, const char *tabl
 }
 
 /**
- * Poll for pending join requests for a specific table
- * 
- * Strategy: 
- * 1. Get all txids at cashier since start_block
- * 2. Check known player identities for p_join_request targeting this table
- * 3. Verify their payin_tx is in the cashier tx list
- * 4. Add player to t_player_info
- * 
- * @param cashier_id The cashier's short Verus ID (e.g., "cashier")
- * @param table_id The table ID to filter for
- * @param dealer_id The dealer ID to filter for
- * @param start_block Only check transactions from this block onwards
- * @return Number of join requests processed, or negative error code
+ * Poll player identities for pending join requests for a specific table.
+ *
+ * The dealer is the actor. The cashier is queried just once per tick as a
+ * verifier (txid index since start_block); the actual join metadata lives in
+ * P_JOIN_REQUEST_KEY on each player's own Verus identity.
+ *
+ * Strategy:
+ * 1. Fetch txids at the cashier address since start_block (verification index).
+ * 2. For each known player short-name, read its P_JOIN_REQUEST_KEY.
+ * 3. Match dealer_id / table_id, verify payin_tx is in the cashier tx list and
+ *    was confirmed at or after start_block.
+ * 4. If new, process the join (writes T_PLAYER_INFO_KEY on the table id).
+ *
+ * @param cashier_id  The cashier's short Verus ID (e.g., "cashier") — verifier.
+ * @param table_id    The table ID this dealer is seating for.
+ * @param dealer_id   This dealer's short ID.
+ * @param start_block Only accept payin_tx confirmed at or after this height.
+ * @return Number of join requests processed, or negative error code.
  */
-int32_t poker_poll_cashier_for_joins(const char *cashier_id, const char *table_id, 
+int32_t poker_poll_players_for_joins(const char *cashier_id, const char *table_id, 
                                       const char *dealer_id, int32_t start_block)
 {
 	char *cashier_address = NULL;
