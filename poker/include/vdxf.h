@@ -220,6 +220,28 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 #define T_SETTLEMENT_INFO_KEY "chips.vrsc::poker.sg777z.t_settlement_info"
 
 /*
+ * Cashier-side settlement result (docs/TODO.md item 1.3).
+ *
+ * The dealer writes the settlement *order* (winners, settle_amounts,
+ * player_ids, payin_txs, pot, cashier_id, status:pending) into
+ * T_SETTLEMENT_INFO_KEY.<gid> on the table id. The cashier MUST NOT
+ * mutate that key. Instead, after issuing all sendcurrency payouts the
+ * cashier writes its receipt — {status:"completed", payout_txs:[...]}
+ * — to its OWN identity under C_SETTLEMENT_RESULT_KEY.<gid>.
+ *
+ * The dealer polls cashier_id, observes the result, and canonicalizes
+ * status + payout_txs onto T_SETTLEMENT_INFO_KEY.<gid> on the table id
+ * (preserving the dealer-written order fields). Same handshake pattern
+ * as item 1.4's G_SETTLEMENT_COMPLETE_BY_CASHIER → G_SETTLEMENT_COMPLETE.
+ *
+ * The cashier also uses this key for its own re-pay idempotency: at
+ * the top of cashier_process_settlement, if C_SETTLEMENT_RESULT_KEY for
+ * this game already exists with status:completed, the cashier returns
+ * OK without re-issuing payouts.
+ */
+#define C_SETTLEMENT_RESULT_KEY "chips.vrsc::poker.sg777z.c_settlement_result"
+
+/*
 * p_game_history - Stored on player ID after joining a game
 * {
 *   payin_tx: Player's payin transaction ID

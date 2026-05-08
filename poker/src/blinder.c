@@ -263,7 +263,32 @@ static int32_t cashier_process_settlement(char *table_id)
 		dlg_error("Failed to get game_id");
 		return ERR_GAME_ID_NOT_FOUND;
 	}
-	
+
+	/* Re-pay idempotency guard (docs/TODO.md item 1.3): once we've
+	 * migrated the result write off T_SETTLEMENT_INFO_KEY (which the
+	 * cashier no longer mutates), the cashier's old "status==completed"
+	 * check on the table-id record can never fire — that record stays
+	 * "pending" until the dealer canonicalizes. Instead, gate on the
+	 * cashier's own C_SETTLEMENT_RESULT_KEY.<gid>: if already present
+	 * with status:completed, payouts have been issued in a prior tick
+	 * (the dealer just hasn't canonicalized yet) and we must not re-pay. */
+	{
+		cJSON *prior_result = get_cJSON_from_id_key_vdxfid_from_height(
+			(char *)bet_get_cashier_short_name(),
+			get_key_data_vdxf_id(C_SETTLEMENT_RESULT_KEY, game_id_str),
+			g_start_block);
+		if (prior_result) {
+			const char *prior_status = jstr(prior_result, "status");
+			if (prior_status && strcmp(prior_status, "completed") == 0) {
+				dlg_info("Settlement already completed for game %s (C_SETTLEMENT_RESULT_KEY present); skipping re-pay",
+					 game_id_str);
+				cJSON_Delete(prior_result);
+				return OK;
+			}
+			cJSON_Delete(prior_result);
+		}
+	}
+
 	// Read settlement info from table ID
 	settlement_info = get_cJSON_from_id_key_vdxfid_from_height(table_id,
 		get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, game_id_str), g_start_block);
@@ -342,23 +367,28 @@ static int32_t cashier_process_settlement(char *table_id)
 		cJSON_Delete(payout_data);
 	}
 	
-	// Update settlement info with payout TXs and mark complete
-	cJSON *updated_settlement = cJSON_Duplicate(settlement_info, 1);
-	cJSON_DeleteItemFromObject(updated_settlement, "status");
-	cJSON_AddStringToObject(updated_settlement, "status", "completed");
-	cJSON_AddItemToObject(updated_settlement, "payout_txs", payout_txs);
-	
-	// Write updated settlement to table ID
-	cJSON *out = poker_update_key_json(table_id,
-		get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, game_id_str),
-		updated_settlement, true);
-	
+	/* Single-writer-per-identity (docs/TODO.md item 1.3): publish the
+	 * cashier's settlement *result* (status + payout_txs) on the cashier's
+	 * OWN id — the dealer canonicalizes status + payout_txs onto
+	 * T_SETTLEMENT_INFO_KEY.<gid> on table_id once it observes this key.
+	 * The dealer-written settlement *order* (winners, settle_amounts,
+	 * player_ids, payin_txs, pot, cashier_id) is never mutated by us. */
+	cJSON *cashier_result = cJSON_CreateObject();
+	cJSON_AddStringToObject(cashier_result, "status", "completed");
+	/* payout_txs ownership transfers to cashier_result here; do NOT
+	 * cJSON_Delete it separately. */
+	cJSON_AddItemToObject(cashier_result, "payout_txs", payout_txs);
+
+	cJSON *out = poker_append_key_json((char *)bet_get_cashier_short_name(),
+		get_key_data_vdxf_id(C_SETTLEMENT_RESULT_KEY, game_id_str),
+		cashier_result, true);
+
 	if (!out) {
-		dlg_error("Failed to update settlement status");
-		cJSON_Delete(updated_settlement);
+		dlg_error("Failed to publish C_SETTLEMENT_RESULT_KEY on cashier id");
+		cJSON_Delete(cashier_result);
 		return ERR_GAME_STATE_UPDATE;
 	}
-	
+
 	dlg_info("Settlement complete - signalling G_SETTLEMENT_COMPLETE_BY_CASHIER on cashier id");
 
 	/* Single-writer-per-identity (docs/TODO.md item 1.4): write the
@@ -371,7 +401,7 @@ static int32_t cashier_process_settlement(char *table_id)
 	append_game_state((char *)bet_get_cashier_short_name(),
 			  G_SETTLEMENT_COMPLETE_BY_CASHIER, NULL);
 
-	cJSON_Delete(updated_settlement);
+	cJSON_Delete(cashier_result);
 	return retval;
 }
 

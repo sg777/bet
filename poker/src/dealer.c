@@ -578,10 +578,54 @@ int32_t handle_game_state(struct table *t)
 		retval = dealer_initiate_settlement(t, dcv_vars);
 		break;
 	case G_SETTLEMENT_PENDING:
-		/* docs/TODO.md item 1.4: dealer canonicalizes G_SETTLEMENT_COMPLETE
-		 * on table_id once the cashier signals G_SETTLEMENT_COMPLETE_BY_CASHIER
-		 * on its own id. Mirrors the existing G_DECK_SHUFFLING_B handshake. */
+		/* docs/TODO.md items 1.3 + 1.4: dealer canonicalizes the cashier's
+		 * settlement result onto the table id once it observes the
+		 * cashier-side terminal-state signal. Two-step canonicalize:
+		 *   (1) Read C_SETTLEMENT_RESULT_KEY.<gid> from cashier_id;
+		 *       copy {status, payout_txs} onto T_SETTLEMENT_INFO_KEY.<gid>
+		 *       on table_id (preserving dealer-written order fields).
+		 *   (2) Append canonical G_SETTLEMENT_COMPLETE on table_id.
+		 * Mirrors the existing G_DECK_SHUFFLING_B handshake. */
 		if (is_cashier_settlement_complete(t->cashier_id)) {
+			char *gid = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
+			if (gid) {
+				cJSON *c_result = get_cJSON_from_id_key_vdxfid_from_height(
+					t->cashier_id,
+					get_key_data_vdxf_id(C_SETTLEMENT_RESULT_KEY, gid),
+					g_start_block);
+				cJSON *t_settlement = get_cJSON_from_id_key_vdxfid_from_height(
+					t->table_id,
+					get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, gid),
+					g_start_block);
+				if (c_result && t_settlement) {
+					cJSON *updated = cJSON_Duplicate(t_settlement, 1);
+					cJSON_DeleteItemFromObject(updated, "status");
+					const char *new_status = jstr(c_result, "status");
+					cJSON_AddStringToObject(updated, "status",
+								new_status ? new_status : "completed");
+					cJSON *payout_txs = cJSON_GetObjectItem(c_result, "payout_txs");
+					if (payout_txs) {
+						cJSON_DeleteItemFromObject(updated, "payout_txs");
+						cJSON_AddItemToObject(updated, "payout_txs",
+								      cJSON_Duplicate(payout_txs, 1));
+					}
+					cJSON *out = poker_update_key_json(t->table_id,
+						get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, gid),
+						updated, true);
+					if (!out) {
+						dlg_error("Failed to canonicalize T_SETTLEMENT_INFO_KEY on table id");
+					}
+					cJSON_Delete(updated);
+				} else {
+					dlg_warn("Cashier signalled but could not read %s on cashier or %s on table",
+						 c_result ? "T_SETTLEMENT_INFO_KEY" : "C_SETTLEMENT_RESULT_KEY",
+						 t_settlement ? "(other)" : "T_SETTLEMENT_INFO_KEY");
+				}
+				if (c_result) cJSON_Delete(c_result);
+				if (t_settlement) cJSON_Delete(t_settlement);
+			} else {
+				dlg_warn("Cashier signalled but no T_GAME_ID on table id; cannot canonicalize result");
+			}
 			dlg_info("Cashier settlement complete signal observed, advancing table to G_SETTLEMENT_COMPLETE");
 			append_game_state(t->table_id, G_SETTLEMENT_COMPLETE, NULL);
 		}
