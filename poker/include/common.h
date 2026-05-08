@@ -110,8 +110,19 @@ static inline double table_chips_to_chips(int64_t table_chips)
 	return (double)table_chips / (double)normalization_factor;
 }
 
-#define CARDS_MAXCARDS       14 // 14 cards for 2 players (4 hole + 5 community + 5 spare)
-// Note: 52-card deck requires chunked identity updates (too large for single update)
+/* Full 52-card deck. With 2 players (the current §10 CLI auto config)
+ * each updateidentity write of a blinded deck is ~6 KB hex-encoded JSON
+ * (52 × 32-byte points → 1664 raw bytes → ~3.5 KB JSON → ~7 KB hex),
+ * comfortably within the per-tx CMM budget.
+ *
+ * If/when num_players approaches 9 (max), the cashier's per-game writes
+ * scale to ~9 × 7 KB ≈ 63 KB across all C_B_P*_DECK_KEY entries. Each
+ * key is a separate CMM entry / separate write today, so this stays
+ * inside the per-tx limit; if a single write ever bundles all decks the
+ * comment that used to live here ("requires chunked identity updates")
+ * would become a real concern again. Keep an eye on this when scaling
+ * past ~6 players. */
+#define CARDS_MAXCARDS       52
 #define CARDS_MAXPLAYERS     9 // 9   //
 #define CARDS_MAXROUNDS      4 // 9   //
 #define CARDS_MAXCHIPS       1000

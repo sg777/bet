@@ -418,13 +418,11 @@ static int32_t dealer_evaluate_showdown(char *table_id, struct privatebet_vars *
 		cJSON_Delete(reveal);
 	}
 
-	/* Build 7-card hand per active player and score it. The current
-	 * 14-card test deck (CARDS_MAXCARDS=14) packs only 13 clubs + 2D,
-	 * so most hands evaluate to flushes/straight-flushes — see
-	 * docs/TODO.md "deck size enlargement". The eval pipeline itself
-	 * is sound; it produces meaningful score deltas across the
-	 * available card values and selects a real winner unless the
-	 * cards collide exactly. */
+	/* Build the 7-card hand per active player and score it.
+	 * card values land in 0..51 via card_rand256(privkeyflag, i)
+	 * which packs the deck index into priv.bytes[30] — that index is
+	 * what reveal_card writes into card_value, and what
+	 * poker.c::CardMask[52] expects. */
 	unsigned long scores[CARDS_MAXPLAYERS] = { 0 };
 	unsigned long max_score = 0;
 	int32_t num_winners = 0;
