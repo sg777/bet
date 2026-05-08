@@ -187,15 +187,64 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 #define T_BOARD_CARDS_KEY "chips.vrsc::poker.sg777z.t_board_cards"
 
 /*
-* p_decoded_card - Player reports their decoded card to their ID (for dealer verification)
-* {
-*   card_id: which card was decoded
-*   card_type: hole_card, flop_card_1, etc.
-*   card_value: decoded card value
-* }
-* Dealer polls this to confirm all players decoded the same community card
-*/
+ * p_decoded_card — Player publishes a cumulative snapshot of every
+ * community card it has decoded so far for the current game. Schema:
+ *
+ *   {
+ *     "game_id":  "<32-byte hex>",
+ *     "decoded_cards": [
+ *       { "card_id": <int>, "card_type": <enum>, "card_value": <0..51> },
+ *       ...
+ *     ]
+ *   }
+ *
+ * Why a cumulative snapshot (rather than one CMM entry per card):
+ *   `get_cJSON_from_id_key_vdxfid_from_height` returns only the LATEST
+ *   CMM entry for a key. With a per-card schema the dealer's consensus
+ *   check for, say, flop_card_1 fails once the player has appended
+ *   flop_card_2 — the latest entry's card_type no longer matches. Each
+ *   write here re-publishes the full array so the latest entry always
+ *   holds the player's complete view, and the dealer's consensus
+ *   read finds any requested card_type by scanning the array within
+ *   that single entry.
+ *
+ * Single-writer-per-identity: only the player owning verus_pid writes
+ * this key. The dealer reads it to verify community cards.
+ *
+ * Hole-card *secrecy* during play: this key is currently used only for
+ * community-card consensus. Each player's two private hole cards are
+ * revealed in a separate one-shot write at G_SHOWDOWN — see
+ * P_HOLECARDS_REVEAL_KEY below.
+ */
 #define P_DECODED_CARD_KEY "chips.vrsc::poker.sg777z.p_decoded_card"
+
+/*
+ * p_holecards_reveal - Player reveals its two hole cards at showdown.
+ *
+ * Player publishes a single CMM entry on its OWN identity at G_SHOWDOWN
+ * (single-writer-per-identity rule):
+ *   {
+ *     game_id:    "<32-byte hex>",
+ *     hole_cards: [v0, v1]    // card values (deck face indices)
+ *   }
+ *
+ * Dealer reads this from each non-folded player's id at G_SHOWDOWN,
+ * combines with the 5 community cards from T_BOARD_CARDS_KEY, and runs
+ * 7-card hand evaluation (poker.c::seven_card_draw_score) to determine
+ * winners and pot distribution.
+ *
+ * Why a separate key instead of reusing P_DECODED_CARD_KEY:
+ *   - keeps community-card consensus reads deterministic — they read the
+ *     latest entry of P_DECODED_CARD_KEY without having to filter by
+ *     card_type.
+ *   - one-shot write per game — simpler dealer-side reasoning than
+ *     iterating an append-mode CMM and filtering hole-card entries.
+ *   - revealed strictly at showdown, never earlier — prevents accidental
+ *     leaking of hole cards mid-hand (P_DECODED_CARD_KEY entries that
+ *     get appended throughout the hand would otherwise expose them as
+ *     soon as a player decodes).
+ */
+#define P_HOLECARDS_REVEAL_KEY "chips.vrsc::poker.sg777z.p_holecards_reveal"
 
 /*
 * t_game_info {
@@ -391,6 +440,12 @@ char *get_str_from_id_key_from_height(const char *id, const char *key, int32_t h
 cJSON *get_cJSON_from_id_key(const char *id, const char *key, int32_t is_full_id);
 cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid);
 cJSON *get_cJSON_from_id_key_vdxfid_from_height(const char *id, const char *key_vdxfid, int32_t height_start);
+/* Like get_cJSON_from_id_key_vdxfid_from_height but returns ALL CMM
+ * entries for the key (height-merged), not just the latest. Each
+ * element of the returned array is a decoded cJSON object (the original
+ * payload that was hex-encoded into the CMM entry). Caller owns the
+ * returned array and must cJSON_Delete it. Returns NULL on no entries. */
+cJSON *get_all_cJSON_from_id_key_vdxfid_from_height(const char *id, const char *key_vdxfid, int32_t height_start);
 cJSON *append_cmm_from_id_key_data_hex(const char *id, const char *key, char *hex_data, bool is_key_vdxf_id);
 cJSON *append_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id);
 cJSON *update_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id);

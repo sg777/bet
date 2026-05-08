@@ -80,6 +80,45 @@ Persist `cashier_r` keyed by `<game_id>` so a restarted cashier can recover the 
 
 ---
 
+### 5. Side-pot generalization for hand evaluation (all-in scenarios)
+
+**Status:** deferred. The new `dealer_evaluate_showdown` (in `poker/src/dealer.c`) splits `vars->pot` evenly among tied top-score winners — which is correct for the no-all-in case but wrong when one or more players go all-in for less than the full pot.
+
+The legacy code in `poker/src/host.c` (`det_dcv_pot_split`) implements the proper side-pot algorithm: walk players in order of `funds_spent`, peel off sub-pots, distribute each sub-pot only among winners eligible for that level. It depends on a `card_values[CARDS_MAXPLAYERS][hand_size]` global that is **no longer populated** in the Verus CMM flow (the legacy nanomsg `bet_receive_card` was the writer) — so we cannot just call it as-is.
+
+**What needs to happen when picked up:**
+1. Replace the `card_values[][]` global with values sourced from the same on-chain reads that `dealer_evaluate_showdown` already does (hole cards from `P_HOLECARDS_REVEAL_KEY` on each player id, board from `T_BOARD_CARDS_KEY` on table id) — populate a local 2-D buffer with the same shape as `card_values[][]`.
+2. Adapt `det_dcv_pot_split` to take the buffer as a parameter (drop the global) and `vars` for `funds_spent`/`bet_actions`/`pot`.
+3. Drive the loop from `vars->bet_actions[i][round] == allin` markers (already set today by `game.c::verus_handle_round_betting` when a player goes all-in).
+4. Replace the simple even-split block at the bottom of `dealer_evaluate_showdown` with a call to the adapted side-pot logic. Keep the simple path as a fast fallback for `no all-ins this hand`.
+
+**Touched when picked up:**
+- `poker/src/dealer.c` (`dealer_evaluate_showdown` — switch from even-split to side-pot)
+- `poker/src/host.c` (adapt `det_dcv_pot_split` signature; drop `card_values[][]` global dependency)
+- `poker/include/host.h` (export the adapted signature, if needed)
+
+---
+
+### 6. Enlarge poker deck from 14 to a full 52 cards
+
+**Status:** deferred. `CARDS_MAXCARDS` in `poker/include/common.h` is currently `14` — sized for 2 players (4 hole cards + 5 community + 5 spare). The deck values land in `priv.bytes[30]` via `bet.c::card_rand256(privkeyflag, index)` where `index` is the deck slot (0..13). Combined with `poker/src/poker.c::CardMask[52]` — which maps slots 0..12 to clubs 2..A and slot 13 to 2D — almost every showdown hand evaluates to a flush or straight-flush. Hand evaluation is *correct* on this degenerate deck (the pipeline now in `dealer_evaluate_showdown` does pick a real winner from kicker differences), but the variety of outcomes is low and tied scores will be more frequent than on a real deck.
+
+**What needs to happen when picked up:**
+1. Bump `CARDS_MAXCARDS` to 52 (or to a value that comfortably covers `num_players * 2 + 5 + spare` — but matching the real 52-card deck is the simplest correct choice).
+2. Verify deck-size dependents:
+   - `poker/include/common.h` (`CARDS_MAXCARDS`)
+   - `poker/include/bet.h` (`struct p_deck_info_struct.player_r[CARDS_MAXCARDS]`, `struct b_deck_info_struct.cashier_r[][CARDS_MAXCARDS]`, `struct d_deck_info_struct.dealer_r[CARDS_MAXCARDS]`)
+   - `poker/src/deck.c` (`gen_deck`, `shuffle_deck`, `shuffle_deck_db`, `blind_deck_d`, `blind_deck_b` — already `n`-parametric, should be safe)
+   - On-chain message size — 52 × 32-byte points × per-player blinded decks may push the cashier's `C_B_P*_DECK_KEY.<gid>` write above the per-key CMM size budget; check `updateidentity` accepts it and adjust if needed.
+3. Confirm `card_rand256(int32_t privkeyflag, int8_t index)` parameter is wide enough for index ≥ 14. The signature uses `int8_t` so it tops out at 127 — fine for 52, but rename the parameter (or widen) for clarity.
+
+**Touched when picked up:**
+- `poker/include/common.h` (the `#define`)
+- `poker/include/bet.h` (struct field sizing, if statically allocated)
+- `poker/src/test.c` (any literal 14s in test deck construction)
+
+---
+
 ## Out of scope here
 
 - Replacing or deleting `process_block` (cashier-side blocknotify path). It's currently dead code for joins (see `PLAYER_JOIN_FLOW.md` §1.3) but the decision of whether to delete vs. repurpose stays open until joins are stable.

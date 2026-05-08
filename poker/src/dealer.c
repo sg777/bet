@@ -10,6 +10,7 @@
 #include "config.h"
 #include "poker_vdxf.h"
 #include "storage.h"
+#include "poker.h"
 
 struct d_deck_info_struct d_deck_info;
 struct game_meta_info_struct game_meta_info;
@@ -295,6 +296,180 @@ static bool is_cashier_settlement_complete(char *cashier_id)
 	return (game_state == G_SETTLEMENT_COMPLETE_BY_CASHIER);
 }
 
+/*
+ * Showdown hand evaluation.
+ *
+ * Reads each non-folded player's hole cards from
+ * P_HOLECARDS_REVEAL_KEY.<gid> on the player id (single-writer per
+ * identity), reads the 5 community cards from T_BOARD_CARDS_KEY.<gid>
+ * on the table id, builds a 7-card hand per player, and runs
+ * poker.c::seven_card_draw_score to pick winners. Sets
+ * vars->winners[i] = 1 for tied/best players and credits
+ * vars->win_funds[i] = pot/num_winners (integer split; remainder is
+ * dropped today — TODO: side-pot handling via det_dcv_pot_split).
+ *
+ * Returns:
+ *   OK                         all non-folded players have published
+ *                              hole cards and winners have been set;
+ *   ERR_T_BOARD_CARDS_NULL     community cards not yet on the table id
+ *                              (caller should retry on next tick);
+ *   ERR_PLAYER_HOLECARDS_PEND  one or more players haven't published
+ *                              hole cards yet (caller should retry).
+ */
+static int32_t dealer_evaluate_showdown(char *table_id, struct privatebet_vars *vars)
+{
+	int32_t retval = OK;
+	int32_t hole_cards[CARDS_MAXPLAYERS][2];
+	int32_t board[5];
+	int32_t folded[CARDS_MAXPLAYERS] = { 0 };
+	int32_t active_players = 0;
+	char *game_id_str = NULL;
+
+	for (int32_t i = 0; i < CARDS_MAXPLAYERS; i++) {
+		hole_cards[i][0] = -1;
+		hole_cards[i][1] = -1;
+	}
+	for (int32_t i = 0; i < 5; i++) board[i] = -1;
+
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	if (!game_id_str) {
+		dlg_error("Showdown: unable to resolve T_GAME_ID for table %s", table_id);
+		return ERR_GAME_ID_NOT_FOUND;
+	}
+
+	/* Mark folded vs active across all rounds. A player is considered
+	 * active if no fold action was recorded in any round. */
+	for (int32_t i = 0; i < num_of_players; i++) {
+		for (int32_t r = 0; r < CARDS_MAXROUNDS; r++) {
+			if (vars->bet_actions[i][r] == fold) {
+				folded[i] = 1;
+				break;
+			}
+		}
+		if (!folded[i]) active_players++;
+	}
+
+	if (active_players == 0) {
+		dlg_warn("Showdown: no active players (all folded?) — skipping hand eval");
+		return OK;
+	}
+
+	/* Edge case: only one active player — wins by default, no hand
+	 * eval needed (and they would not have decoded all 5 community
+	 * cards anyway since dealer aborts dealing once a single player
+	 * remains; see G_REVEAL_CARD timeout path). */
+	if (active_players == 1) {
+		for (int32_t i = 0; i < num_of_players; i++) {
+			if (!folded[i]) {
+				vars->winners[i] = 1;
+				vars->win_funds[i] = vars->pot;
+				dlg_info("Showdown: only player %d active — wins pot %lld table chips",
+					 i, (long long)vars->pot);
+			}
+		}
+		return OK;
+	}
+
+	/* Read community cards from the table id (dealer-canonical). */
+	{
+		cJSON *board_cards = get_cJSON_from_id_key_vdxfid_from_height(
+			table_id, get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id_str), g_start_block);
+		if (!board_cards) {
+			dlg_info("Showdown: T_BOARD_CARDS_KEY not yet on table id");
+			return ERR_T_BOARD_CARDS_NULL;
+		}
+		cJSON *flop = cJSON_GetObjectItem(board_cards, "flop");
+		if (flop && cJSON_GetArraySize(flop) >= 3) {
+			board[0] = jinti(flop, 0);
+			board[1] = jinti(flop, 1);
+			board[2] = jinti(flop, 2);
+		}
+		board[3] = jint(board_cards, "turn");
+		board[4] = jint(board_cards, "river");
+		cJSON_Delete(board_cards);
+	}
+	for (int32_t i = 0; i < 5; i++) {
+		if (board[i] < 0) {
+			dlg_info("Showdown: community card slot %d not yet revealed (got %d)", i, board[i]);
+			return ERR_T_BOARD_CARDS_NULL;
+		}
+	}
+
+	/* Read each active player's hole-card reveal from their own id. */
+	for (int32_t i = 0; i < num_of_players; i++) {
+		if (folded[i]) continue;
+		cJSON *reveal = get_cJSON_from_id_key_vdxfid_from_height(
+			player_ids[i],
+			get_key_data_vdxf_id(P_HOLECARDS_REVEAL_KEY, game_id_str),
+			g_start_block);
+		if (!reveal) {
+			dlg_info("Showdown: player %d (%s) has not published hole cards yet",
+				 i, player_ids[i]);
+			return ERR_PLAYER_HOLECARDS_PEND;
+		}
+		cJSON *hc = cJSON_GetObjectItem(reveal, "hole_cards");
+		if (!hc || cJSON_GetArraySize(hc) < 2) {
+			dlg_warn("Showdown: malformed hole-card reveal from player %d", i);
+			cJSON_Delete(reveal);
+			return ERR_PLAYER_HOLECARDS_PEND;
+		}
+		hole_cards[i][0] = jinti(hc, 0);
+		hole_cards[i][1] = jinti(hc, 1);
+		cJSON_Delete(reveal);
+	}
+
+	/* Build 7-card hand per active player and score it. The current
+	 * 14-card test deck (CARDS_MAXCARDS=14) packs only 13 clubs + 2D,
+	 * so most hands evaluate to flushes/straight-flushes — see
+	 * docs/TODO.md "deck size enlargement". The eval pipeline itself
+	 * is sound; it produces meaningful score deltas across the
+	 * available card values and selects a real winner unless the
+	 * cards collide exactly. */
+	unsigned long scores[CARDS_MAXPLAYERS] = { 0 };
+	unsigned long max_score = 0;
+	int32_t num_winners = 0;
+
+	for (int32_t i = 0; i < num_of_players; i++) {
+		if (folded[i]) continue;
+		unsigned char h[7];
+		h[0] = (unsigned char)hole_cards[i][0];
+		h[1] = (unsigned char)hole_cards[i][1];
+		h[2] = (unsigned char)board[0];
+		h[3] = (unsigned char)board[1];
+		h[4] = (unsigned char)board[2];
+		h[5] = (unsigned char)board[3];
+		h[6] = (unsigned char)board[4];
+		scores[i] = seven_card_draw_score(h);
+		dlg_info("Showdown: player %d (%s) hand=[%d,%d,%d,%d,%d,%d,%d] score=%lu",
+			 i, player_ids[i], h[0], h[1], h[2], h[3], h[4], h[5], h[6], scores[i]);
+		if (scores[i] > max_score) max_score = scores[i];
+	}
+
+	for (int32_t i = 0; i < num_of_players; i++) {
+		if (folded[i]) continue;
+		if (scores[i] == max_score) {
+			vars->winners[i] = 1;
+			num_winners++;
+		}
+	}
+
+	/* Pot split. Integer division — remainder is dropped (no odd-chip
+	 * rule yet). Side-pot generalization for all-in scenarios is
+	 * tracked in docs/TODO.md. */
+	if (num_winners > 0) {
+		int64_t share = vars->pot / num_winners;
+		for (int32_t i = 0; i < num_of_players; i++) {
+			if (vars->winners[i] == 1) {
+				vars->win_funds[i] = share;
+				dlg_info("Showdown winner: player %d (%s) score=%lu wins %lld table chips",
+					 i, player_ids[i], scores[i], (long long)share);
+			}
+		}
+	}
+
+	return retval;
+}
+
 int32_t dealer_shuffle_deck(char *id)
 {
 	int32_t retval = OK;
@@ -537,45 +712,38 @@ int32_t handle_game_state(struct table *t)
 		retval = verus_handle_round_betting(t->table_id, dcv_vars);
 		break;
 	case G_SHOWDOWN:
-		dlg_info("Showdown - determining winners and pot distribution");
-		// For now, split pot among players who didn't fold
-		// TODO: Implement proper hand evaluation
+		/* Showdown — collect each non-folded player's hole-card reveal
+		 * (P_HOLECARDS_REVEAL_KEY on player id, single-writer-per-id)
+		 * + community cards (T_BOARD_CARDS_KEY on table id), score
+		 * 7-card hands via poker.c::seven_card_draw_score, set
+		 * winners[] / win_funds[], and initiate settlement.
+		 *
+		 * If any input is not yet on-chain (board incomplete or some
+		 * player hasn't published yet), return OK so the dealer loop
+		 * retries on the next tick rather than escalating into a
+		 * failed-game path. Settlement is only initiated once eval
+		 * succeeds, so this gating also prevents emitting a stale/
+		 * incomplete settlement record. */
 		{
-			int32_t active_players = 0;
-			for (int32_t i = 0; i < num_of_players; i++) {
-				// Check if player folded in any round
-				int32_t player_folded = 0;
-				for (int32_t r = 0; r < CARDS_MAXROUNDS; r++) {
-					if (dcv_vars->bet_actions[i][r] == fold) {
-						player_folded = 1;
-						break;
-					}
+			static int32_t last_pending_log = -1;
+			int32_t eval_rc = dealer_evaluate_showdown(t->table_id, dcv_vars);
+			if (eval_rc == ERR_T_BOARD_CARDS_NULL ||
+			    eval_rc == ERR_PLAYER_HOLECARDS_PEND) {
+				if (last_pending_log != eval_rc) {
+					dlg_info("Showdown: %s — retrying", bet_err_str(eval_rc));
+					last_pending_log = eval_rc;
 				}
-				if (!player_folded) {
-					dcv_vars->winners[i] = 1;
-					active_players++;
-				}
+				retval = OK;
+				break;
 			}
-			/* Split pot among winners. Pot is in table chips; integer
-			 * division gives the per-winner share. Any remainder
-			 * (pot % active_players) is dropped here - typical poker
-			 * convention is to award the odd chip to the first winner
-			 * by table position, but this simplified path doesn't yet
-			 * implement that. */
-			if (active_players > 0) {
-				int64_t share = dcv_vars->pot / active_players;
-				for (int32_t i = 0; i < num_of_players; i++) {
-					if (dcv_vars->winners[i] == 1) {
-						dcv_vars->win_funds[i] = share;
-						dlg_info("Player %d (%s): wins %lld table chips (%.4f CHIPS)",
-							 i, player_ids[i],
-							 (long long)share,
-							 table_chips_to_chips(share));
-					}
-				}
+			last_pending_log = -1;
+			if (eval_rc != OK) {
+				dlg_error("Showdown evaluation failed: %s", bet_err_str(eval_rc));
+				retval = eval_rc;
+				break;
 			}
+			retval = dealer_initiate_settlement(t, dcv_vars);
 		}
-		retval = dealer_initiate_settlement(t, dcv_vars);
 		break;
 	case G_SETTLEMENT_PENDING:
 		/* docs/TODO.md items 1.3 + 1.4: dealer canonicalizes the cashier's

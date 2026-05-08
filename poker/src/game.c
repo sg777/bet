@@ -544,25 +544,42 @@ int32_t update_board_cards(char *table_id, int32_t card_type)
 		return ERR_GAME_ID_NOT_FOUND;
 	}
 
-	// Poll each player for their decoded card value
+	/* Each player publishes a cumulative snapshot under
+	 * P_DECODED_CARD_KEY.<gid> of the form
+	 *   { game_id, decoded_cards: [ {card_id, card_type, card_value}, ... ] }
+	 * (see vdxf.h::P_DECODED_CARD_KEY). The latest CMM entry therefore
+	 * contains the player's full view; we scan its `decoded_cards`
+	 * array for an entry matching the requested card_type. */
 	for (int32_t i = 0; i < num_of_players; i++) {
-		cJSON *player_decoded = get_cJSON_from_id_key_vdxfid_from_height(player_ids[i],
+		cJSON *snapshot = get_cJSON_from_id_key_vdxfid_from_height(player_ids[i],
 			get_key_data_vdxf_id(P_DECODED_CARD_KEY, game_id_str), g_start_block);
-		if (player_decoded) {
-			int32_t p_card_type = jint(player_decoded, "card_type");
-			int32_t p_card_value = jint(player_decoded, "card_value");
-			
-			if (p_card_type == card_type) {
-				if (consensus_value == -1) {
-					consensus_value = p_card_value;
-					confirmed_count = 1;
-				} else if (p_card_value == consensus_value) {
-					confirmed_count++;
-				} else {
-					dlg_error("Player %d reported different card value for type %d: %d vs %d",
-						i, card_type, p_card_value, consensus_value);
-					// TODO: Handle dispute
+		if (!snapshot) continue;
+
+		cJSON *decoded_arr = cJSON_GetObjectItem(snapshot, "decoded_cards");
+		int32_t found_value = -1;
+		if (decoded_arr) {
+			for (int32_t k = 0; k < cJSON_GetArraySize(decoded_arr); k++) {
+				cJSON *e = cJSON_GetArrayItem(decoded_arr, k);
+				if (e && jint(e, "card_type") == card_type) {
+					/* If duplicates ever land in the array, prefer
+					 * the last one (matches report_decoded_card
+					 * supersede semantics). */
+					found_value = jint(e, "card_value");
 				}
+			}
+		}
+		cJSON_Delete(snapshot);
+
+		if (found_value >= 0) {
+			if (consensus_value == -1) {
+				consensus_value = found_value;
+				confirmed_count = 1;
+			} else if (found_value == consensus_value) {
+				confirmed_count++;
+			} else {
+				dlg_error("Player %d reported different card value for type %d: %d vs %d",
+					  i, card_type, found_value, consensus_value);
+				// TODO: Handle dispute
 			}
 		}
 	}

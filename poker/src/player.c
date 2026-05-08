@@ -140,30 +140,69 @@ static bool is_community_card(int32_t card_type)
 		card_type == turn_card || card_type == river_card);
 }
 
-// Report decoded card to player's identity (for dealer verification of community cards)
+/*
+ * Report a freshly decoded community card to the player's own identity
+ * under P_DECODED_CARD_KEY.<game_id>.
+ *
+ * The CMM entry is a cumulative snapshot of every community card this
+ * player has decoded so far for the current game (schema documented
+ * on P_DECODED_CARD_KEY in vdxf.h). On each call we:
+ *   1. Read the latest existing snapshot for this game (if any).
+ *   2. Replace any pre-existing entry for the same card_type with the
+ *      new value, otherwise append.
+ *   3. Re-publish the full snapshot.
+ *
+ * This lets the dealer's update_board_cards consensus check find any
+ * card_type by scanning the latest entry's `decoded_cards` array,
+ * rather than having to walk multiple per-card CMM entries.
+ */
 static int32_t report_decoded_card(int32_t card_id, int32_t card_type, int32_t card_value)
 {
 	char str[65];
-	cJSON *decoded_info = NULL, *out = NULL;
+	cJSON *snapshot = NULL, *decoded_arr = NULL, *out = NULL;
+	char *gid = bits256_str(str, p_deck_info.game_id);
+	const char *key_vdxfid = get_key_data_vdxf_id(P_DECODED_CARD_KEY, gid);
 
-	decoded_info = cJSON_CreateObject();
-	cJSON_AddNumberToObject(decoded_info, "card_id", card_id);
-	cJSON_AddNumberToObject(decoded_info, "card_type", card_type);
-	cJSON_AddNumberToObject(decoded_info, "card_value", card_value);
+	/* Pull the existing snapshot (or build a fresh one). */
+	snapshot = get_cJSON_from_id_key_vdxfid_from_height(
+		player_config.verus_pid, key_vdxfid, g_start_block);
+	if (!snapshot) {
+		snapshot = cJSON_CreateObject();
+		cJSON_AddStringToObject(snapshot, "game_id", gid);
+		decoded_arr = cJSON_CreateArray();
+		cJSON_AddItemToObject(snapshot, "decoded_cards", decoded_arr);
+	} else {
+		decoded_arr = cJSON_GetObjectItem(snapshot, "decoded_cards");
+		if (!decoded_arr) {
+			decoded_arr = cJSON_CreateArray();
+			cJSON_AddItemToObject(snapshot, "decoded_cards", decoded_arr);
+		}
+		/* If a previous entry exists for this card_type, drop it so
+		 * the new value supersedes (idempotent re-decode). */
+		for (int i = cJSON_GetArraySize(decoded_arr) - 1; i >= 0; i--) {
+			cJSON *e = cJSON_GetArrayItem(decoded_arr, i);
+			if (e && jint(e, "card_type") == card_type) {
+				cJSON_DeleteItemFromArray(decoded_arr, i);
+			}
+		}
+	}
 
-	out = poker_append_key_json(player_config.verus_pid,
-		get_key_data_vdxf_id(P_DECODED_CARD_KEY, bits256_str(str, p_deck_info.game_id)),
-		decoded_info, true);
+	cJSON *new_entry = cJSON_CreateObject();
+	cJSON_AddNumberToObject(new_entry, "card_id", card_id);
+	cJSON_AddNumberToObject(new_entry, "card_type", card_type);
+	cJSON_AddNumberToObject(new_entry, "card_value", card_value);
+	cJSON_AddItemToArray(decoded_arr, new_entry);
 
+	out = poker_append_key_json(player_config.verus_pid, key_vdxfid, snapshot, true);
 	if (!out) {
 		dlg_error("Failed to report decoded card to player ID");
-		cJSON_Delete(decoded_info);
+		cJSON_Delete(snapshot);
 		return ERR_UPDATEIDENTITY;
 	}
 
-	dlg_info("Reported decoded card to player ID: card_id=%d, card_type=%d, value=%d",
-		card_id, card_type, card_value);
-	cJSON_Delete(decoded_info);
+	dlg_info("Reported decoded card snapshot to player ID: card_id=%d, card_type=%d, value=%d (snapshot now has %d card(s))",
+		 card_id, card_type, card_value, cJSON_GetArraySize(decoded_arr));
+	cJSON_Delete(snapshot);
 	return OK;
 }
 
@@ -907,6 +946,42 @@ int32_t handle_game_state_player(char *table_id)
 		for (int i = 0; i < hand_size && i < p_local_state.cards_decoded_count; i++) {
 			if (p_local_state.decoded_cards[i] >= 0) {
 				dlg_info("  Card %d: %s", i + 1, get_card_name(p_local_state.decoded_cards[i]));
+			}
+		}
+		/* One-shot reveal of our two hole cards onto our own player id
+		 * under P_HOLECARDS_REVEAL_KEY.<gid>. Single-writer-per-identity:
+		 * only this player writes this key, the dealer reads it at
+		 * showdown to score 7-card hands. Guard prevents re-publishing
+		 * on every poll tick of the player loop while the table sits in
+		 * G_SHOWDOWN. */
+		{
+			static int32_t hole_cards_published = 0;
+			if (!hole_cards_published &&
+			    p_local_state.hole_cards[0] >= 0 &&
+			    p_local_state.hole_cards[1] >= 0) {
+				char str[65];
+				char *gid = bits256_str(str, p_deck_info.game_id);
+				cJSON *reveal = cJSON_CreateObject();
+				cJSON_AddStringToObject(reveal, "game_id", gid);
+				cJSON *hc_arr = cJSON_CreateArray();
+				cJSON_AddItemToArray(hc_arr, cJSON_CreateNumber(p_local_state.hole_cards[0]));
+				cJSON_AddItemToArray(hc_arr, cJSON_CreateNumber(p_local_state.hole_cards[1]));
+				cJSON_AddItemToObject(reveal, "hole_cards", hc_arr);
+
+				dlg_info("Publishing hole cards [%s, %s] for showdown",
+					 get_card_name(p_local_state.hole_cards[0]),
+					 get_card_name(p_local_state.hole_cards[1]));
+
+				cJSON *out = poker_append_key_json(
+					player_config.verus_pid,
+					get_key_data_vdxf_id(P_HOLECARDS_REVEAL_KEY, gid),
+					reveal, true);
+				if (out) {
+					hole_cards_published = 1;
+				} else {
+					dlg_warn("Hole-card reveal write failed; will retry on next tick");
+				}
+				cJSON_Delete(reveal);
 			}
 		}
 		break;
