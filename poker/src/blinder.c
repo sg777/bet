@@ -1,5 +1,6 @@
 #include "bet.h"
 #include "blinder.h"
+#include "commands.h"
 #include "config.h"
 #include "deck.h"
 #include "cards.h"
@@ -12,6 +13,25 @@ extern int32_t g_start_block;
 
 // Forward declaration - defined later in file
 static int32_t ensure_cashier_game_id_initialized(char *table_id);
+
+/*
+ * Cashier-side join discovery state (single-table for now — see docs/TODO.md).
+ *
+ * Idle until the first valid P_JOIN_REQUEST_KEY targeting this cashier shows up
+ * on a known player's identity. From that request we learn `cashier_table_id`
+ * and seed `g_start_block` from T_TABLE_INFO_KEY.<game_id>.start_block read off
+ * the table id. Reset back to idle on G_SETTLEMENT_COMPLETE.
+ */
+static char    cashier_table_id[64] = {0};
+static int32_t cashier_active = 0;
+
+/* Mirror of poker_vdxf.c::known_players[] used by poker_poll_players_for_joins.
+ * TODO.md item 1 collapses both lists into a single config-driven source. */
+static const char *known_players[] = {"p1","p2","p3","p4","p5","p6","p7","p8","p9", NULL};
+
+static int32_t cashier_check_payin_join(const char *player_short,
+                                        char *out_table_id, size_t out_size);
+static int32_t cashier_poll_players_for_joins(void);
 
 char all_t_b_p_keys[all_t_b_p_keys_no][128] = { T_B_P1_DECK_KEY, T_B_P2_DECK_KEY, T_B_P3_DECK_KEY, T_B_P4_DECK_KEY,
 						T_B_P5_DECK_KEY, T_B_P6_DECK_KEY, T_B_P7_DECK_KEY, T_B_P8_DECK_KEY,
@@ -299,6 +319,131 @@ static int32_t cashier_process_settlement(char *table_id)
 	return retval;
 }
 
+/*
+ * Inspect P_JOIN_REQUEST_KEY on `player_short`. If the request targets this
+ * cashier and the claimed payin_tx actually credited this cashier's address,
+ * copy the table_id into `out_table_id` and return OK.
+ *
+ * No on-chain writes. No height filter on the player ID read (P_JOIN_REQUEST_KEY
+ * is cumulative-latest). Verification is cryptographic via
+ * chips_get_balance_on_address_from_tx — independent of g_start_block, so this
+ * function can run before the cashier has resolved a start_block at all.
+ *
+ * Returns OK on a verified match, ERR_ID_NOT_FOUND for any non-match
+ * (no request, request not for us, payin not credited). The caller only
+ * branches on OK vs non-OK, so the specific code is a sentinel.
+ */
+static int32_t cashier_check_payin_join(const char *player_short,
+                                        char *out_table_id, size_t out_size)
+{
+	cJSON *join_request = NULL;
+	int32_t retval = ERR_ID_NOT_FOUND;
+
+	if (!player_short || !out_table_id || out_size == 0) {
+		return ERR_ARGS_NULL;
+	}
+
+	if (!is_id_exists(player_short, 0)) {
+		return ERR_ID_NOT_FOUND;
+	}
+
+	join_request = get_cJSON_from_id_key(player_short, P_JOIN_REQUEST_KEY, 0);
+	if (!join_request) {
+		return ERR_ID_NOT_FOUND;
+	}
+
+	const char *req_cashier = jstr(join_request, "cashier_id");
+	const char *req_table   = jstr(join_request, "table_id");
+	const char *req_payin   = jstr(join_request, "payin_tx");
+
+	if (!req_cashier || !req_table || !req_payin) {
+		cJSON_Delete(join_request);
+		return ERR_ID_NOT_FOUND;
+	}
+
+	if (strcmp(req_cashier, bet_get_cashiers_id_fqn()) != 0) {
+		cJSON_Delete(join_request);
+		return ERR_ID_NOT_FOUND;
+	}
+
+	/* Verify cryptographically: the payin_tx actually credited our address. */
+	double credited = chips_get_balance_on_address_from_tx(
+		get_vdxf_id(bet_get_cashiers_id_fqn()), (char *)req_payin);
+	if (credited <= 0.0) {
+		dlg_warn("Player %s claims payin_tx %s but it did not credit cashier",
+			 player_short, req_payin);
+		cJSON_Delete(join_request);
+		return ERR_ID_NOT_FOUND;
+	}
+
+	snprintf(out_table_id, out_size, "%s", req_table);
+	dlg_info("Cashier verified join: player=%s table=%s payin_tx=%s amount=%f",
+		 player_short, req_table, req_payin, credited);
+	retval = OK;
+
+	cJSON_Delete(join_request);
+	return retval;
+}
+
+/*
+ * Iterate known_players[]. On the first verified match, learn `cashier_table_id`
+ * from the join request, then resolve the game's start_block from the table id
+ * (T_GAME_ID_KEY -> T_TABLE_INFO_KEY.<game_id>.start_block) and seed
+ * g_start_block. Marks `cashier_active = 1`.
+ *
+ * Both reads from the table id use plain getidentity (no height filter) because
+ * those keys are cumulative-latest writes by the dealer at game-init time.
+ *
+ * Returns OK once the cashier is active, ERR_TABLE_IS_NOT_STARTED while idle.
+ */
+static int32_t cashier_poll_players_for_joins(void)
+{
+	char learned_table_id[64] = {0};
+
+	for (int i = 0; known_players[i] != NULL; i++) {
+		if (cashier_check_payin_join(known_players[i],
+					     learned_table_id,
+					     sizeof(learned_table_id)) == OK) {
+			break;
+		}
+	}
+
+	if (learned_table_id[0] == '\0') {
+		return ERR_TABLE_IS_NOT_STARTED;
+	}
+
+	/* Resolve game_id and start_block from the table id (cumulative reads). */
+	char *game_id_str = get_str_from_id_key(learned_table_id, T_GAME_ID_KEY);
+	if (!game_id_str) {
+		dlg_warn("Cashier learned table %s but T_GAME_ID_KEY is missing",
+			 learned_table_id);
+		return ERR_GAME_ID_NOT_FOUND;
+	}
+
+	cJSON *t_table_info = get_cJSON_from_id_key_vdxfid(
+		learned_table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+	if (!t_table_info) {
+		dlg_warn("Cashier learned table %s game %s but T_TABLE_INFO_KEY.<game_id> is missing",
+			 learned_table_id, game_id_str);
+		return ERR_T_TABLE_INFO_NULL;
+	}
+
+	int32_t start_block = jint(t_table_info, "start_block");
+	cJSON_Delete(t_table_info);
+
+	if (start_block <= 0) {
+		dlg_warn("Cashier learned table %s game %s but start_block is %d",
+			 learned_table_id, game_id_str, start_block);
+		return ERR_TABLE_IS_NOT_STARTED;
+	}
+
+	snprintf(cashier_table_id, sizeof(cashier_table_id), "%s", learned_table_id);
+	g_start_block = start_block;
+	cashier_active = 1;
+
+	return OK;
+}
+
 // Ensure cashier's ID has T_GAME_ID_KEY set (required for append_game_state to work)
 static int32_t ensure_cashier_game_id_initialized(char *table_id)
 {
@@ -363,17 +508,34 @@ int32_t handle_game_state_cashier(char *table_id)
 		break;
 	case G_SETTLEMENT_COMPLETE:
 		dlg_info("Settlement complete - game finished");
+		/* Reset cashier-side join discovery state so the next game's
+		 * payin will re-seed cashier_table_id and g_start_block. */
+		cashier_active = 0;
+		cashier_table_id[0] = '\0';
+		g_start_block = 0;
+		dlg_info("Cashier returning to idle — polling player IDs for next join");
 		break;
 	}
 	return retval;
 }
 
-int32_t cashier_game_init(char *table_id)
+int32_t cashier_game_init(void)
 {
 	int32_t retval = OK;
 
+	dlg_info("Cashier idle — polling player IDs for join requests");
+
 	while (1) {
-		retval = handle_game_state_cashier(table_id);
+		if (!cashier_active) {
+			if (cashier_poll_players_for_joins() != OK) {
+				sleep(2);
+				continue;
+			}
+			dlg_info("Cashier active for table %s, start_block=%d",
+				 cashier_table_id, g_start_block);
+		}
+
+		retval = handle_game_state_cashier(cashier_table_id);
 		if (retval)
 			return retval;
 		sleep(2);

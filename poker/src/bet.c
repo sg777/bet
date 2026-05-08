@@ -539,8 +539,8 @@ void bet_start(int argc, char **argv)
 				dlg_info("Using cashier config: %s", cashier_config_ini_file);
 			}
 			
-			dlg_info("Starting cashier node (table: %s)", args.table_id);
-			cashier_game_init((char *)args.table_id);
+			dlg_info("Starting cashier node");
+			cashier_game_init();
 		}
 		else {
 			dlg_error("Unknown node type: %s (use player, dealer, or cashier)", node);
