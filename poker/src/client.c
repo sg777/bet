@@ -1036,14 +1036,6 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 				pthread_cond_signal(&gui_join_cond);
 				pthread_mutex_unlock(&gui_join_mutex);
 				dlg_info("Signal sent to backend thread");
-				
-				// Send acknowledgment to GUI
-				cJSON *join_ack = cJSON_CreateObject();
-				cJSON_AddStringToObject(join_ack, "method", "join_ack");
-				cJSON_AddStringToObject(join_ack, "status", "approved");
-				cJSON_AddStringToObject(join_ack, "message", "Join approved, proceeding with payin transaction");
-				player_lws_write(join_ack);
-				cJSON_Delete(join_ack);
 			}
 			break;
 		cases("withdraw")

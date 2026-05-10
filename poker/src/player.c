@@ -1087,6 +1087,13 @@ int32_t handle_verus_player()
 		pthread_mutex_unlock(&gui_join_mutex);
 		
 		dlg_info("GUI join approved, proceeding to join table");
+
+		cJSON *join_ack = cJSON_CreateObject();
+		cJSON_AddStringToObject(join_ack, "method", "join_ack");
+		cJSON_AddStringToObject(join_ack, "status", "approved");
+		cJSON_AddStringToObject(join_ack, "message", "Join approved, proceeding with payin transaction");
+		player_lws_write(join_ack);
+		cJSON_Delete(join_ack);
 	}
 
 	// Join the table (skip if already joined)
