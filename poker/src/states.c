@@ -669,7 +669,30 @@ int32_t bet_player_round_betting(cJSON *argjson, struct privatebet_info *bet, st
 	(void)bet;  /* legacy multisig path removed - bet no longer needed */
 
 	playerid = jint(argjson, "playerid");
-	round = jint(argjson, "round");
+
+	/* round MUST come from the dealer's T_BETTING_STATE_KEY (the
+	 * authoritative round counter), NOT from the GUI message.
+	 * gui_build_betting_round() in gui.c does not include "round" in the
+	 * payload it sends to the GUI, so jint(argjson, "round") returned 0
+	 * by default for every GUI-driven action. Pre-flop happened to work
+	 * by accident because the dealer was also on round=0; on every
+	 * post-flop round the action got stamped round=0 while the dealer
+	 * expected round>=1, so the dealer's verus_poll_player_action()
+	 * dropped it as a stale-round action and auto-folded the GUI player
+	 * after its 121 s timeout.
+	 *
+	 * Same bug class as the comment in player.c::player_write_betting_action;
+	 * the fix was applied there for the CLI/auto path but not extended to
+	 * the GUI path here. By re-reading T_BETTING_STATE_KEY we pull the
+	 * round the dealer is currently waiting for - which is exactly the
+	 * round this action belongs to, since the dealer has not yet
+	 * advanced (it is still waiting for our action). */
+	{
+		cJSON *bs = player_read_betting_state(player_config.table_id);
+		round = bs ? jint(bs, "round") : 0;
+		if (bs)
+			cJSON_Delete(bs);
+	}
 
 	possibilities = cJSON_GetObjectItem(argjson, "possibilities");
 	if (!possibilities || cJSON_GetArraySize(possibilities) != 1) {
