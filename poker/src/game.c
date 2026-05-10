@@ -297,19 +297,37 @@ static int32_t update_next_card(char *table_id, int32_t player_id, int32_t card_
 	return retval;
 }
 
+static int32_t deal_hole_batch(char *table_id)
+{
+	cJSON *payload = NULL, *requests = NULL, *out = NULL;
+
+	payload = cJSON_CreateObject();
+	cJSON_AddStringToObject(payload, "phase", "hole");
+	requests = cJSON_CreateArray();
+	for (int i = 0; i < no_of_hole_cards; i++) {
+		for (int j = 0; j < num_of_players; j++) {
+			cJSON *e = cJSON_CreateObject();
+			cJSON_AddNumberToObject(e, "player_id", j);
+			cJSON_AddNumberToObject(e, "card_id", (i * num_of_players) + j);
+			cJSON_AddNumberToObject(e, "card_type", hole_card);
+			cJSON_AddItemToArray(requests, e);
+		}
+	}
+	cJSON_AddItemToObject(payload, "requests", requests);
+
+	dlg_info("Issuing hole-card reveal batch (%d entries) to table",
+		 cJSON_GetArraySize(requests));
+	out = append_game_state(table_id, G_REVEAL_CARD, payload);
+	return out ? OK : ERR_UPDATEIDENTITY;
+}
+
 int32_t deal_next_card(char *table_id)
 {
 	int32_t retval = OK;
 
 	if (hole_cards_drawn == 0) {
-		for (int i = 0; i < no_of_hole_cards; i++) {
-			for (int j = 0; j < num_of_players; j++) {
-				if (card_matrix[j][i] == 0) {
-					retval = update_next_card(table_id, j, (i * num_of_players) + j, hole_card);
-					goto end;
-				}
-			}
-		}
+		retval = deal_hole_batch(table_id);
+		goto end;
 	} else if (flop_cards_drawn == 0) {
 		for (int i = no_of_hole_cards; i < no_of_hole_cards + no_of_flop_cards; i++) {
 			for (int j = 0; j < num_of_players; j++) {
@@ -374,6 +392,84 @@ int32_t init_game_state(char *table_id)
 	init_game_meta_info(table_id);  // Load player funds from payin amounts
 	retval = deal_next_card(table_id);
 	return retval;
+}
+
+static int32_t is_request_batch(cJSON *game_state_info)
+{
+	if (!game_state_info) return 0;
+	cJSON *requests = cJSON_GetObjectItem(game_state_info, "requests");
+	return (requests && requests->type == cJSON_Array) ? 1 : 0;
+}
+
+static int32_t player_has_acked_hole_card(const char *player_pid, const char *gid,
+					  int32_t card_id)
+{
+	cJSON *snapshot = NULL, *arr = NULL;
+	int32_t found = 0;
+
+	snapshot = get_cJSON_from_id_key_vdxfid_from_height((char *)player_pid,
+		get_key_data_vdxf_id(P_DECODED_CARD_KEY, (char *)gid), g_start_block);
+	if (!snapshot) return 0;
+	arr = cJSON_GetObjectItem(snapshot, "decoded_cards");
+	if (!arr) { cJSON_Delete(snapshot); return 0; }
+	for (int i = 0; i < cJSON_GetArraySize(arr); i++) {
+		cJSON *e = cJSON_GetArrayItem(arr, i);
+		if (e && jint(e, "card_type") == hole_card &&
+		    jint(e, "card_id") == card_id) {
+			found = 1;
+			break;
+		}
+	}
+	cJSON_Delete(snapshot);
+	return found;
+}
+
+int32_t is_hole_batch_complete(char *table_id)
+{
+	cJSON *game_state_info = NULL, *requests = NULL;
+	char *game_id_str = NULL;
+
+	game_state_info = get_game_state_info(table_id);
+	if (!is_request_batch(game_state_info))
+		return ERR_PLAYER_TIMEOUT;
+
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	if (!game_id_str) return ERR_GAME_ID_NOT_FOUND;
+
+	requests = cJSON_GetObjectItem(game_state_info, "requests");
+	for (int i = 0; i < cJSON_GetArraySize(requests); i++) {
+		cJSON *e = cJSON_GetArrayItem(requests, i);
+		int32_t pid = jint(e, "player_id");
+		int32_t cid = jint(e, "card_id");
+		if (pid < 0 || pid >= num_of_players) continue;
+		if (!player_has_acked_hole_card(player_ids[pid], game_id_str, cid))
+			return ERR_PLAYER_TIMEOUT;
+	}
+	return OK;
+}
+
+int32_t verus_receive_hole_batch(char *table_id, struct privatebet_vars *vars)
+{
+	cJSON *game_state_info = NULL, *requests = NULL;
+
+	game_state_info = get_game_state_info(table_id);
+	requests = cJSON_GetObjectItem(game_state_info, "requests");
+	if (!requests) return ERR_ARGS_NULL;
+
+	for (int i = 0; i < cJSON_GetArraySize(requests); i++) {
+		cJSON *e = cJSON_GetArrayItem(requests, i);
+		int32_t cid = jint(e, "card_id");
+		card_matrix[(cid % num_of_players)][(cid / num_of_players)] = 1;
+		no_of_cards++;
+	}
+	hole_cards_drawn = 1;
+	dlg_info("═══════════════════════════════════════════");
+	dlg_info("  ✓ ALL HOLE CARDS DEALT - PREFLOP BETTING  ");
+	dlg_info("═══════════════════════════════════════════");
+	dlg_info("═══════════════════════════════════════════");
+	dlg_info("  💰 INITIATING BETTING - SMALL BLIND       ");
+	dlg_info("═══════════════════════════════════════════");
+	return verus_small_blind(table_id, vars);
 }
 
 int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)

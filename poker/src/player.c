@@ -206,17 +206,25 @@ static int32_t report_decoded_card(int32_t card_id, int32_t card_type, int32_t c
 	return OK;
 }
 
-int32_t reveal_card(char *table_id)
+static cJSON *find_bv_in_batch(cJSON *bv_info, int32_t player_id, int32_t card_id)
 {
-	int32_t retval = OK, player_id, card_id, card_value = -1, card_type;
-	char *game_id_str = NULL, str[65];
-	cJSON *game_state_info = NULL, *bv_info = NULL, *b_blinded_deck = NULL, *dealer_blind_info = NULL, *bv = NULL;
-	bits256 b_blinded_card, blinded_value;
+	cJSON *bvs = bv_info ? cJSON_GetObjectItem(bv_info, "bvs") : NULL;
+	if (!bvs || bvs->type != cJSON_Array) return NULL;
+	for (int i = 0; i < cJSON_GetArraySize(bvs); i++) {
+		cJSON *e = cJSON_GetArrayItem(bvs, i);
+		if (e && jint(e, "player_id") == player_id &&
+		    jint(e, "card_id") == card_id)
+			return e;
+	}
+	return NULL;
+}
 
-	game_state_info = get_game_state_info(table_id);
-	player_id = jint(game_state_info, "player_id");
-	card_id = jint(game_state_info, "card_id");
-	card_type = jint(game_state_info, "card_type");
+int32_t reveal_card_for(char *table_id, int32_t player_id, int32_t card_id, int32_t card_type)
+{
+	int32_t retval = OK, card_value = -1;
+	char *game_id_str = NULL, str[65];
+	cJSON *bv_info = NULL, *b_blinded_deck = NULL, *dealer_blind_info = NULL, *bv = NULL;
+	bits256 b_blinded_card, blinded_value;
 
 	if ((player_id == p_deck_info.player_id) || (player_id == -1)) {
 		// Check if we already decoded this card (from local state)
@@ -290,11 +298,6 @@ int32_t reveal_card(char *table_id)
 			}
 		}
 
-		/* Read the BV for the current (player_id, card_id) directly from
-		 * the cashier id under C_CARD_BV_KEY.<gid>. The poll loop below
-		 * waits for the cashier's *latest* CMM entry on this key to match
-		 * the (player_id, card_id) the dealer is currently asking about
-		 * (single-writer-per-identity, docs/TODO.md item 1.2). */
 		while (1) {
 			bv_info = get_cJSON_from_id_key_vdxfid_from_height(cashier_id,
 							       get_key_data_vdxf_id(C_CARD_BV_KEY, game_id_str), g_start_block);
@@ -303,16 +306,16 @@ int32_t reveal_card(char *table_id)
 				wait_for_a_blocktime();
 				continue;
 			}
-			dlg_info("%s", cJSON_Print(bv_info));
-
-			bv = jobj(bv_info, "bv");
-			if (!bv) {
-				// TODO:: This needs to be handled
-				dlg_error("BV is missing");
+			cJSON *batch_entry = find_bv_in_batch(bv_info, player_id, card_id);
+			if (batch_entry) {
+				bv = cJSON_GetObjectItem(batch_entry, "bv");
+				if (bv) break;
 			}
-			dlg_info("%s", cJSON_Print(bv));
-			if ((jint(bv_info, "card_id") == card_id) && (jint(bv_info, "player_id") == player_id))
+			bv = jobj(bv_info, "bv");
+			if (bv && jint(bv_info, "card_id") == card_id &&
+			    jint(bv_info, "player_id") == player_id)
 				break;
+			wait_for_a_blocktime();
 		}
 
 		/* Read the blinded deck for this player slot directly from the
@@ -444,20 +447,102 @@ int32_t reveal_card(char *table_id)
 	return retval;
 }
 
+int32_t reveal_card(char *table_id)
+{
+	cJSON *game_state_info = get_game_state_info(table_id);
+	if (!game_state_info) return OK;
+	int32_t player_id = jint(game_state_info, "player_id");
+	int32_t card_id = jint(game_state_info, "card_id");
+	int32_t card_type = jint(game_state_info, "card_type");
+	return reveal_card_for(table_id, player_id, card_id, card_type);
+}
+
+static int32_t append_hole_acks_to_snapshot(int32_t *card_ids, int32_t n)
+{
+	char str[65];
+	cJSON *snapshot = NULL, *decoded_arr = NULL, *out = NULL;
+	char *gid = bits256_str(str, p_deck_info.game_id);
+	const char *key_vdxfid = get_key_data_vdxf_id(P_DECODED_CARD_KEY, gid);
+
+	snapshot = get_cJSON_from_id_key_vdxfid_from_height(
+		player_config.verus_pid, key_vdxfid, g_start_block);
+	if (!snapshot) {
+		snapshot = cJSON_CreateObject();
+		cJSON_AddStringToObject(snapshot, "game_id", gid);
+		decoded_arr = cJSON_CreateArray();
+		cJSON_AddItemToObject(snapshot, "decoded_cards", decoded_arr);
+	} else {
+		decoded_arr = cJSON_GetObjectItem(snapshot, "decoded_cards");
+		if (!decoded_arr) {
+			decoded_arr = cJSON_CreateArray();
+			cJSON_AddItemToObject(snapshot, "decoded_cards", decoded_arr);
+		}
+	}
+
+	int32_t added = 0;
+	for (int k = 0; k < n; k++) {
+		int32_t cid = card_ids[k];
+		int32_t already = 0;
+		for (int i = 0; i < cJSON_GetArraySize(decoded_arr); i++) {
+			cJSON *e = cJSON_GetArrayItem(decoded_arr, i);
+			if (e && jint(e, "card_type") == hole_card &&
+			    jint(e, "card_id") == cid) {
+				already = 1;
+				break;
+			}
+		}
+		if (already) continue;
+		cJSON *entry = cJSON_CreateObject();
+		cJSON_AddNumberToObject(entry, "card_id", cid);
+		cJSON_AddNumberToObject(entry, "card_type", hole_card);
+		cJSON_AddItemToArray(decoded_arr, entry);
+		added++;
+	}
+	if (added == 0) {
+		cJSON_Delete(snapshot);
+		return OK;
+	}
+	out = poker_append_key_json(player_config.verus_pid, key_vdxfid, snapshot, true);
+	cJSON_Delete(snapshot);
+	return out ? OK : ERR_UPDATEIDENTITY;
+}
+
+static int32_t reveal_hole_batch(char *table_id, cJSON *requests)
+{
+	int32_t my_id = p_deck_info.player_id;
+	int32_t my_card_ids[CARDS_MAXCARDS];
+	int32_t my_n = 0;
+
+	for (int i = 0; i < cJSON_GetArraySize(requests); i++) {
+		cJSON *e = cJSON_GetArrayItem(requests, i);
+		if (jint(e, "player_id") != my_id) continue;
+		int32_t cid = jint(e, "card_id");
+		int32_t ctype = jint(e, "card_type");
+		int32_t r = reveal_card_for(table_id, my_id, cid, ctype);
+		if (r != OK) return r;
+		if (my_n < CARDS_MAXCARDS) my_card_ids[my_n++] = cid;
+	}
+	if (my_n == 0) return OK;
+	return append_hole_acks_to_snapshot(my_card_ids, my_n);
+}
+
 static int32_t handle_player_reveal_card(char *table_id)
 {
 	int32_t retval = OK;
 	cJSON *game_state_info = NULL, *player_game_state_info = NULL;
 
-	player_game_state_info = get_game_state_info(player_config.verus_pid);
 	game_state_info = get_game_state_info(table_id);
+	if (!game_state_info)
+		return retval;
 
-	if (!game_state_info) {
-		// TODO:: This error needs to be handled.
+	cJSON *requests = cJSON_GetObjectItem(game_state_info, "requests");
+	if (requests && requests->type == cJSON_Array) {
+		retval = reveal_hole_batch(table_id, requests);
 		return retval;
 	}
+
+	player_game_state_info = get_game_state_info(player_config.verus_pid);
 	if (jint(game_state_info, "player_id") != p_deck_info.player_id) {
-		// Not this players turn
 		dlg_info("Not this players turn...");
 		return retval;
 	}

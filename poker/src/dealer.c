@@ -682,7 +682,19 @@ int32_t handle_game_state(struct table *t)
 		dlg_info("Its time for game");
 		retval = init_game_state(t->table_id);
 		break;
-	case G_REVEAL_CARD:
+	case G_REVEAL_CARD: {
+		cJSON *gsi = get_game_state_info(t->table_id);
+		int32_t is_batch = (gsi && cJSON_GetObjectItem(gsi, "requests")) ? 1 : 0;
+		if (is_batch) {
+			retval = is_hole_batch_complete(t->table_id);
+			if (retval == OK) {
+				dlg_info("Hole-card batch complete");
+				retval = verus_receive_hole_batch(t->table_id, dcv_vars);
+			} else {
+				retval = OK;
+			}
+			break;
+		}
 		retval = is_card_drawn(t->table_id);
 		if (retval == OK) {
 			dlg_info("Card is drawn");
@@ -705,6 +717,7 @@ int32_t handle_game_state(struct table *t)
 			retval = OK;  // Don't propagate timeout as error - game continues
 		}
 		break;
+	}
 	case G_ROUND_BETTING:
 		// Poll current player for their betting action
 		retval = verus_handle_round_betting(t->table_id, dcv_vars);

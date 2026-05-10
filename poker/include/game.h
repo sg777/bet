@@ -46,6 +46,8 @@ cJSON *get_game_state_info(const char *id);
 int32_t init_game_state(char *table_id);
 int32_t is_card_drawn(char *table_id);
 int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars);
+int32_t is_hole_batch_complete(char *table_id);
+int32_t verus_receive_hole_batch(char *table_id, struct privatebet_vars *vars);
 int32_t verus_small_blind(char *table_id, struct privatebet_vars *vars);
 
 // Round betting - dealer writes state, polls player actions
