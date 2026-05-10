@@ -921,6 +921,117 @@ int32_t player_handle_betting(char *table_id)
 	return retval;
 }
 
+static cJSON *card_int_to_json_str(int32_t v)
+{
+	if (v < 0 || v > 51)
+		return cJSON_CreateNull();
+	char buf[4];
+	strncpy(buf, card_value_to_string(v), sizeof(buf));
+	return cJSON_CreateString(buf);
+}
+
+static int32_t try_send_final_info_to_gui(char *table_id)
+{
+	extern int g_betting_mode;
+	char str[65];
+	char *gid = bits256_str(str, p_deck_info.game_id);
+	cJSON *settlement = NULL, *board = NULL;
+	cJSON *msg = NULL, *show_info = NULL, *win_arr = NULL;
+	cJSON *board_arr = NULL, *all_holes = NULL;
+	cJSON *winners_in = NULL, *player_ids_in = NULL, *flop = NULL;
+	int32_t np = 0, ready = 1;
+
+	if (g_betting_mode != BET_MODE_GUI)
+		return 0;
+
+	settlement = get_cJSON_from_id_key_vdxfid_from_height(table_id,
+		get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, gid), g_start_block);
+	if (!settlement)
+		return 0;
+
+	board = get_cJSON_from_id_key_vdxfid_from_height(table_id,
+		get_key_data_vdxf_id(T_BOARD_CARDS_KEY, gid), g_start_block);
+	if (!board) {
+		cJSON_Delete(settlement);
+		return 0;
+	}
+
+	player_ids_in = cJSON_GetObjectItem(settlement, "player_ids");
+	np = player_ids_in ? cJSON_GetArraySize(player_ids_in) : 0;
+
+	all_holes = cJSON_CreateArray();
+	for (int p = 0; p < np; p++) {
+		cJSON *pid = cJSON_GetArrayItem(player_ids_in, p);
+		cJSON *cards_arr = cJSON_CreateArray();
+		cJSON *reveal = NULL;
+		if (pid && pid->valuestring) {
+			reveal = get_cJSON_from_id_key_vdxfid_from_height(pid->valuestring,
+				get_key_data_vdxf_id(P_HOLECARDS_REVEAL_KEY, gid), g_start_block);
+		}
+		if (!reveal) {
+			ready = 0;
+			cJSON_Delete(cards_arr);
+			break;
+		}
+		cJSON *hc = cJSON_GetObjectItem(reveal, "hole_cards");
+		if (!hc || cJSON_GetArraySize(hc) < 2) {
+			ready = 0;
+			cJSON_Delete(reveal);
+			cJSON_Delete(cards_arr);
+			break;
+		}
+		for (int c = 0; c < cJSON_GetArraySize(hc); c++) {
+			cJSON *hcv = cJSON_GetArrayItem(hc, c);
+			cJSON_AddItemToArray(cards_arr, card_int_to_json_str(hcv ? hcv->valueint : -1));
+		}
+		cJSON_Delete(reveal);
+		cJSON_AddItemToArray(all_holes, cards_arr);
+	}
+
+	if (!ready) {
+		cJSON_Delete(all_holes);
+		cJSON_Delete(settlement);
+		cJSON_Delete(board);
+		return 0;
+	}
+
+	msg = cJSON_CreateObject();
+	cJSON_AddStringToObject(msg, "method", "finalInfo");
+
+	winners_in = cJSON_GetObjectItem(settlement, "winners");
+	win_arr = cJSON_CreateArray();
+	if (winners_in) {
+		for (int i = 0; i < cJSON_GetArraySize(winners_in); i++) {
+			cJSON *w = cJSON_GetArrayItem(winners_in, i);
+			cJSON_AddItemToArray(win_arr, cJSON_CreateNumber(w ? w->valueint : 0));
+		}
+	}
+	cJSON_AddItemToObject(msg, "winners", win_arr);
+	cJSON_AddNumberToObject(msg, "win_amount", (double)jint(settlement, "pot"));
+
+	show_info = cJSON_CreateObject();
+
+	board_arr = cJSON_CreateArray();
+	flop = cJSON_GetObjectItem(board, "flop");
+	for (int i = 0; i < 3; i++) {
+		cJSON *c = flop ? cJSON_GetArrayItem(flop, i) : NULL;
+		cJSON_AddItemToArray(board_arr, card_int_to_json_str(c ? c->valueint : -1));
+	}
+	cJSON_AddItemToArray(board_arr, card_int_to_json_str(jint(board, "turn")));
+	cJSON_AddItemToArray(board_arr, card_int_to_json_str(jint(board, "river")));
+	cJSON_AddItemToObject(show_info, "boardCardInfo", board_arr);
+
+	cJSON_AddItemToObject(show_info, "allHoleCardsInfo", all_holes);
+	cJSON_AddItemToObject(msg, "showInfo", show_info);
+
+	dlg_info("Sending finalInfo to GUI");
+	player_lws_write(msg);
+	cJSON_Delete(msg);
+	cJSON_Delete(settlement);
+	cJSON_Delete(board);
+	return 1;
+}
+
 int32_t handle_game_state_player(char *table_id)
 {
 	int32_t game_state, retval = OK;
@@ -983,6 +1094,11 @@ int32_t handle_game_state_player(char *table_id)
 				}
 				cJSON_Delete(reveal);
 			}
+		}
+		{
+			static int32_t final_info_sent = 0;
+			if (!final_info_sent && try_send_final_info_to_gui(table_id))
+				final_info_sent = 1;
 		}
 		break;
 	case G_SETTLEMENT_COMPLETE:
