@@ -1463,27 +1463,117 @@ double chips_get_balance_on_address_from_tx(char *address, char *tx)
 	return balance;
 }
 
+/*
+ * chips_get_wallet_address
+ * ------------------------
+ * Returns a wallet R-address suitable for putting in the table_info "addr"
+ * field, payout transactions, etc.
+ *
+ * Historically this called `listaddressgroupings` and walked the entire
+ * wallet looking for the first address that passed `chips_validate_address`.
+ * On a regtest wallet that has accumulated tens of thousands of addresses
+ * from mining, that RPC returns >1M lines of JSON, which (combined with
+ * cJSON's O(N^2) array indexing and per-address validateaddress subprocess
+ * calls) takes minutes to chew through and parks the caller — including the
+ * libwebsockets service thread that pushes table_info to the GUI.
+ *
+ * We now resolve the address from the running node's own Verus identity:
+ *   1. Player nodes have player_config.verus_pid populated from <player>.ini.
+ *   2. Cashier / dealer nodes have verus_config.cashier_id / .dealer_id
+ *      populated from keys.ini.
+ *
+ * For whichever identity is configured we issue a single
+ *   verus -chain=VRSCTEST getidentity <id>
+ * and extract identity.primaryaddresses[0]. The result is cached for the
+ * process lifetime since the bound address does not change at runtime.
+ *
+ * The legacy listaddressgroupings/getnewaddress path is kept as a final
+ * fallback so the function never silently returns NULL if no identity is
+ * configured (e.g. unit tests / one-off CLI subcommands).
+ */
 char *chips_get_wallet_address()
 {
-	int argc;
-	char **argv = NULL;
-	cJSON *addresses = NULL;
+	static char cached_addr[64] = { 0 };
+	if (cached_addr[0] != '\0')
+		return cached_addr;
 
-	argc = 2;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, blockchain_cli, "listaddressgroupings");
-	make_command(argc, argv, &addresses);
-
-	for (int32_t i = 0; i < cJSON_GetArraySize(addresses); i++) {
-		cJSON *temp = cJSON_GetArrayItem(addresses, i);
-		for (int32_t j = 0; j < cJSON_GetArraySize(temp); j++) {
-			cJSON *temp1 = cJSON_GetArrayItem(temp, j);
-
-			if (chips_validate_address(unstringify(cJSON_Print(cJSON_GetArrayItem(temp1, 0)))))
-				return (unstringify(cJSON_Print(cJSON_GetArrayItem(temp1, 0))));
-		}
+	/* Build a fully-qualified Verus ID. player_config.verus_pid stores the
+	 * short form ("p1"), which getidentity rejects; verus_config.cashier_id
+	 * / .dealer_id are already FQNs (loaded from keys.ini). For the player
+	 * case we append the poker parent FQN ("sg777z.VRSCTEST@") the same way
+	 * vdxf.c::get_cmm_from_height does. */
+	char fqn[256] = { 0 };
+	if (player_config.verus_pid[0] != '\0') {
+		snprintf(fqn, sizeof(fqn), "%s.%s", player_config.verus_pid, bet_get_poker_id_fqn());
+	} else if (verus_config.initialized && verus_config.cashier_id[0] != '\0') {
+		strncpy(fqn, verus_config.cashier_id, sizeof(fqn) - 1);
+	} else if (verus_config.initialized && verus_config.dealer_id[0] != '\0') {
+		strncpy(fqn, verus_config.dealer_id, sizeof(fqn) - 1);
 	}
-	bet_dealloc_args(argc, &argv);
+
+	if (fqn[0] != '\0') {
+		int argc = 3;
+		char **argv = NULL;
+		cJSON *id_resp = NULL;
+
+		bet_alloc_args(argc, &argv);
+		argv = bet_copy_args(argc, blockchain_cli, "getidentity", fqn);
+		make_command(argc, argv, &id_resp);
+		bet_dealloc_args(argc, &argv);
+
+		if (id_resp != NULL) {
+			cJSON *identity = cJSON_GetObjectItem(id_resp, "identity");
+			if (identity != NULL) {
+				cJSON *primary = cJSON_GetObjectItem(identity, "primaryaddresses");
+				if (primary != NULL && cJSON_GetArraySize(primary) > 0) {
+					cJSON *first = cJSON_GetArrayItem(primary, 0);
+					if (first != NULL && first->type == cJSON_String && first->valuestring != NULL) {
+						strncpy(cached_addr, first->valuestring, sizeof(cached_addr) - 1);
+						cached_addr[sizeof(cached_addr) - 1] = '\0';
+					}
+				}
+			}
+			cJSON_Delete(id_resp);
+		}
+
+		if (cached_addr[0] != '\0') {
+			dlg_info("chips_get_wallet_address: resolved %s -> %s (cached)", fqn, cached_addr);
+			return cached_addr;
+		}
+		dlg_warn("chips_get_wallet_address: getidentity(%s) yielded no primaryaddresses, falling back",
+			 fqn);
+	}
+
+	/* Legacy fallback - slow, but preserves prior behaviour when no
+	 * identity is available. Result is NOT cached so a future call can
+	 * retry the identity path once configs are loaded. */
+	{
+		int argc = 2;
+		char **argv = NULL;
+		cJSON *addresses = NULL;
+
+		bet_alloc_args(argc, &argv);
+		argv = bet_copy_args(argc, blockchain_cli, "listaddressgroupings");
+		make_command(argc, argv, &addresses);
+
+		for (int32_t i = 0; i < cJSON_GetArraySize(addresses); i++) {
+			cJSON *temp = cJSON_GetArrayItem(addresses, i);
+			for (int32_t j = 0; j < cJSON_GetArraySize(temp); j++) {
+				cJSON *temp1 = cJSON_GetArrayItem(temp, j);
+
+				if (chips_validate_address(
+					    unstringify(cJSON_Print(cJSON_GetArrayItem(temp1, 0))))) {
+					char *addr = unstringify(cJSON_Print(cJSON_GetArrayItem(temp1, 0)));
+					cJSON_Delete(addresses);
+					bet_dealloc_args(argc, &argv);
+					return addr;
+				}
+			}
+		}
+		if (addresses != NULL)
+			cJSON_Delete(addresses);
+		bet_dealloc_args(argc, &argv);
+	}
 	return chips_get_new_address();
 }
 
