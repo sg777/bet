@@ -297,28 +297,65 @@ static int32_t update_next_card(char *table_id, int32_t player_id, int32_t card_
 	return retval;
 }
 
-static int32_t deal_hole_batch(char *table_id)
+static cJSON *make_request_entry(int32_t player_id, int32_t card_id, int32_t card_type)
 {
-	cJSON *payload = NULL, *requests = NULL, *out = NULL;
+	cJSON *e = cJSON_CreateObject();
+	cJSON_AddNumberToObject(e, "player_id", player_id);
+	cJSON_AddNumberToObject(e, "card_id", card_id);
+	cJSON_AddNumberToObject(e, "card_type", card_type);
+	return e;
+}
+
+static int32_t write_reveal_batch(char *table_id, const char *phase_name, cJSON *requests)
+{
+	cJSON *payload = NULL, *out = NULL;
 
 	payload = cJSON_CreateObject();
-	cJSON_AddStringToObject(payload, "phase", "hole");
-	requests = cJSON_CreateArray();
-	for (int i = 0; i < no_of_hole_cards; i++) {
-		for (int j = 0; j < num_of_players; j++) {
-			cJSON *e = cJSON_CreateObject();
-			cJSON_AddNumberToObject(e, "player_id", j);
-			cJSON_AddNumberToObject(e, "card_id", (i * num_of_players) + j);
-			cJSON_AddNumberToObject(e, "card_type", hole_card);
-			cJSON_AddItemToArray(requests, e);
-		}
-	}
+	cJSON_AddStringToObject(payload, "phase", phase_name);
 	cJSON_AddItemToObject(payload, "requests", requests);
 
-	dlg_info("Issuing hole-card reveal batch (%d entries) to table",
-		 cJSON_GetArraySize(requests));
+	dlg_info("Issuing %s reveal batch (%d entries) to table",
+		 phase_name, cJSON_GetArraySize(requests));
 	out = append_game_state(table_id, G_REVEAL_CARD, payload);
 	return out ? OK : ERR_UPDATEIDENTITY;
+}
+
+static int32_t deal_hole_batch(char *table_id)
+{
+	cJSON *requests = cJSON_CreateArray();
+	for (int i = 0; i < no_of_hole_cards; i++) {
+		for (int j = 0; j < num_of_players; j++) {
+			cJSON_AddItemToArray(requests,
+				make_request_entry(j, (i * num_of_players) + j, hole_card));
+		}
+	}
+	return write_reveal_batch(table_id, "hole", requests);
+}
+
+static int32_t deal_flop_batch(char *table_id)
+{
+	int32_t base = no_of_hole_cards * num_of_players;
+	cJSON *requests = cJSON_CreateArray();
+	cJSON_AddItemToArray(requests, make_request_entry(-1, base + 1, flop_card_1));
+	cJSON_AddItemToArray(requests, make_request_entry(-1, base + 2, flop_card_2));
+	cJSON_AddItemToArray(requests, make_request_entry(-1, base + 3, flop_card_3));
+	return write_reveal_batch(table_id, "flop", requests);
+}
+
+static int32_t deal_turn_batch(char *table_id)
+{
+	int32_t base = no_of_hole_cards * num_of_players;
+	cJSON *requests = cJSON_CreateArray();
+	cJSON_AddItemToArray(requests, make_request_entry(-1, base + no_of_flop_cards + 2, turn_card));
+	return write_reveal_batch(table_id, "turn", requests);
+}
+
+static int32_t deal_river_batch(char *table_id)
+{
+	int32_t base = no_of_hole_cards * num_of_players;
+	cJSON *requests = cJSON_CreateArray();
+	cJSON_AddItemToArray(requests, make_request_entry(-1, base + no_of_flop_cards + no_of_turn_card + 3, river_card));
+	return write_reveal_batch(table_id, "river", requests);
 }
 
 int32_t deal_next_card(char *table_id)
@@ -327,60 +364,15 @@ int32_t deal_next_card(char *table_id)
 
 	if (hole_cards_drawn == 0) {
 		retval = deal_hole_batch(table_id);
-		goto end;
 	} else if (flop_cards_drawn == 0) {
-		for (int i = no_of_hole_cards; i < no_of_hole_cards + no_of_flop_cards; i++) {
-			for (int j = 0; j < num_of_players; j++) {
-				if (card_matrix[j][i] == 0) {
-					if ((i - (no_of_hole_cards)) == 0) {
-						retval = update_next_card(table_id, j,
-									  (no_of_hole_cards * num_of_players) +
-										  (i - no_of_hole_cards) + 1,
-									  flop_card_1);
-					} else if ((i - (no_of_hole_cards)) == 1) {
-						retval = update_next_card(table_id, j,
-									  (no_of_hole_cards * num_of_players) +
-										  (i - no_of_hole_cards) + 1,
-									  flop_card_2);
-					} else if ((i - (no_of_hole_cards)) == 2) {
-						retval = update_next_card(table_id, j,
-									  (no_of_hole_cards * num_of_players) +
-										  (i - no_of_hole_cards) + 1,
-									  flop_card_3);
-					}
-					goto end;
-				}
-			}
-		}
+		retval = deal_flop_batch(table_id);
 	} else if (turn_card_drawn == 0) {
-		for (int i = no_of_hole_cards + no_of_flop_cards;
-		     i < no_of_hole_cards + no_of_flop_cards + no_of_turn_card; i++) {
-			for (int j = 0; j < num_of_players; j++) {
-				if (card_matrix[j][i] == 0) {
-					retval = update_next_card(table_id, j,
-								  (no_of_hole_cards * num_of_players) +
-									  (i - no_of_hole_cards) + 2,
-								  turn_card);
-					goto end;
-				}
-			}
-		}
+		retval = deal_turn_batch(table_id);
 	} else if (river_card_drawn == 0) {
-		for (int i = no_of_hole_cards + no_of_flop_cards + no_of_turn_card;
-		     i < no_of_hole_cards + no_of_flop_cards + no_of_turn_card + no_of_river_card; i++) {
-			for (int j = 0; j < num_of_players; j++) {
-				if (card_matrix[j][i] == 0) {
-					retval = update_next_card(table_id, j,
-								  (no_of_hole_cards * num_of_players) +
-									  (i - no_of_hole_cards) + 3,
-								  river_card);
-					goto end;
-				}
-			}
-		}
-	} else
+		retval = deal_river_batch(table_id);
+	} else {
 		retval = ERR_ALL_CARDS_DRAWN;
-end:
+	}
 	return retval;
 }
 
@@ -401,8 +393,8 @@ static int32_t is_request_batch(cJSON *game_state_info)
 	return (requests && requests->type == cJSON_Array) ? 1 : 0;
 }
 
-static int32_t player_has_acked_hole_card(const char *player_pid, const char *gid,
-					  int32_t card_id)
+static int32_t player_has_decoded(const char *player_pid, const char *gid,
+				  int32_t card_id, int32_t card_type)
 {
 	cJSON *snapshot = NULL, *arr = NULL;
 	int32_t found = 0;
@@ -414,7 +406,7 @@ static int32_t player_has_acked_hole_card(const char *player_pid, const char *gi
 	if (!arr) { cJSON_Delete(snapshot); return 0; }
 	for (int i = 0; i < cJSON_GetArraySize(arr); i++) {
 		cJSON *e = cJSON_GetArrayItem(arr, i);
-		if (e && jint(e, "card_type") == hole_card &&
+		if (e && jint(e, "card_type") == card_type &&
 		    jint(e, "card_id") == card_id) {
 			found = 1;
 			break;
@@ -424,7 +416,7 @@ static int32_t player_has_acked_hole_card(const char *player_pid, const char *gi
 	return found;
 }
 
-int32_t is_hole_batch_complete(char *table_id)
+int32_t is_reveal_batch_complete(char *table_id)
 {
 	cJSON *game_state_info = NULL, *requests = NULL;
 	char *game_id_str = NULL;
@@ -441,35 +433,106 @@ int32_t is_hole_batch_complete(char *table_id)
 		cJSON *e = cJSON_GetArrayItem(requests, i);
 		int32_t pid = jint(e, "player_id");
 		int32_t cid = jint(e, "card_id");
-		if (pid < 0 || pid >= num_of_players) continue;
-		if (!player_has_acked_hole_card(player_ids[pid], game_id_str, cid))
-			return ERR_PLAYER_TIMEOUT;
+		int32_t ctype = jint(e, "card_type");
+		if (pid >= 0) {
+			if (!player_has_decoded(player_ids[pid], game_id_str, cid, ctype))
+				return ERR_PLAYER_TIMEOUT;
+		} else {
+			for (int p = 0; p < num_of_players; p++) {
+				int32_t folded = 0;
+				if (dcv_vars) {
+					for (int r = 0; r < CARDS_MAXROUNDS; r++) {
+						if (dcv_vars->bet_actions[p][r] == fold) {
+							folded = 1;
+							break;
+						}
+					}
+				}
+				if (folded) continue;
+				if (!player_has_decoded(player_ids[p], game_id_str, cid, ctype))
+					return ERR_PLAYER_TIMEOUT;
+			}
+		}
 	}
 	return OK;
 }
 
-int32_t verus_receive_hole_batch(char *table_id, struct privatebet_vars *vars)
+int32_t verus_receive_reveal_batch(char *table_id, struct privatebet_vars *vars)
 {
 	cJSON *game_state_info = NULL, *requests = NULL;
+	const char *phase = NULL;
 
 	game_state_info = get_game_state_info(table_id);
 	requests = cJSON_GetObjectItem(game_state_info, "requests");
 	if (!requests) return ERR_ARGS_NULL;
+	phase = jstr(game_state_info, "phase");
+	if (!phase) phase = "";
 
-	for (int i = 0; i < cJSON_GetArraySize(requests); i++) {
-		cJSON *e = cJSON_GetArrayItem(requests, i);
-		int32_t cid = jint(e, "card_id");
-		card_matrix[(cid % num_of_players)][(cid / num_of_players)] = 1;
-		no_of_cards++;
+	if (strcmp(phase, "hole") == 0) {
+		for (int i = 0; i < cJSON_GetArraySize(requests); i++) {
+			cJSON *e = cJSON_GetArrayItem(requests, i);
+			int32_t cid = jint(e, "card_id");
+			card_matrix[(cid % num_of_players)][(cid / num_of_players)] = 1;
+			no_of_cards++;
+		}
+		hole_cards_drawn = 1;
+		dlg_info("═══════════════════════════════════════════");
+		dlg_info("  ✓ ALL HOLE CARDS DEALT - PREFLOP BETTING  ");
+		dlg_info("═══════════════════════════════════════════");
+		dlg_info("═══════════════════════════════════════════");
+		dlg_info("  💰 INITIATING BETTING - SMALL BLIND       ");
+		dlg_info("═══════════════════════════════════════════");
+		return verus_small_blind(table_id, vars);
 	}
-	hole_cards_drawn = 1;
+
+	if (strcmp(phase, "flop") == 0) {
+		for (int p = 0; p < num_of_players; p++) {
+			card_matrix[p][no_of_hole_cards] = 1;
+			card_matrix[p][no_of_hole_cards + 1] = 1;
+			card_matrix[p][no_of_hole_cards + 2] = 1;
+		}
+		flop_cards_drawn = 1;
+		no_of_cards += 3;
+		dlg_info("═══════════════════════════════════════════");
+		dlg_info("  ✓ FLOP DEALT - FLOP BETTING               ");
+		dlg_info("═══════════════════════════════════════════");
+		update_board_cards(table_id, flop_card_1);
+		update_board_cards(table_id, flop_card_2);
+		update_board_cards(table_id, flop_card_3);
+	} else if (strcmp(phase, "turn") == 0) {
+		for (int p = 0; p < num_of_players; p++)
+			card_matrix[p][no_of_hole_cards + no_of_flop_cards] = 1;
+		turn_card_drawn = 1;
+		no_of_cards += 1;
+		dlg_info("═══════════════════════════════════════════");
+		dlg_info("  ✓ TURN DEALT - TURN BETTING               ");
+		dlg_info("═══════════════════════════════════════════");
+		update_board_cards(table_id, turn_card);
+	} else if (strcmp(phase, "river") == 0) {
+		for (int p = 0; p < num_of_players; p++)
+			card_matrix[p][no_of_hole_cards + no_of_flop_cards + no_of_turn_card] = 1;
+		river_card_drawn = 1;
+		no_of_cards += 1;
+		dlg_info("═══════════════════════════════════════════");
+		dlg_info("  ✓ RIVER DEALT - FINAL BETTING             ");
+		dlg_info("═══════════════════════════════════════════");
+		update_board_cards(table_id, river_card);
+	} else {
+		return ERR_GAME_STATE_UPDATE;
+	}
+
 	dlg_info("═══════════════════════════════════════════");
-	dlg_info("  ✓ ALL HOLE CARDS DEALT - PREFLOP BETTING  ");
+	dlg_info("  💰 INITIATING BETTING - ROUND %d          ", vars->round + 1);
 	dlg_info("═══════════════════════════════════════════");
-	dlg_info("═══════════════════════════════════════════");
-	dlg_info("  💰 INITIATING BETTING - SMALL BLIND       ");
-	dlg_info("═══════════════════════════════════════════");
-	return verus_small_blind(table_id, vars);
+	int32_t r = verus_write_betting_state(table_id, vars, "round_betting");
+	if (r == OK) {
+		cJSON *out = append_game_state(table_id, G_ROUND_BETTING, NULL);
+		if (!out) {
+			dlg_error("Failed to advance dealer state to G_ROUND_BETTING");
+			r = ERR_UPDATEIDENTITY;
+		}
+	}
+	return r;
 }
 
 int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
@@ -772,7 +835,6 @@ int32_t verus_write_betting_state(char *table_id, struct privatebet_vars *vars, 
 	cJSON_AddStringToObject(betting_state, "action", action);
 	cJSON_AddNumberToObject(betting_state, "last_turn", vars->last_turn);
 	
-	// Record turn start time for timeout tracking
 	vars->turn_start_time = (int64_t)time(NULL);
 	vars->turn_start_block = chips_get_block_count();
 	cJSON_AddNumberToObject(betting_state, "turn_start_time", (double)vars->turn_start_time);
@@ -1080,12 +1142,10 @@ int32_t verus_handle_round_betting(char *table_id, struct privatebet_vars *vars)
 	int32_t retval = OK;
 	cJSON *player_action = NULL;
 	
-	// Poll current player for their action
 	player_action = verus_poll_player_action(table_id, vars->turni, vars->round,
 						 vars->turn_start_time);
-	
+
 	if (!player_action) {
-		// Player hasn't acted yet - check for timeout
 		if (verus_check_turn_timeout(vars)) {
 			// TIMEOUT - Auto-fold the player
 			int64_t elapsed = (int64_t)time(NULL) - vars->turn_start_time;

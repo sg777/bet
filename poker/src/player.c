@@ -219,7 +219,8 @@ static cJSON *find_bv_in_batch(cJSON *bv_info, int32_t player_id, int32_t card_i
 	return NULL;
 }
 
-int32_t reveal_card_for(char *table_id, int32_t player_id, int32_t card_id, int32_t card_type)
+int32_t reveal_card_for_ex(char *table_id, int32_t player_id, int32_t card_id, int32_t card_type,
+			   int32_t do_report, int32_t *out_value)
 {
 	int32_t retval = OK, card_value = -1;
 	char *game_id_str = NULL, str[65];
@@ -321,11 +322,12 @@ int32_t reveal_card_for(char *table_id, int32_t player_id, int32_t card_id, int3
 		/* Read the blinded deck for this player slot directly from the
 		 * cashier id under C_B_P*_DECK_KEY.<gid> (docs/TODO.md item 1.1).
 		 * cashier_id was resolved once at the top of reveal_card. */
+		int32_t deck_slot = (player_id == -1) ? p_deck_info.player_id : player_id;
 		dlg_info("[DBG-PREAD] reading C_B_P%d_DECK_KEY from cashier_id=\"%s\" game_id=%s player_id=%d card_id=%d g_start_block=%d",
-			 player_id + 1, cashier_id, game_id_str, player_id, card_id, g_start_block);
+			 deck_slot + 1, cashier_id, game_id_str, player_id, card_id, g_start_block);
 		b_blinded_deck = get_cJSON_from_id_key_vdxfid_from_height(
 			cashier_id,
-			get_key_data_vdxf_id(all_c_b_p_keys[player_id], game_id_str),
+			get_key_data_vdxf_id(all_c_b_p_keys[deck_slot], game_id_str),
 			g_start_block);
 		if (b_blinded_deck) {
 			char *deck_dbg = cJSON_PrintUnformatted(b_blinded_deck);
@@ -338,7 +340,7 @@ int32_t reveal_card_for(char *table_id, int32_t player_id, int32_t card_id, int3
 		}
 		b_blinded_card = jbits256i(b_blinded_deck, card_id);
 		if (player_id == -1)
-			blinded_value = jbits256i(bv, player_id);
+			blinded_value = jbits256i(bv, p_deck_info.player_id);
 		else
 			blinded_value = jbits256i(bv, 0);
 
@@ -438,13 +440,18 @@ int32_t reveal_card_for(char *table_id, int32_t player_id, int32_t card_id, int3
 				}
 			}
 
-			// For community cards, report to player ID for dealer verification
-			if (is_community_card(card_type)) {
+			if (do_report && is_community_card(card_type)) {
 				report_decoded_card(card_id, card_type, card_value);
 			}
+			if (out_value) *out_value = card_value;
 		}
 	}
 	return retval;
+}
+
+int32_t reveal_card_for(char *table_id, int32_t player_id, int32_t card_id, int32_t card_type)
+{
+	return reveal_card_for_ex(table_id, player_id, card_id, card_type, 1, NULL);
 }
 
 int32_t reveal_card(char *table_id)
@@ -457,7 +464,13 @@ int32_t reveal_card(char *table_id)
 	return reveal_card_for(table_id, player_id, card_id, card_type);
 }
 
-static int32_t append_hole_acks_to_snapshot(int32_t *card_ids, int32_t n)
+struct decoded_entry {
+	int32_t card_id;
+	int32_t card_type;
+	int32_t card_value;
+};
+
+static int32_t append_decoded_to_snapshot(struct decoded_entry *entries, int32_t n)
 {
 	char str[65];
 	cJSON *snapshot = NULL, *decoded_arr = NULL, *out = NULL;
@@ -481,20 +494,33 @@ static int32_t append_hole_acks_to_snapshot(int32_t *card_ids, int32_t n)
 
 	int32_t added = 0;
 	for (int k = 0; k < n; k++) {
-		int32_t cid = card_ids[k];
-		int32_t already = 0;
+		int32_t cid = entries[k].card_id;
+		int32_t ctype = entries[k].card_type;
+		int32_t cval = entries[k].card_value;
+		int32_t already_idx = -1;
 		for (int i = 0; i < cJSON_GetArraySize(decoded_arr); i++) {
 			cJSON *e = cJSON_GetArrayItem(decoded_arr, i);
-			if (e && jint(e, "card_type") == hole_card &&
+			if (e && jint(e, "card_type") == ctype &&
 			    jint(e, "card_id") == cid) {
-				already = 1;
+				already_idx = i;
 				break;
 			}
 		}
-		if (already) continue;
+		if (already_idx >= 0) {
+			cJSON *e = cJSON_GetArrayItem(decoded_arr, already_idx);
+			int32_t prev = jint(e, "card_value");
+			if (cval >= 0 && prev != cval) {
+				cJSON_DeleteItemFromObject(e, "card_value");
+				cJSON_AddNumberToObject(e, "card_value", cval);
+				added++;
+			}
+			continue;
+		}
 		cJSON *entry = cJSON_CreateObject();
 		cJSON_AddNumberToObject(entry, "card_id", cid);
-		cJSON_AddNumberToObject(entry, "card_type", hole_card);
+		cJSON_AddNumberToObject(entry, "card_type", ctype);
+		if (cval >= 0)
+			cJSON_AddNumberToObject(entry, "card_value", cval);
 		cJSON_AddItemToArray(decoded_arr, entry);
 		added++;
 	}
@@ -507,23 +533,34 @@ static int32_t append_hole_acks_to_snapshot(int32_t *card_ids, int32_t n)
 	return out ? OK : ERR_UPDATEIDENTITY;
 }
 
-static int32_t reveal_hole_batch(char *table_id, cJSON *requests)
+static char g_last_decoded_phase[16];
+static char g_last_decoded_gid[80];
+
+static int32_t reveal_request_batch(char *table_id, cJSON *requests)
 {
 	int32_t my_id = p_deck_info.player_id;
-	int32_t my_card_ids[CARDS_MAXCARDS];
-	int32_t my_n = 0;
+	struct decoded_entry mine[CARDS_MAXCARDS];
+	int32_t n = 0;
 
 	for (int i = 0; i < cJSON_GetArraySize(requests); i++) {
 		cJSON *e = cJSON_GetArrayItem(requests, i);
-		if (jint(e, "player_id") != my_id) continue;
+		int32_t epid = jint(e, "player_id");
+		if (epid != my_id && epid != -1) continue;
 		int32_t cid = jint(e, "card_id");
 		int32_t ctype = jint(e, "card_type");
-		int32_t r = reveal_card_for(table_id, my_id, cid, ctype);
+		int32_t cval = -1;
+		int32_t r = reveal_card_for_ex(table_id, epid, cid, ctype, 0,
+					       (ctype == hole_card) ? NULL : &cval);
 		if (r != OK) return r;
-		if (my_n < CARDS_MAXCARDS) my_card_ids[my_n++] = cid;
+		if (n < CARDS_MAXCARDS) {
+			mine[n].card_id = cid;
+			mine[n].card_type = ctype;
+			mine[n].card_value = (ctype == hole_card) ? -1 : cval;
+			n++;
+		}
 	}
-	if (my_n == 0) return OK;
-	return append_hole_acks_to_snapshot(my_card_ids, my_n);
+	if (n == 0) return OK;
+	return append_decoded_to_snapshot(mine, n);
 }
 
 static int32_t handle_player_reveal_card(char *table_id)
@@ -537,7 +574,26 @@ static int32_t handle_player_reveal_card(char *table_id)
 
 	cJSON *requests = cJSON_GetObjectItem(game_state_info, "requests");
 	if (requests && requests->type == cJSON_Array) {
-		retval = reveal_hole_batch(table_id, requests);
+		const char *cur_phase = jstr(game_state_info, "phase");
+		char str[65];
+		char *gid = bits256_str(str, p_deck_info.game_id);
+		if (cur_phase && gid &&
+		    g_last_decoded_phase[0] && g_last_decoded_gid[0] &&
+		    strcmp(cur_phase, g_last_decoded_phase) == 0 &&
+		    strcmp(gid, g_last_decoded_gid) == 0) {
+			return OK;
+		}
+		if (cur_phase) {
+			strncpy(g_last_decoded_phase, cur_phase, sizeof(g_last_decoded_phase) - 1);
+			g_last_decoded_phase[sizeof(g_last_decoded_phase) - 1] = 0;
+			strncpy(g_last_decoded_gid, gid, sizeof(g_last_decoded_gid) - 1);
+			g_last_decoded_gid[sizeof(g_last_decoded_gid) - 1] = 0;
+		}
+		retval = reveal_request_batch(table_id, requests);
+		if (retval != OK) {
+			g_last_decoded_phase[0] = 0;
+			g_last_decoded_gid[0] = 0;
+		}
 		return retval;
 	}
 

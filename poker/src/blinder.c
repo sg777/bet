@@ -168,17 +168,30 @@ int32_t cashier_shuffle_deck(char *id)
 	return retval;
 }
 
-static int32_t reveal_bv_batch(char *table_id, cJSON *requests)
+static char g_last_bv_phase[16];
+static char g_last_bv_gid[80];
+
+static int32_t reveal_bv_batch(char *table_id, cJSON *game_state_info, cJSON *requests)
 {
 	int32_t retval = OK;
 	char *game_id_str = NULL, hexstr[65];
 	cJSON *batch = NULL, *bvs = NULL, *out = NULL;
+	const char *phase = jstr(game_state_info, "phase");
+	if (!phase) phase = "unknown";
 
 	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 	if (!game_id_str) return ERR_GAME_ID_NOT_FOUND;
 
+	int32_t local_num_players = num_of_players;
+	if (local_num_players <= 0) {
+		cJSON *tpi = get_cJSON_from_id_key_vdxfid_from_height(
+			table_id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), g_start_block);
+		local_num_players = jint(tpi, "num_players");
+		if (tpi) cJSON_Delete(tpi);
+	}
+
 	batch = cJSON_CreateObject();
-	cJSON_AddStringToObject(batch, "phase", "hole");
+	cJSON_AddStringToObject(batch, "phase", phase);
 	bvs = cJSON_CreateArray();
 	for (int i = 0; i < cJSON_GetArraySize(requests); i++) {
 		cJSON *e = cJSON_GetArrayItem(requests, i);
@@ -188,18 +201,31 @@ static int32_t reveal_bv_batch(char *table_id, cJSON *requests)
 		cJSON_AddNumberToObject(entry, "player_id", pid);
 		cJSON_AddNumberToObject(entry, "card_id", cid);
 		cJSON *bv_info = cJSON_CreateArray();
-		jaddistr(bv_info, bits256_str(hexstr, b_deck_info.cashier_r[pid][cid].priv));
+		if (pid >= 0) {
+			jaddistr(bv_info, bits256_str(hexstr, b_deck_info.cashier_r[pid][cid].priv));
+		} else {
+			for (int p = 0; p < local_num_players; p++)
+				jaddistr(bv_info, bits256_str(hexstr, b_deck_info.cashier_r[p][cid].priv));
+		}
 		cJSON_AddItemToObject(entry, "bv", bv_info);
 		cJSON_AddItemToArray(bvs, entry);
 	}
 	cJSON_AddItemToObject(batch, "bvs", bvs);
 
-	dlg_info("Cashier writing batched BVs (%d entries) for hole phase",
-		 cJSON_GetArraySize(bvs));
+	dlg_info("Cashier writing batched BVs (%d entries) for %s phase",
+		 cJSON_GetArraySize(bvs), phase);
+	strncpy(g_last_bv_phase, phase, sizeof(g_last_bv_phase) - 1);
+	g_last_bv_phase[sizeof(g_last_bv_phase) - 1] = 0;
+	strncpy(g_last_bv_gid, game_id_str, sizeof(g_last_bv_gid) - 1);
+	g_last_bv_gid[sizeof(g_last_bv_gid) - 1] = 0;
 	out = poker_append_key_json((char *)bet_get_cashier_short_name(),
 				    get_key_data_vdxf_id(C_CARD_BV_KEY, game_id_str),
 				    batch, true);
-	if (!out) retval = ERR_BV_UPDATE;
+	if (!out) {
+		retval = ERR_BV_UPDATE;
+		g_last_bv_phase[0] = 0;
+		g_last_bv_gid[0] = 0;
+	}
 	cJSON_Delete(batch);
 	return retval;
 }
@@ -214,7 +240,7 @@ int32_t reveal_bv(char *table_id)
 	{
 		cJSON *requests = cJSON_GetObjectItem(game_state_info, "requests");
 		if (requests && requests->type == cJSON_Array)
-			return reveal_bv_batch(table_id, requests);
+			return reveal_bv_batch(table_id, game_state_info, requests);
 	}
 	player_id = jint(game_state_info, "player_id");
 	card_id = jint(game_state_info, "card_id");
@@ -281,8 +307,18 @@ static int32_t handle_bv_reveal_card(char *table_id)
 
 	cJSON *requests = cJSON_GetObjectItem(game_state_info, "requests");
 	if (requests && requests->type == cJSON_Array) {
-		if (card_bv && cJSON_GetObjectItem(card_bv, "bvs")) {
-			dlg_info("Cashier already published BV batch for hole phase; skipping");
+		const char *cur_phase = jstr(game_state_info, "phase");
+		if (cur_phase && game_id_str &&
+		    g_last_bv_phase[0] && g_last_bv_gid[0] &&
+		    strcmp(cur_phase, g_last_bv_phase) == 0 &&
+		    strcmp(game_id_str, g_last_bv_gid) == 0) {
+			return retval;
+		}
+		const char *prev_phase = card_bv ? jstr(card_bv, "phase") : NULL;
+		if (card_bv && cJSON_GetObjectItem(card_bv, "bvs") &&
+		    cur_phase && prev_phase && strcmp(cur_phase, prev_phase) == 0) {
+			dlg_info("Cashier already published BV batch for %s phase; skipping",
+				 cur_phase);
 			return retval;
 		}
 		return reveal_bv(table_id);

@@ -686,10 +686,11 @@ int32_t handle_game_state(struct table *t)
 		cJSON *gsi = get_game_state_info(t->table_id);
 		int32_t is_batch = (gsi && cJSON_GetObjectItem(gsi, "requests")) ? 1 : 0;
 		if (is_batch) {
-			retval = is_hole_batch_complete(t->table_id);
+			retval = is_reveal_batch_complete(t->table_id);
 			if (retval == OK) {
-				dlg_info("Hole-card batch complete");
-				retval = verus_receive_hole_batch(t->table_id, dcv_vars);
+				const char *phase = jstr(gsi, "phase");
+				dlg_info("%s reveal batch complete", phase ? phase : "?");
+				retval = verus_receive_reveal_batch(t->table_id, dcv_vars);
 			} else {
 				retval = OK;
 			}
