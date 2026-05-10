@@ -733,6 +733,31 @@ int32_t player_handle_betting(char *table_id)
 	 * is treated as stale and ignored. */
 	p_local_state.last_betting_turn_start_time = turn_start_time;
 
+	{
+		const char *last_str = jstr(betting_state, "last_action_str");
+		if (last_str && last_str[0]) {
+			int64_t last_amt = (int64_t)jdouble(betting_state, "last_action_amount");
+			int32_t last_pid = jint(betting_state, "last_action_player");
+			cJSON *gm = NULL;
+			if (strcmp(last_str, "small_blind") == 0) {
+				gm = gui_build_blind_post(last_pid, "small_blind_bet", last_amt);
+			} else if (strcmp(last_str, "big_blind") == 0) {
+				gm = gui_build_blind_post(last_pid, "big_blind_bet", last_amt);
+			} else if (strcmp(last_str, "check") == 0 ||
+				   strcmp(last_str, "fold") == 0) {
+				gm = gui_build_betting_action(last_pid, last_str, 0);
+			} else if (strcmp(last_str, "call") == 0 ||
+				   strcmp(last_str, "raise") == 0 ||
+				   strcmp(last_str, "allin") == 0) {
+				gm = gui_build_betting_action(last_pid, last_str, last_amt);
+			}
+			if (gm) {
+				gui_send_message(gm);
+				cJSON_Delete(gm);
+			}
+		}
+	}
+
 	// Check if it's our turn
 	if (current_turn != p_deck_info.player_id) {
 		// Not our turn, just display status (once per dealer prompt)

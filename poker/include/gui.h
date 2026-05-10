@@ -31,6 +31,7 @@ cJSON *gui_build_deal_board(int32_t *board_cards, int32_t count);
 cJSON *gui_build_betting_round(int32_t playerid, int64_t pot, int64_t to_call, int64_t min_raise,
                                int32_t *possibilities, int32_t poss_count, int64_t *player_funds, int32_t num_players);
 cJSON *gui_build_betting_action(int32_t playerid, const char *action, int64_t bet_amount);
+cJSON *gui_build_blind_post(int32_t playerid, const char *kind, int64_t amount);
 cJSON *gui_build_final_info(int32_t *winners, int32_t winner_count, int64_t win_amount,
                             int32_t **all_holecards, int32_t *board_cards);
 

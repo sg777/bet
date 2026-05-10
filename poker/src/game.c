@@ -116,6 +116,39 @@ int32_t get_game_state(const char *id)
 	return game_state;
 }
 
+static char g_last_action_str[16] = {0};
+static int64_t g_last_action_amount = 0;
+static int32_t g_last_action_player = -1;
+static int32_t g_last_action_present = 0;
+
+static void clear_last_action(void)
+{
+	g_last_action_str[0] = 0;
+	g_last_action_amount = 0;
+	g_last_action_player = -1;
+	g_last_action_present = 0;
+}
+
+static void record_last_action(int32_t playerid, int32_t action_enum, int64_t amount)
+{
+	const char *s = NULL;
+	switch (action_enum) {
+	case small_blind: s = "small_blind"; break;
+	case big_blind:   s = "big_blind"; break;
+	case check:       s = "check"; break;
+	case call:        s = "call"; break;
+	case raise:       s = "raise"; break;
+	case fold:        s = "fold"; break;
+	case allin:       s = "allin"; break;
+	default: return;
+	}
+	strncpy(g_last_action_str, s, sizeof(g_last_action_str) - 1);
+	g_last_action_str[sizeof(g_last_action_str) - 1] = 0;
+	g_last_action_amount = amount;
+	g_last_action_player = playerid;
+	g_last_action_present = 1;
+}
+
 cJSON *get_game_state_info(const char *id)
 {
 	char *game_id_str = NULL;
@@ -161,6 +194,7 @@ void init_struct_vars()
 		}
 	}
 	no_of_cards = 0;
+	clear_last_action();
 }
 
 int32_t init_game_meta_info(char *table_id)
@@ -834,6 +868,13 @@ int32_t verus_write_betting_state(char *table_id, struct privatebet_vars *vars, 
 	cJSON_AddNumberToObject(betting_state, "pot", (double)vars->pot);
 	cJSON_AddStringToObject(betting_state, "action", action);
 	cJSON_AddNumberToObject(betting_state, "last_turn", vars->last_turn);
+	if (g_last_action_present) {
+		cJSON_AddStringToObject(betting_state, "last_action_str", g_last_action_str);
+		cJSON_AddNumberToObject(betting_state, "last_action_amount",
+					(double)g_last_action_amount);
+		cJSON_AddNumberToObject(betting_state, "last_action_player",
+					g_last_action_player);
+	}
 	
 	vars->turn_start_time = (int64_t)time(NULL);
 	vars->turn_start_block = chips_get_block_count();
@@ -971,6 +1012,7 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
 	int64_t amount = (int64_t)jdouble(action_info, "amount");
 	int32_t playerid = vars->turni;
 	int64_t available = vars->funds[playerid];
+	int64_t betamount_before = vars->betamount[playerid][vars->round];
 	
 	dlg_info("═══════════════════════════════════════════");
 	dlg_info("  Player %d (%s): %s %lld table chips (available: %lld)",
@@ -990,6 +1032,8 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
 		vars->bet_actions[playerid][vars->round] = allin;
 		dlg_info("  💰 Pot: %lld table chips, Player funds: %lld (ALL-IN)",
 			 (long long)vars->pot, (long long)vars->funds[playerid]);
+		record_last_action(playerid, vars->bet_actions[playerid][vars->round],
+				   vars->betamount[playerid][vars->round] - betamount_before);
 		return retval;
 	}
 	
@@ -1072,7 +1116,9 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
 	dlg_info("  💰 Pot: %lld table chips (%.4f CHIPS), Player funds: %lld",
 		 (long long)vars->pot, table_chips_to_chips(vars->pot),
 		 (long long)vars->funds[playerid]);
-	
+
+	record_last_action(playerid, vars->bet_actions[playerid][vars->round],
+			   vars->betamount[playerid][vars->round] - betamount_before);
 	return retval;
 }
 

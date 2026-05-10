@@ -222,6 +222,16 @@ cJSON *gui_build_betting_action(int32_t playerid, const char *action, int64_t be
     return msg;
 }
 
+cJSON *gui_build_blind_post(int32_t playerid, const char *kind, int64_t amount)
+{
+    cJSON *msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(msg, "method", "betting");
+    cJSON_AddStringToObject(msg, "action", kind);
+    cJSON_AddNumberToObject(msg, "playerid", playerid);
+    cJSON_AddNumberToObject(msg, "amount", (double)amount);
+    return msg;
+}
+
 cJSON *gui_build_final_info(int32_t *winners, int32_t winner_count, int64_t win_amount,
                             int32_t **all_holecards, int32_t *board_cards)
 {
