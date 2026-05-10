@@ -487,13 +487,7 @@ int32_t verus_receive_card(char *table_id, struct privatebet_vars *vars)
 	}
 
 	if (flag) {
-		// Check if all community cards are dealt (river done)
-		if (river_card_drawn == 1) {
-			dlg_info("═══════════════════════════════════════════");
-			dlg_info("  🏆 ALL CARDS DEALT - PROCEEDING TO SHOWDOWN ");
-			dlg_info("═══════════════════════════════════════════");
-			append_game_state(table_id, G_SHOWDOWN, NULL);
-		} else if (vars->round == 0) {
+		if (vars->round == 0) {
 			dlg_info("═══════════════════════════════════════════");
 			dlg_info("  💰 INITIATING BETTING - SMALL BLIND       ");
 			dlg_info("═══════════════════════════════════════════");
