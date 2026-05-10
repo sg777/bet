@@ -1,0 +1,119 @@
+# =============================================================================
+#  .gitattributes — line ending policy for the bet repository
+# =============================================================================
+#
+#  Goal
+#  ----
+#  Make sure every text file in this repo is stored with LF (Unix) line
+#  endings on disk and in the index, regardless of which OS or editor a
+#  contributor uses. Without this file, files committed from Windows boxes
+#  (or by tools/agents that happen to write CRLF) end up baked into HEAD
+#  with CRLF, and any later edit that rewrites them as LF then produces a
+#  several-thousand-line phantom diff that hides the real logical change.
+#
+#  Mechanics
+#  ---------
+#    * `text=auto`         git autodetects text vs binary on first add
+#    * `eol=lf`            text files are normalized to LF in the index AND
+#                          checked out as LF on every platform (overrides
+#                          `core.autocrlf` settings inherited from the user)
+#    * `binary` / `-text`  files marked binary are byte-for-byte preserved,
+#                          never line-ending-converted
+#
+#  After changing this file run once:
+#      git add --renormalize .
+#      git commit -m "normalize line endings"
+#  to apply the new policy to anything already in HEAD.
+# =============================================================================
+
+# Default: treat every file as text, store/checkout with LF.
+* text=auto eol=lf
+
+# -----------------------------------------------------------------------------
+# Source / config / docs — be explicit so contributors do not have to rely on
+# the autodetector for these.
+# -----------------------------------------------------------------------------
+*.c            text eol=lf
+*.h            text eol=lf
+*.cpp          text eol=lf
+*.hpp          text eol=lf
+*.cc           text eol=lf
+*.py           text eol=lf
+*.sh           text eol=lf
+*.bash         text eol=lf
+*.js           text eol=lf
+*.jsx          text eol=lf
+*.ts           text eol=lf
+*.tsx          text eol=lf
+*.json         text eol=lf
+*.md           text eol=lf
+*.mdc          text eol=lf
+*.txt          text eol=lf
+*.ini          text eol=lf
+*.cfg          text eol=lf
+*.conf         text eol=lf
+*.yaml         text eol=lf
+*.yml          text eol=lf
+*.toml         text eol=lf
+*.html         text eol=lf
+*.css          text eol=lf
+*.svg          text eol=lf
+*.sql          text eol=lf
+*.dot          text eol=lf
+Makefile       text eol=lf
+makefile       text eol=lf
+*.mk           text eol=lf
+*.cmake        text eol=lf
+CMakeLists.txt text eol=lf
+Dockerfile     text eol=lf
+.gitattributes text eol=lf
+.gitignore     text eol=lf
+.editorconfig  text eol=lf
+
+# Shell scripts must keep LF on every platform (CRLF would break /bin/sh)
+*.sh           text eol=lf
+*.bash         text eol=lf
+
+# -----------------------------------------------------------------------------
+# Binary / opaque files — never touch these byte-for-byte.
+# -----------------------------------------------------------------------------
+*.tar          binary
+*.tar.gz       binary
+*.tgz          binary
+*.zip          binary
+*.gz           binary
+*.bz2          binary
+*.xz           binary
+*.7z           binary
+*.rar          binary
+
+*.png          binary
+*.jpg          binary
+*.jpeg         binary
+*.gif          binary
+*.bmp          binary
+*.ico          binary
+*.webp         binary
+
+*.pdf          binary
+*.doc          binary
+*.docx         binary
+*.xls          binary
+*.xlsx         binary
+*.ppt          binary
+*.pptx         binary
+
+*.so           binary
+*.so.*         binary
+*.a            binary
+*.dll          binary
+*.dylib        binary
+*.exe          binary
+*.o            binary
+*.obj          binary
+*.lib          binary
+*.bin          binary
+
+*.db           binary
+*.sqlite       binary
+*.sqlite3      binary
