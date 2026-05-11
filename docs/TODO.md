@@ -13,7 +13,7 @@ Items that are designed/discussed but intentionally **not** part of the current 
 - `poker/src/blinder.c:known_players` (cashier — added with the cashier-side join discovery in `PLAYER_JOIN_FLOW.md` §1.4)
 - `poker/src/vdxf.c:cashier_poll_disputes` (cashier dispute polling, currently dormant — see item 3 below)
 
-**What's already documented:** full design is in [`PLAYER_JOIN_FLOW.md`](./PLAYER_JOIN_FLOW.md) §3 — `[players] ids = p1,p2` block in `dealer.ini`, `is_id_exists` validation at startup, fail-fast on missing IDs, replacement of both `known_players[]` call sites.
+**What's already documented:** full design is in [`PLAYER_JOIN_FLOW.md`](reference/player-join-flow.md) §3 — `[players] ids = p1,p2` block in `dealer.ini`, `is_id_exists` validation at startup, fail-fast on missing IDs, replacement of both `known_players[]` call sites.
 
 **Why deferred:** the hardcoded list is functionally correct (just inefficient — up to 9 `getidentity` RPCs per 2-second poll tick instead of 2). We want to land payin / join correctness first on a clean chain before touching the discovery layer.
 

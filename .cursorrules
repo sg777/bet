@@ -25,9 +25,12 @@ Pangea-Bet is a decentralized poker platform built on the CHIPS blockchain. The 
   - `iguana/` - Iguana protocol utilities
 - `includes/` - Shared header files (crypto, iguana)
 - `external/` - External dependencies (iniparser, libwebsockets, etc.)
-- `docs/` - Extensive documentation
-  - `protocol/` - Protocol specifications
-  - `verus_migration/` - Verus migration docs
+- `docs/` - Extensive documentation (Diátaxis layout)
+  - `tutorials/` - Follow-along walkthroughs (VRSCTEST setup, etc.)
+  - `guides/` - Task-oriented how-tos (build from source, GUI simulator)
+  - `reference/` - Configs, message formats, VDXF keys, RPC surface, glossary
+  - `explanation/` - Architecture and conceptual background
+  - `archive/` - Pre-Verus / removed-feature historical docs
 
 ## Key Entry Points
 
