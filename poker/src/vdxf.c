@@ -444,7 +444,7 @@ int32_t join_table()
 	dlg_info("Updating player identity with join request: %s", cJSON_Print(join_request));
 	update_result = append_cmm_from_id_key_data_cJSON(
 		player_config.verus_pid, 
-		"chips.vrsc::poker.sg777z.p_join_request",
+		P_JOIN_REQUEST_KEY,
 		join_request, 
 		false
 	);

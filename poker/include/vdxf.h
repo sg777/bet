@@ -15,11 +15,11 @@ Our aim is to define as minimum identifiers as possible and as minimum keys as p
 
 We define every keys under the namespace chips.vrsc::
 As we know that bet aim to support multiple games, so under the namespace chips.vrsc:: we group the keys based on the game 
-in which they used for. For example chips.vrsc::poker.sg777z is the prefix to all the keys that are used in playing the poker game.
+in which they used for. For example chips.vrsc::poker is the prefix to all the keys that are used in playing the poker game.
 Likewise if any keys are common across the games then those are defined with the prefix chips.vrsc::bet.
 
-Lets say the cashiers are specific to the context of poker, so we defined them with the prefix chips.vrsc::poker.sg777z and the final
-key is represented as chips.vrsc::poker.sg777z.cashiers.
+Lets say the cashiers are specific to the context of poker, so we defined them with the prefix chips.vrsc::poker and the final
+key is represented as chips.vrsc::poker.cashiers.
 */
 
 #define CASHIERS_KEY "chips.vrsc::poker.sg777z.cashiers"
