@@ -104,15 +104,18 @@ static cJSON *update_with_retry(const char *method, cJSON *params)
 			}
 
 			if (txid) {
-				/* wait_for_a_blocktime() + getrawtransaction round-trip
-				 * is sufficient settle time on current Verus builds; the
-				 * daemon's wallet has already re-indexed by the time
-				 * check_if_tx_exists() returns true. Empirically verified
-				 * with 25 back-to-back updates on VRSCTEST, no
-				 * "bad-txns-inputs-spent" failures. */
 				wait_for_a_blocktime();
-				if (check_if_tx_exists(txid))
+				if (check_if_tx_exists(txid)) {
+					/* The tx is confirmed but the wallet's in-memory UTXO
+					 * set takes a few seconds to re-index after a block.
+					 * Without this sleep the very next updateidentity call
+					 * tries to spend the OLD identity UTXO and hits
+					 * "bad-txns-inputs-spent". 3 s is safe on VRSCTEST
+					 * (block every ~2-3 s) and negligible on production
+					 * CHIPS (block ~30 s). */
+					sleep(3);
 					break;
+				}
 			} else {
 				// No txid to check, assume success
 				break;
