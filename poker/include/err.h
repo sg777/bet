@@ -65,10 +65,6 @@ typedef enum {
     ERR_INI_PARSING = 65,
     ERR_JSON_PARSING = 66,
 
-    // NNG Related Errors
-    ERR_NNG_SEND = 67,
-    ERR_NNG_BINDING = 68,
-
     // PTHREAD Errors
     ERR_PTHREAD_LAUNCHING = 69,
     ERR_PTHREAD_JOINING = 70,

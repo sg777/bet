@@ -86,10 +86,6 @@ const char *bet_err_str(int32_t err_no)
 		return "Error in parsing the ini configuration file";
 	case ERR_JSON_PARSING:
 		return "Error in parsing the json configuration file";
-	case ERR_NNG_SEND:
-		return "Error in sending the data using Nano sockets";
-	case ERR_NNG_BINDING:
-		return "Error in binding to the Nano sockets";
 	case ERR_PTHREAD_LAUNCHING:
 		return "Error in launching the thread";
 	case ERR_PTHREAD_JOINING:

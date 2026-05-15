@@ -1793,8 +1793,6 @@ void bet_handle_player_error(struct privatebet_info *bet, int32_t err_no)
 	case ERR_DCV_COMMISSION_MISMATCH:
 	case ERR_INI_PARSING:
 	case ERR_JSON_PARSING:
-	case ERR_NNG_SEND:
-	case ERR_NNG_BINDING:
 	case ERR_PTHREAD_LAUNCHING:
 	case ERR_PTHREAD_JOINING:
 		exit(-1);

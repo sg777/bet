@@ -95,7 +95,6 @@ poker/src/legacy/
 #### 3.2 Remove Pub-Sub Code
 - Delete `network_legacy.c` after verification
 - Remove port bindings (7797, 7798, 7901, 7902)
-- Remove `ERR_NNG_*` error codes
 
 #### 3.3 Clean Up Network Module
 - Simplify `network.c` to only handle WebSockets
