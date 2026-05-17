@@ -1,104 +1,170 @@
-[![bet CD](https://github.com/sg777/bet/actions/workflows/bet-cd.yml/badge.svg?branch=master)](https://github.com/sg777/bet/actions/workflows/bet-cd.yml)
-
 # Pangea-Bet
 
-Decentralized poker platform built on the CHIPS blockchain using Verus IDs for node communication.
+[![bet CD](https://github.com/sg777/bet/actions/workflows/bet-cd.yml/badge.svg?branch=master)](https://github.com/sg777/bet/actions/workflows/bet-cd.yml)
 
-### Node Types
+Decentralized poker, with every hand of state recorded on a Verus
+chain. Players, the dealer, and the cashier each control a Verus
+identity; the gameplay protocol is a sequence of
+`updateidentity` writes against those identities' content
+multimaps (CMMs). There is no central server, no off-chain
+matchmaking, and no separate audit log — the chain is the audit log.
 
-1. **Dealer**: Manages tables
-2. **Player**: Joins tables
-3. **Cashier**: Validates transactions
+> **Status:** Active development. The poker product is functional
+> end-to-end on a local Verus regtest (`VRSCTEST`). There is no
+> mainnet release at this time.
 
-### Ports
+---
 
-- **GUI HTTP**: Port `1234` (serves web interface)
-- **WebSocket**: Ports `9000` (dealer), `9001` (player), `9002` (cashier) - configurable in respective config files
+## Node types
 
-## Prerequisites
+| Role     | Identity (dev regtest)        | Responsibilities                                                 |
+|----------|-------------------------------|------------------------------------------------------------------|
+| Dealer   | `d1.<parent>@`                | Hosts tables, drives the per-hand state machine, deals cards.    |
+| Player   | `p1.<parent>@`, `p2.<parent>@`, … | Buys in with `sendcurrency`, signs deck-shuffle steps, places bets. |
+| Cashier  | `cashier.<parent>@`           | Custodies payin funds, settles payouts, blinds the deck.         |
 
-- Linux or macOS
-- Running CHIPS daemon (`chipsd`) with blockchain synced
-- Verus IDs registered on CHIPS blockchain (for dealer/cashier)
-- Ports `1234` and `9000-9002` open
+A single `bet` binary plays all three roles — selected by the first
+argument (`./bin/bet start dealer`, `./bin/bet start player`, etc.).
 
-## Installation
+---
 
-### Building from Source
+## Quick start (local regtest)
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/sg777/bet.git
-   cd bet
-   git submodule update --init --recursive
-   ```
-
-2. **Build the project**:
-   ```bash
-   cd poker
-   make
-   ```
-
-3. **Build dependencies** (if needed):
-   ```bash
-   make --directory ../external/iniparser
-   ```
-
-See [Compilation Documentation](./docs/protocol/compile.md) for detailed build instructions.
-
-### Pre-compiled Binaries
-
-Pre-compiled binaries are available in the [Releases](https://github.com/sg777/bet/releases) section.
-
-## Configuration
-
-Configuration files are in `poker/config/`. See [Configuration Documentation](./docs/protocol/) for details.
-
-## Usage
-
-### Starting Nodes
+A fully-local development cycle needs a patched `verusd` running the
+`VRSCTEST` chain. The end-to-end bring-up (chain config, identity
+registration, helper scripts) is documented in
+[`docs/tutorials/cli-auto-vrsctest.md`](./docs/tutorials/cli-auto-vrsctest.md).
+Once that's in place:
 
 ```bash
-# Dealer
-cd poker && ./bin/bet dealer
+# Build
+git clone --recurse-submodules <fork-url> bet
+cd bet
+make -j$(nproc)
 
-# Cashier
-cd poker && ./bin/cashierd
-
-# Player
-cd poker && ./bin/bet player
+# Run a 2-player hand (each command in its own terminal / tmux pane)
+cd poker
+./bin/bet start cashier
+./bin/bet start dealer
+./bin/bet start player -c config/p1.ini
+./bin/bet start player -c config/p2.ini
 ```
 
-### Accessing the GUI
+The legacy positional form (`./bin/bet dealer`, `./bin/bet player`,
+`./bin/bet cashier`) is preserved for compatibility.
 
-Open `http://localhost:1234` in your browser after starting any node.
+GUI mode (per-player) starts a local WebSocket on the port from
+`config/pN.ini`:
 
-### Funding and Withdrawals
-
-**Get address and fund**:
 ```bash
-chips-cli getnewaddress
-# Send CHIPS to this address
+./bin/bet start player -c config/p1.ini --gui
+# Then open http://localhost:9001/ from a pangea-poker build.
 ```
 
-**Withdraw**:
-```bash
-cd poker && ./bin/bet withdraw <amount> <destination_address>
-```
+Detailed build instructions:
+[`docs/guides/build-from-source.md`](docs/guides/build-from-source.md).
 
-**Note**: Ensure sufficient CHIPS for stake size + transaction fees.
+---
+
+## Architecture in one paragraph
+
+`bet` is structured around the *single-writer-per-identity* rule:
+every identity in play has exactly one owning node, and that node
+is the only one allowed to update its CMM. The dealer writes the
+table identity's hand state; each player writes their own identity's
+deck-shuffle output; the cashier writes payment acknowledgements
+and settlement on its own identity. Reading is open — every
+participant can `getidentitycontent` any identity to reconstruct the
+full game. The state machine in
+[`docs/reference/game-states.md`](docs/reference/game-states.md)
+enumerates the 14 hand states; the full key-by-key reference is in
+[`docs/reference/vdxf-keys.md`](docs/reference/vdxf-keys.md).
+
+---
+
+## Ports
+
+`bet` itself opens only WebSocket ports for GUI integration. There
+is no inter-node TCP — coordination flows entirely through the chain.
+
+| Port  | Default for | Configurable in        |
+|-------|-------------|------------------------|
+| 9000  | Dealer GUI  | `dealer:gui_ws_port`   |
+| 9001  | Player 1 GUI| `verus:ws_port` (`p1.ini`) |
+| 9002  | Player 2 / cashier GUI | `verus:ws_port` / `cashier:gui_ws_port` |
+
+The chain RPC is whichever port your `verusd` is configured for
+(18843 on the dev regtest); the `verus` CLI handles that connection
+on `bet`'s behalf.
+
+---
 
 ## Documentation
 
-Comprehensive documentation is available in the [`docs/`](./docs/) directory:
+The full doc tree is under [`docs/`](./docs/):
 
-- **[Documentation Index](./docs/README.md)** - Complete documentation guide and navigation
-- **[Getting Started](./docs/protocol/compile.md)** - Installation and setup instructions
-- **[System Architecture](./docs/verus_migration/architecture.md)** - Layered architecture and RPC abstraction
-- **[Configuration Guides](./docs/README.md#configuration-guides)** - Node configuration (dealer, player, cashier)
-- **[Verus Migration](./docs/verus_migration/verus_migration.md)** - Verus ID architecture and protocol details
-- **[API Reference](./docs/protocol/GUI_MESSAGE_FORMATS.md)** - GUI WebSocket API documentation
+* **[Documentation Index](docs/README.md)** — top-level navigation.
+* **[Building from source](docs/guides/build-from-source.md)** — system
+  packages, recursive submodule clone, `make -j`.
+* **[VRSCTEST Local Setup](docs/tutorials/cli-auto-vrsctest.md)** —
+  bring up a local regtest with the patched `verusd`.
+* **[System Architecture](docs/explanation/architecture.md)** —
+  layered design, RPC abstraction, where each module lives.
+* **[Verus Overview](docs/explanation/verus-overview.md)** —
+  how identities, CMMs, and VDXF keys are used.
+* **[Game State Machine](docs/reference/game-states.md)** —
+  the 14 `G_*` states and the writer for each.
+* **[Keys and Data Structure](docs/reference/vdxf-keys.md)** —
+  every CMM key `bet` reads or writes, with payload shapes.
+* **[Player Join Flow](docs/reference/player-join-flow.md)** — the full
+  player join + payin sequence.
+* **[GUI Message Formats](docs/reference/gui-message-formats.md)** —
+  WebSocket wire format for GUI integrators.
+* **[Glossary](docs/reference/glossary.md)** — terminology
+  (CMM, vdxfid, primaryaddresses, single-writer rule, etc.).
+
+---
+
+## Configuration
+
+Configuration lives under `poker/config/`. Each node reads a
+subset of:
+
+* `dealer.ini` / `player.ini` / `pN.ini` / `cashier.ini` —
+  per-node knobs.
+* `blockchain.ini` — chain CLI and currency name.
+* `keys.ini` — identity short names and VDXF key prefix.
+* `.rpccredentials` — Verus daemon RPC user/password.
+
+Reference: [`dealer_configuration.md`](docs/reference/dealer-config.md) |
+[`player_configuration.md`](docs/reference/player-config.md) |
+[`cashier_configuration.md`](docs/reference/cashier-config.md).
+
+---
+
+## Wallet operations
+
+All wallet operations route through the paired Verus daemon's
+wallet — `bet` does not implement key management of its own.
+Day-to-day tasks:
+
+```bash
+# Get a fresh receiving address from your wallet
+verus -chain=VRSCTEST getnewaddress
+
+# Check balance
+./bin/bet balance
+
+# Withdraw to an arbitrary R-address
+./bin/bet withdraw <amount|all> <destination_address>
+```
+
+The GUI `withdrawRequest` / `withdraw` methods (player and cashier
+nodes) provide the same functionality through the WebSocket
+front-end.
+
+---
 
 ## License
 
-See LICENSE file for details.
+See [LICENSE](./LICENSE).

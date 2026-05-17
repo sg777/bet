@@ -15,11 +15,11 @@ Our aim is to define as minimum identifiers as possible and as minimum keys as p
 
 We define every keys under the namespace chips.vrsc::
 As we know that bet aim to support multiple games, so under the namespace chips.vrsc:: we group the keys based on the game 
-in which they used for. For example chips.vrsc::poker.sg777z is the prefix to all the keys that are used in playing the poker game.
+in which they used for. For example chips.vrsc::poker is the prefix to all the keys that are used in playing the poker game.
 Likewise if any keys are common across the games then those are defined with the prefix chips.vrsc::bet.
 
-Lets say the cashiers are specific to the context of poker, so we defined them with the prefix chips.vrsc::poker.sg777z and the final
-key is represented as chips.vrsc::poker.sg777z.cashiers.
+Lets say the cashiers are specific to the context of poker, so we defined them with the prefix chips.vrsc::poker and the final
+key is represented as chips.vrsc::poker.cashiers.
 */
 
 #define CASHIERS_KEY "chips.vrsc::poker.sg777z.cashiers"
@@ -41,7 +41,27 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 */
 #define DEALERS_KEY "chips.vrsc::poker.sg777z.dealers"
 
+/*
+* t_game_ids - Tracks the current active game ID
+* {
+*   "hexdata" (string representing the 256-bit game ID)
+* }
+*/
 #define T_GAME_ID_KEY "chips.vrsc::poker.sg777z.t_game_ids"
+
+/*
+* t_table_info - Stored on dealer identity (as advertisement) and table identity (for active game)
+* {
+*   max_players: maximum number of players allowed
+*   big_blind: big blind amount in CHIPS
+*   min_stake: minimum buy-in amount in CHIPS
+*   max_stake: maximum buy-in amount in CHIPS
+*   table_id: the table identity string
+*   dealer_id: the dealer identity string
+*   cashier_id: the cashier identity string
+*   start_block: block height when the table/game was initialized
+* }
+*/
 #define T_TABLE_INFO_KEY "chips.vrsc::poker.sg777z.t_table_info"
 /*
 * t_player_info {
@@ -112,6 +132,40 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 #define T_B_P9_DECK_KEY "chips.vrsc::poker.sg777z.t_b_p9_deck"
 
 /*
+ * Cashier-side mirrors of T_B_*_DECK_KEY.
+ *
+ * Per the single-writer-per-identity rule (docs/TODO.md item 1.1), the cashier
+ * writes its blinded-deck output to its OWN identity under these C_B_* keys.
+ * The dealer polls the cashier id, sees them populated, and canonicalizes them
+ * onto the table id under the existing T_B_* keys (which players read from).
+ *
+ * Wire format and per-game scoping (`<game_id>` suffix) are identical to the
+ * T_B_* keys; only the writer + storage location differ.
+ */
+#define C_B_DECK_KEY "chips.vrsc::poker.sg777z.c_b_deck"
+#define C_B_P1_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p1_deck"
+#define C_B_P2_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p2_deck"
+#define C_B_P3_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p3_deck"
+#define C_B_P4_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p4_deck"
+#define C_B_P5_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p5_deck"
+#define C_B_P6_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p6_deck"
+#define C_B_P7_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p7_deck"
+#define C_B_P8_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p8_deck"
+#define C_B_P9_DECK_KEY "chips.vrsc::poker.sg777z.c_b_p9_deck"
+
+/*
+ * Cashier-side mirror of T_CARD_BV_KEY (docs/TODO.md item 1.2).
+ *
+ * The cashier writes one entry per (player_id, card_id) reveal request to
+ * its OWN identity under C_CARD_BV_KEY.<game_id>. The player reader
+ * (player.c:reveal_card) reads directly from the cashier id resolved via
+ * T_TABLE_INFO_KEY — no canonicalize-onto-table-id step. Same payload
+ * shape as T_CARD_BV_KEY (`{player_id, card_id, bv: [...]}`); only the
+ * writer/storage location differ.
+ */
+#define C_CARD_BV_KEY "chips.vrsc::poker.sg777z.c_card_bv"
+
+/*
 * card_bv {
 * player_id : If player id is -1, then blinding values of all the players for that card to be revealed.
 * card_id
@@ -133,15 +187,64 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 #define T_BOARD_CARDS_KEY "chips.vrsc::poker.sg777z.t_board_cards"
 
 /*
-* p_decoded_card - Player reports their decoded card to their ID (for dealer verification)
-* {
-*   card_id: which card was decoded
-*   card_type: hole_card, flop_card_1, etc.
-*   card_value: decoded card value
-* }
-* Dealer polls this to confirm all players decoded the same community card
-*/
+ * p_decoded_card — Player publishes a cumulative snapshot of every
+ * community card it has decoded so far for the current game. Schema:
+ *
+ *   {
+ *     "game_id":  "<32-byte hex>",
+ *     "decoded_cards": [
+ *       { "card_id": <int>, "card_type": <enum>, "card_value": <0..51> },
+ *       ...
+ *     ]
+ *   }
+ *
+ * Why a cumulative snapshot (rather than one CMM entry per card):
+ *   `get_cJSON_from_id_key_vdxfid_from_height` returns only the LATEST
+ *   CMM entry for a key. With a per-card schema the dealer's consensus
+ *   check for, say, flop_card_1 fails once the player has appended
+ *   flop_card_2 — the latest entry's card_type no longer matches. Each
+ *   write here re-publishes the full array so the latest entry always
+ *   holds the player's complete view, and the dealer's consensus
+ *   read finds any requested card_type by scanning the array within
+ *   that single entry.
+ *
+ * Single-writer-per-identity: only the player owning verus_pid writes
+ * this key. The dealer reads it to verify community cards.
+ *
+ * Hole-card *secrecy* during play: this key is currently used only for
+ * community-card consensus. Each player's two private hole cards are
+ * revealed in a separate one-shot write at G_SHOWDOWN — see
+ * P_HOLECARDS_REVEAL_KEY below.
+ */
 #define P_DECODED_CARD_KEY "chips.vrsc::poker.sg777z.p_decoded_card"
+
+/*
+ * p_holecards_reveal - Player reveals its two hole cards at showdown.
+ *
+ * Player publishes a single CMM entry on its OWN identity at G_SHOWDOWN
+ * (single-writer-per-identity rule):
+ *   {
+ *     game_id:    "<32-byte hex>",
+ *     hole_cards: [v0, v1]    // card values (deck face indices)
+ *   }
+ *
+ * Dealer reads this from each non-folded player's id at G_SHOWDOWN,
+ * combines with the 5 community cards from T_BOARD_CARDS_KEY, and runs
+ * 7-card hand evaluation (poker.c::seven_card_draw_score) to determine
+ * winners and pot distribution.
+ *
+ * Why a separate key instead of reusing P_DECODED_CARD_KEY:
+ *   - keeps community-card consensus reads deterministic — they read the
+ *     latest entry of P_DECODED_CARD_KEY without having to filter by
+ *     card_type.
+ *   - one-shot write per game — simpler dealer-side reasoning than
+ *     iterating an append-mode CMM and filtering hole-card entries.
+ *   - revealed strictly at showdown, never earlier — prevents accidental
+ *     leaking of hole cards mid-hand (P_DECODED_CARD_KEY entries that
+ *     get appended throughout the hand would otherwise expose them as
+ *     soon as a player decodes).
+ */
+#define P_HOLECARDS_REVEAL_KEY "chips.vrsc::poker.sg777z.p_holecards_reveal"
 
 /*
 * t_game_info {
@@ -164,6 +267,28 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 * }
 */
 #define T_SETTLEMENT_INFO_KEY "chips.vrsc::poker.sg777z.t_settlement_info"
+
+/*
+ * Cashier-side settlement result (docs/TODO.md item 1.3).
+ *
+ * The dealer writes the settlement *order* (winners, settle_amounts,
+ * player_ids, payin_txs, pot, cashier_id, status:pending) into
+ * T_SETTLEMENT_INFO_KEY.<gid> on the table id. The cashier MUST NOT
+ * mutate that key. Instead, after issuing all sendcurrency payouts the
+ * cashier writes its receipt — {status:"completed", payout_txs:[...]}
+ * — to its OWN identity under C_SETTLEMENT_RESULT_KEY.<gid>.
+ *
+ * The dealer polls cashier_id, observes the result, and canonicalizes
+ * status + payout_txs onto T_SETTLEMENT_INFO_KEY.<gid> on the table id
+ * (preserving the dealer-written order fields). Same handshake pattern
+ * as item 1.4's G_SETTLEMENT_COMPLETE_BY_CASHIER → G_SETTLEMENT_COMPLETE.
+ *
+ * The cashier also uses this key for its own re-pay idempotency: at
+ * the top of cashier_process_settlement, if C_SETTLEMENT_RESULT_KEY for
+ * this game already exists with status:completed, the cashier returns
+ * OK without re-issuing payouts.
+ */
+#define C_SETTLEMENT_RESULT_KEY "chips.vrsc::poker.sg777z.c_settlement_result"
 
 /*
 * p_game_history - Stored on player ID after joining a game
@@ -269,6 +394,11 @@ extern char all_t_d_p_key_names[all_t_d_p_keys_no][128];
 extern char all_t_b_p_keys[all_t_b_p_keys_no][128];
 extern char all_t_b_p_key_names[all_t_b_p_keys_no][128];
 
+/* Cashier-owned mirrors of all_t_b_p_keys[] / all_t_b_p_key_names[].
+ * Same indexing convention: index 0..8 = P1..P9, index 9 = bare deck. */
+extern char all_c_b_p_keys[all_t_b_p_keys_no][128];
+extern char all_c_b_p_key_names[all_t_b_p_keys_no][128];
+
 #define all_game_keys_no 1
 extern char all_game_keys[all_game_keys_no][128];
 extern char all_game_key_names[all_game_keys_no][128];
@@ -294,7 +424,7 @@ cJSON *get_cmm(const char *id, int16_t full_id);
  * ============================================================================ */
 bool is_id_exists(const char *id, int16_t full_id);
 int32_t id_canspendfor(char *id, int32_t full_id, int32_t *err_no);
-int32_t id_cansignfor(char *id, int32_t full_id, int32_t *err_no);
+int32_t id_cansignfor(const char *id, int32_t full_id, int32_t *err_no);
 
 /* ============================================================================
  * Currency/Transaction Operations
@@ -310,9 +440,27 @@ char *get_str_from_id_key_from_height(const char *id, const char *key, int32_t h
 cJSON *get_cJSON_from_id_key(const char *id, const char *key, int32_t is_full_id);
 cJSON *get_cJSON_from_id_key_vdxfid(char *id, char *key_vdxfid);
 cJSON *get_cJSON_from_id_key_vdxfid_from_height(const char *id, const char *key_vdxfid, int32_t height_start);
+/* Like get_cJSON_from_id_key_vdxfid_from_height but returns ALL CMM
+ * entries for the key (height-merged), not just the latest. Each
+ * element of the returned array is a decoded cJSON object (the original
+ * payload that was hex-encoded into the CMM entry). Caller owns the
+ * returned array and must cJSON_Delete it. Returns NULL on no entries. */
+cJSON *get_all_cJSON_from_id_key_vdxfid_from_height(const char *id, const char *key_vdxfid, int32_t height_start);
 cJSON *append_cmm_from_id_key_data_hex(const char *id, const char *key, char *hex_data, bool is_key_vdxf_id);
 cJSON *append_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id);
 cJSON *update_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON *data, bool is_key_vdxf_id);
+/*
+ * Merge-mode CMM writes: read combined view from `start_block`, fold in the
+ * supplied key/value, rewrite the whole snapshot in one updateidentity. Use
+ * this for table-id writes during the join phase so that fresh players (who
+ * do not have start_block yet) can still discover the full game-bootstrap
+ * state via plain getidentity. After all players have joined, switch back to
+ * the cheaper append_cmm_from_id_key_data_* writes.
+ */
+cJSON *merge_cmm_from_id_key_data_hex(const char *id, int32_t start_block,
+				      const char *key, char *hex_data, bool is_key_vdxf_id);
+cJSON *merge_cmm_from_id_key_data_cJSON(const char *id, int32_t start_block,
+					const char *key, cJSON *data, bool is_key_vdxf_id);
 
 /* ============================================================================
  * Poker Table Operations (internal - use poker_vdxf.h for public API)

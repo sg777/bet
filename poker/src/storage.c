@@ -702,6 +702,11 @@ void init_p_local_state()
 	p_local_state.player_id = -1;
 	p_local_state.last_card_id = -1;
 	p_local_state.last_game_state = 0;
+	p_local_state.hole_cards[0] = -1;
+	p_local_state.hole_cards[1] = -1;
+	for (int32_t i = 0; i < 5; i++) {
+		p_local_state.community_cards[i] = -1;
+	}
 }
 
 int32_t save_player_deck_info(const char *game_id_str, const char *table_id, int32_t player_id)

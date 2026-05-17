@@ -86,10 +86,6 @@ const char *bet_err_str(int32_t err_no)
 		return "Error in parsing the ini configuration file";
 	case ERR_JSON_PARSING:
 		return "Error in parsing the json configuration file";
-	case ERR_NNG_SEND:
-		return "Error in sending the data using Nano sockets";
-	case ERR_NNG_BINDING:
-		return "Error in binding to the Nano sockets";
 	case ERR_PTHREAD_LAUNCHING:
 		return "Error in launching the thread";
 	case ERR_PTHREAD_JOINING:
@@ -202,6 +198,10 @@ const char *bet_err_str(int32_t err_no)
 		return "Game already in progress - cannot rejoin mid-game (deck keys lost on restart)";
 	case ERR_PLAYER_TIMEOUT:
 		return "Player timed out - auto-folded";
+	case ERR_T_BOARD_CARDS_NULL:
+		return "Showdown: community cards (T_BOARD_CARDS_KEY) not yet on table id";
+	case ERR_PLAYER_HOLECARDS_PEND:
+		return "Showdown: at least one player has not published P_HOLECARDS_REVEAL_KEY yet";
 	default:
 		dlg_error("err_no::%d", err_no);
 		return "This error is not handled yet...";

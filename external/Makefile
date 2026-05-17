@@ -1,9 +1,6 @@
 SUBMODULES =					\
-	external/jsmn				\
-	external/nng				\
 	external/libwebsockets			\
 	external/dlg 				\
-	external/cmake				\
 	external/iniparser
 
 TOP := ../..
@@ -29,22 +26,17 @@ endif
 # LIBSECP_HEADERS := external/libwally-core/src/secp256k1/include/secp256k1_ecdh.h		\
 # 		external/libwally-core/src/secp256k1/include/secp256k1_recovery.h		\
 # 		external/libwally-core/src/secp256k1/include/secp256k1.h
-JSMN_HEADERS := external/jsmn/jsmn.h
-NNG_HEADERS := external/nng/include/nng.h \
-		external/nng/include/nng/compat/nanomsg/nn.h
 LIBWEBSOCKETS_HEADERS := external/libwebsockets/include/libwebsockets.h
 DLG_HEADERS := external/dlg/include/dlg/dlg.h
 INIPARSER_HEADERS := external/iniparser/src/dictionary.h \
 		external/iniparser/src/iniparser.h
 
-EXTERNAL_HEADERS := $(JSMN_HEADERS) $(NNG_HEADERS) $(LIBWEBSOCKETS_HEADERS) $(DLG_HEADERS) $(INIPARSER_HEADERS)
-EXTERNAL_LIBS := ${TARGET_DIR}/libjsmn.a ${TARGET_DIR}/libnng.a ${TARGET_DIR}/libwebsockets.a $(TARGET_DIR)/libdlg.a ${TARGET_DIR}/libiniparser.a
+EXTERNAL_HEADERS := $(LIBWEBSOCKETS_HEADERS) $(DLG_HEADERS) $(INIPARSER_HEADERS)
+EXTERNAL_LIBS := ${TARGET_DIR}/libwebsockets.a $(TARGET_DIR)/libdlg.a ${TARGET_DIR}/libiniparser.a
 
-EXTERNAL_LIBS_CLEAN := ${TARGET_DIR}/libjsmn.a ${TARGET_DIR}/libnng.a ${TARGET_DIR}/libwebsockets.a $(TARGET_DIR)/libdlg.a ${TARGET_DIR}/libiniparser.a
+EXTERNAL_LIBS_CLEAN := ${TARGET_DIR}/libwebsockets.a $(TARGET_DIR)/libdlg.a ${TARGET_DIR}/libiniparser.a
 
 EXTERNAL_INCLUDE_FLAGS :=					\
-	-I external/jsmn/					\
-	-I external/nng/include/				\
 	-I external/libwebsockets/include/			\
 	-I external/dlg/include/				\
 	-I external/iniparser/src/
@@ -53,7 +45,6 @@ EXTERNAL_LDLIBS := -L${TARGET_DIR} $(patsubst lib%.a,-l%,$(notdir $(EXTERNAL_LIB
 
 submodcheck: 
 	@tools/refresh-submodules.sh $(SUBMODULES)
-	@tools/install_cmake.sh
 	@patch -p0 --forward external/libwebsockets/include/libwebsockets/lws-lecp.h < tools/libwebsockets.patch || true
 
 $(EXTERNAL_HEADERS): submodcheck
@@ -81,18 +72,6 @@ $(EXTERNAL_HEADERS): submodcheck
 # 		--enable-debug \
 # 	&& $(MAKE)
 
-# If we tell Make that the above builds both, it runs it twice in
-# parallel.  So we lie :(
-external/jsmn/jsmn.c: external/jsmn/jsmn.h
-	[ -f $@ ]
-
-$(TARGET_DIR)/jsmn-build/jsmn.o: external/jsmn/jsmn.c Makefile
-	@mkdir -p $(@D)
-	$(COMPILE.c) -DJSMN_STRICT=1 -o $@ $<
-
-$(TARGET_DIR)/libjsmn.a: $(TARGET_DIR)/jsmn-build/jsmn.o
-	$(AR) rc $@ $<
-
 external/dlg/src/dlg/dlg.c: external/dlg/include/dlg/dlg.h
 	[ -f $@ ]
 
@@ -106,14 +85,9 @@ $(TARGET_DIR)/libdlg.a: $(TARGET_DIR)/dlg-build/dlg.o
 $(TARGET_DIR)/libiniparser.a:
 	cd external/iniparser && $(MAKE) && cp -f libiniparser.a ../../$(TARGET_DIR)/
 
-${TARGET_DIR}/libnng.a: external/nng/include/nng/nng.h
-	mkdir -p $(TARGET_DIR)/libnng-build
-	cd $(TARGET_DIR)/libnng-build && PATH=$(shell pwd)/external/cmake/bin:${PATH} cmake -G Ninja $(TOP)/nng \
-	&& ninja && cp -av libnng.a .. 
-
 ${TARGET_DIR}/libwebsockets.a: external/libwebsockets/include/libwebsockets.h
 	mkdir -p $(TARGET_DIR)/libwebsockets-build
-	cd $(TARGET_DIR)/libwebsockets-build && PATH=$(shell pwd)/external/cmake/bin:${PATH} cmake -DLWS_WITH_HTTP2=1 -DLWS_WITH_NO_LOGS=ON $(TOP)/libwebsockets \
+	cd $(TARGET_DIR)/libwebsockets-build && cmake -DLWS_WITH_HTTP2=1 -DLWS_WITH_NO_LOGS=ON $(TOP)/libwebsockets \
 	&& $(MAKE) -j4 && cp -av lib/libwebsockets.a ..
 
 distclean: external-distclean
@@ -121,14 +95,17 @@ clean: external-clean
 
 external-clean:
 	$(RM) $(EXTERNAL_LIBS_CLEAN) $(TARGET_DIR)/*.la $(TARGET_DIR)/*.o
-	$(RM) $(TARGET_DIR)/jsmn-build/jsmn.o
 	$(RM) $(TARGET_DIR)/dlg-build/dlg.o
-	if [ -f ${TARGET_DIR}/libwebsockets-build/Makefile ]; then make -C ${TARGET_DIR}/libwebsockets-build clean; fi
-	if [ -f ${TARGET_DIR}/libnng-build/Makefile ]; then make -C ${TARGET_DIR}/libnng-build clean; fi
+	# Wipe the cmake build trees entirely (not just `make clean` inside them).
+	# `make clean` keeps CMakeCache.txt, which caches negative results from
+	# CHECK_FUNCTION_EXISTS probes (e.g. LWS_HAVE_HMAC_CTX_new). If the
+	# system OpenSSL changes between configures, the stale "not found" entry
+	# survives and the source falls through to the broken `HMAC_CTX ctx`
+	# branch in lws-genhash.h, breaking the build. Removing the build dir
+	# forces cmake to re-probe from scratch on the next make.
+	$(RM) -rf ${TARGET_DIR}/libwebsockets-build
 
 external-distclean:
-	$(RM) -rf ${TARGET_DIR}/jsmn-build
 	$(RM) -rf $(TARGET_DIR)/dlg-build
 	$(RM) -rf ${TARGET_DIR}/libwebsockets-build
-	$(RM) -rf ${TARGET_DIR}/libnng-build
 	$(info $$TARGET_DIR is [${TARGET_DIR}])

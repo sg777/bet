@@ -65,10 +65,6 @@ typedef enum {
     ERR_INI_PARSING = 65,
     ERR_JSON_PARSING = 66,
 
-    // NNG Related Errors
-    ERR_NNG_SEND = 67,
-    ERR_NNG_BINDING = 68,
-
     // PTHREAD Errors
     ERR_PTHREAD_LAUNCHING = 69,
     ERR_PTHREAD_JOINING = 70,
@@ -133,7 +129,9 @@ typedef enum {
     ERR_NO_DEALERS_REGISTERED = 146,
     ERR_COMMAND_FAILED = 147,
     ERR_GAME_ALREADY_STARTED = 148,
-    ERR_PLAYER_TIMEOUT = 149
+    ERR_PLAYER_TIMEOUT = 149,
+    ERR_T_BOARD_CARDS_NULL = 150,
+    ERR_PLAYER_HOLECARDS_PEND = 151
 } bet_error_t;
 
 // clang-format on

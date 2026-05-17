@@ -44,7 +44,7 @@ ifneq ($(UBSAN),0)
 SANITIZER_FLAGS += -fsanitize=undefined
 endif
 
-ifneq ($(FUZZING), 0)
+ifeq ($(FUZZING), 1)
 SANITIZER_FLAGS += -fsanitize=fuzzer-no-link
 endif
 
@@ -99,7 +99,7 @@ endif
 
 default: show-flags all-programs
 
-show-flags: config.vars
+show-flags:
 	@$(ECHO) "CC: $(CC) $(CFLAGS) -c -o"
 	@$(ECHO) "LD: $(LINK.o) $(filter-out %.a,$^) $(LOADLIBES) $(EXTERNAL_LDLIBS) $(LDLIBS) -o"
 
@@ -267,7 +267,6 @@ clean: obsclean
 	$(RM) $(ALL_PROGRAMS)
 	$(RM) $(ALL_FUZZ_TARGETS)
 	make --directory poker clean
-	make --directory external/jsmn clean
 	make --directory libs/crypto clean
 	find . -name '*gcda' -delete
 	find . -name '*gcno' -delete

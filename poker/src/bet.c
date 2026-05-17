@@ -406,8 +406,14 @@ void bet_start(int argc, char **argv)
 	
 	const char *cmd = argv[1];
 
-	// Handle newblock command (early return, no initialization needed)
+	// Handle newblock command. Still needs the basic config so process_block
+	// can find blockchain.ini (for new_block flag) and use the right CLI.
 	if (strcmp(cmd, "newblock") == 0 && argc == 3) {
+		bet_init_config_paths();
+		bet_log_init(NULL);
+		bet_parse_verus_ids_keys_config();
+		bet_parse_rpc_credentials();
+		bet_parse_blockchain_config_ini_file();
 		process_block(argv[2]);
 		return;
 	}
@@ -533,8 +539,8 @@ void bet_start(int argc, char **argv)
 				dlg_info("Using cashier config: %s", cashier_config_ini_file);
 			}
 			
-			dlg_info("Starting cashier node (table: %s)", args.table_id);
-			cashier_game_init((char *)args.table_id);
+			dlg_info("Starting cashier node");
+			cashier_game_init();
 		}
 		else {
 			dlg_error("Unknown node type: %s (use player, dealer, or cashier)", node);

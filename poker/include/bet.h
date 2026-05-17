@@ -112,19 +112,23 @@ struct privatebet_vars {
 	cJSON *actions[CARDS_MAXROUNDS][CARDS_MAXPLAYERS + 1];
 	int32_t mypermi[CARDS_MAXCARDS], permi[CARDS_MAXCARDS], turni, round, validperms, roundready, lastround,
 		numconsensus;
-	double small_blind, big_blind;  // Actual CHIPS values (e.g., 0.01, 0.02)
-	double betamount[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
+	/* All chip-denominated fields are integer "table chips" (1 CHIP = 100
+	 * table chips). Conversion happens only at the on-chain boundaries -
+	 * see chips_to_table_chips() / table_chips_to_chips() in common.h.
+	 * Default blinds: small_blind=1, big_blind=2 (i.e. 0.01 / 0.02 CHIPS). */
+	int64_t small_blind, big_blind;
+	int64_t betamount[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
 	int32_t bet_actions[CARDS_MAXPLAYERS][CARDS_MAXROUNDS];
 	int32_t dealer, last_turn;
-	double last_raise;
+	int64_t last_raise;
 	int64_t turn_start_time;    // Unix timestamp when current turn started
 	int32_t turn_start_block;   // Block height when current turn started
-	double pot;
-	double player_funds;
-	double funds[CARDS_MAXPLAYERS];       // Available funds in CHIPS
-	double funds_spent[CARDS_MAXPLAYERS]; // Total spent this game
-	double win_funds[CARDS_MAXPLAYERS];   // Winnings from pot
-	double ini_funds[CARDS_MAXPLAYERS];   // Initial funds (payin amount)
+	int64_t pot;
+	int64_t player_funds;
+	int64_t funds[CARDS_MAXPLAYERS];       // Available funds (table chips)
+	int64_t funds_spent[CARDS_MAXPLAYERS]; // Total spent this game
+	int64_t win_funds[CARDS_MAXPLAYERS];   // Winnings from pot
+	int64_t ini_funds[CARDS_MAXPLAYERS];   // Initial funds (payin amount)
 	int32_t winners[CARDS_MAXPLAYERS];
 	char player_chips_addrs[CARDS_MAXPLAYERS][64];
 	int32_t req_id_to_player_id_mapping[CARDS_MAXPLAYERS];
@@ -178,6 +182,34 @@ struct p_local_state_struct {
 	int32_t cards_decoded_count;   // How many cards we've decoded
 	int32_t last_card_id;          // Last card_id we processed
 	int32_t last_game_state;       // Last known game state
+	/* Hole cards stored by per-player slot (0 = first hole, 1 = second hole),
+	 * not by global card_id. The global card_id encoding for hole cards is
+	 * (hole_index * num_players) + player_index, so a 2-player table puts
+	 * p1's hole cards at global ids 0,2 and p2's at 1,3 - which leaves holes
+	 * in decoded_cards[] when keyed by card_id. The hole_cards[] array is the
+	 * authoritative source for "what are my two hole cards" used to drive the
+	 * GUI deal message and showdown display. -1 = not yet decoded.
+	 */
+	int32_t hole_cards[2];
+	/* Community cards stored by board position (0..2 = flop, 3 = turn,
+	 * 4 = river), not by global card_id. Like hole_cards[], this avoids
+	 * the decoded_cards[card_id] indexing which collides with hole-card
+	 * slots for multi-player games (community card_ids overlap slots
+	 * already filled by hole_cards under the global-id-as-slot scheme).
+	 * The board position is derived from card_type:
+	 *     position = card_type - flop_card_1
+	 * Used only by the GUI deal-board emit path. -1 = not yet decoded. */
+	int32_t community_cards[5];
+	/* Latest betting_state.turn_start_time observed by the player.
+	 * Echoed back in every betting action write so the dealer can
+	 * dedup: dealer's verus_poll_player_action ignores actions whose
+	 * turn_start_time != current vars->turn_start_time. Without this
+	 * the dealer reads the same stale on-chain action every 2 s poll
+	 * and re-applies it, causing the pot to leak by `amount` per poll.
+	 *
+	 * Not persisted - resets to 0 on restart and is repopulated by
+	 * the next betting_state read. */
+	int64_t last_betting_turn_start_time;
 };
 extern struct p_local_state_struct p_local_state;
 

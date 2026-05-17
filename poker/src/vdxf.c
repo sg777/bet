@@ -96,18 +96,26 @@ static cJSON *update_with_retry(const char *method, cJSON *params)
 		retval = chips_rpc(method, params, &result);
 		if (retval == OK && result && jint(result, "error") == 0) {
 			// updateidentity returns txid directly as a string, not as {"tx": "txid"}
-			// Check if result is a string (direct txid) or object with "tx" field
 			const char *txid = NULL;
 			if (result->type == cJSON_String) {
 				txid = result->valuestring;
 			} else {
 				txid = jstr(result, "tx");
 			}
-			
+
 			if (txid) {
 				wait_for_a_blocktime();
-				if (check_if_tx_exists(txid))
+				if (check_if_tx_exists(txid)) {
+					/* The tx is confirmed but the wallet's in-memory UTXO
+					 * set takes a few seconds to re-index after a block.
+					 * Without this sleep the very next updateidentity call
+					 * tries to spend the OLD identity UTXO and hits
+					 * "bad-txns-inputs-spent". 3 s is safe on VRSCTEST
+					 * (block every ~2-3 s) and negligible on production
+					 * CHIPS (block ~30 s). */
+					sleep(3);
 					break;
+				}
 			} else {
 				// No txid to check, assume success
 				break;
@@ -295,9 +303,10 @@ static cJSON *get_z_getoperationstatus(char *op_id)
 cJSON *update_cashiers(char *ip)
 {
 	cJSON *cashiers_info = NULL, *out = NULL, *ip_obj = NULL, *cashier_ips = NULL;
+	const char *cashiers_id = verus_config.initialized ? verus_config.cashiers_short : "cashiers";
 
 	cashiers_info = cJSON_CreateObject();
-	cashier_ips = get_cashiers_info("cashiers");
+	cashier_ips = get_cashiers_info((char *)cashiers_id);
 
 	ip_obj = cJSON_CreateObject();
 	cJSON_AddStringToObject(ip_obj, get_vdxf_id(STRING_VDXF_ID), ip);
@@ -316,7 +325,7 @@ cJSON *update_cashiers(char *ip)
 
 	cJSON_AddItemToArray(cashier_ips, ip_obj);
 	cJSON_AddItemToObject(cashiers_info, get_vdxf_id(verus_config.initialized ? verus_config.cashiers_key : CASHIERS_KEY), cashier_ips);
-	out = update_cmm("cashiers", cashiers_info);
+	out = update_cmm(cashiers_id, cashiers_info);
 
 end:
 	return out;
@@ -367,9 +376,14 @@ int32_t join_table()
 	char *txid = NULL;
 
 	// Step 1: Send funds to cashier address
-	// Use the table's min_stake as the payin amount (default 0.5 CHIPS for testing)
-	double payin_amount = (table_min_stake > 0) ? table_min_stake : default_min_stake;
-	dlg_info("Sending payin to cashier: %s, amount: %.4f CHIPS", bet_get_cashiers_id_fqn(), payin_amount);
+	// table_min_stake_in_table_chips is in the integer table-chip unit;
+	// convert back to CHIPS at this on-chain boundary.
+	int64_t payin_table_chips = (table_min_stake_in_table_chips > 0)
+		? table_min_stake_in_table_chips
+		: chips_to_table_chips(default_min_stake);
+	double payin_amount = table_chips_to_chips(payin_table_chips);
+	dlg_info("Sending payin to cashier: %s, amount: %.4f CHIPS (%lld table chips)",
+		 bet_get_cashiers_id_fqn(), payin_amount, (long long)payin_table_chips);
 	op_id = verus_sendcurrency_data(bet_get_cashiers_id_fqn(), payin_amount, NULL);
 	if (op_id == NULL)
 		return ERR_SENDCURRENCY;
@@ -433,7 +447,7 @@ int32_t join_table()
 	dlg_info("Updating player identity with join request: %s", cJSON_Print(join_request));
 	update_result = append_cmm_from_id_key_data_cJSON(
 		player_config.verus_pid, 
-		"chips.vrsc::poker.sg777z.p_join_request",
+		P_JOIN_REQUEST_KEY,
 		join_request, 
 		false
 	);
@@ -612,6 +626,7 @@ cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 {
 	int32_t retval, minconf = 1;
 	double fee = 0.0001;
+	char id_fqn[256] = { 0 };
 	cJSON *currency_detail = NULL, *result = NULL, *tx_params = NULL, *params = NULL;
 
 	(void)data; // Data parameter currently unused - join info stored on player identity instead
@@ -624,9 +639,25 @@ cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 	if (amount == 0) {
 		amount = default_chips_tx_fee;
 	}
-	//Full ID needs to be provided for the sendcurrency command
-	if ((!id) || (!is_id_exists(id, 1))) {
-		dlg_error("Invalid ID provided");
+
+	if (!id || id[0] == '\0') {
+		dlg_error("Invalid ID provided (NULL or empty)");
+		return NULL;
+	}
+
+	/* sendcurrency requires a fully qualified identity. Match the convention
+	 * used by is_id_exists / get_cmm_from_height: if the caller passed a
+	 * short name (no '@' suffix), append the parent FQN. Callers that
+	 * already pass a full FQN (e.g. bet_get_cashiers_id_fqn(),
+	 * DEALERS_ID_FQN) are unaffected. */
+	if (strchr(id, '@')) {
+		snprintf(id_fqn, sizeof(id_fqn), "%s", id);
+	} else {
+		snprintf(id_fqn, sizeof(id_fqn), "%s.%s", id, bet_get_poker_id_fqn());
+	}
+
+	if (!is_id_exists(id_fqn, 1)) {
+		dlg_error("Invalid ID provided (%s does not resolve on chain)", id_fqn);
 		return NULL;
 	}
 
@@ -634,9 +665,9 @@ cJSON *verus_sendcurrency_data(const char *id, double amount, cJSON *data)
 
 	// Output: currency to identity address
 	currency_detail = cJSON_CreateObject();
-	cJSON_AddStringToObject(currency_detail, "currency", CHIPS);
+	cJSON_AddStringToObject(currency_detail, "currency", bet_get_currency());
 	cJSON_AddNumberToObject(currency_detail, "amount", amount);
-	cJSON_AddStringToObject(currency_detail, "address", id);
+	cJSON_AddStringToObject(currency_detail, "address", id_fqn);
 	cJSON_AddItemToArray(tx_params, currency_detail);
 
 	// Build params array: [source, destinations, minconf, fee]
@@ -841,6 +872,31 @@ static cJSON *get_available_t_of_d(char *dealer_id)
 	if (!t_table_info)
 		return NULL;
 
+	char *table_id = jstr(t_table_info, "table_id");
+	char *game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+	if (!game_id_str) {
+		cJSON_Delete(t_table_info);
+		return NULL;
+	}
+
+	cJSON *game_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+	if (!game_table_info) {
+		cJSON_Delete(t_table_info);
+		return NULL;
+	}
+
+	extern int32_t g_start_block;
+	int32_t start_block = jint(game_table_info, "start_block");
+	if (start_block <= 0) {
+		cJSON_Delete(game_table_info);
+		cJSON_Delete(t_table_info);
+		return NULL;
+	}
+
+	g_start_block = start_block;
+	cJSON_Delete(t_table_info);
+	t_table_info = game_table_info;
+
 	game_state = get_game_state(jstr(t_table_info, "table_id"));
 
 	if ((game_state == G_TABLE_STARTED) && (!is_table_full(jstr(t_table_info, "table_id"))) &&
@@ -859,13 +915,36 @@ static int32_t check_if_d_t_available(char *dealer_id, char *table_id, cJSON **t
 	if ((!dealer_id) || (!table_id) || (!is_dealer_registered(dealer_id)) || (!is_id_exists(table_id, 0))) {
 		return ERR_CONFIG_PLAYER_ARGS;
 	}
-
+	
 	*t_table_info = get_cJSON_from_id_key(dealer_id, T_TABLE_INFO_KEY, 0);
 	if (*t_table_info == NULL) {
 		return ERR_T_TABLE_INFO_NULL;
 	}
 
 	if ((0 == strcmp(jstr(*t_table_info, "table_id"), table_id))) {
+		// Read the actual active game_id from the table_id to find the current game's start_block
+		char *game_id_str = get_str_from_id_key(table_id, T_GAME_ID_KEY);
+		if (!game_id_str) {
+			return ERR_TABLE_IS_NOT_STARTED;
+		}
+
+		cJSON *game_table_info = get_cJSON_from_id_key_vdxfid(table_id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id_str));
+		if (!game_table_info) {
+			return ERR_T_TABLE_INFO_NULL;
+		}
+
+		extern int32_t g_start_block;
+		int32_t start_block = jint(game_table_info, "start_block");
+		if (start_block <= 0) {
+			cJSON_Delete(game_table_info);
+			return ERR_TABLE_IS_NOT_STARTED;
+		}
+
+		g_start_block = start_block;
+		// Replace the advertisement table_info with the active game's table_info
+		cJSON_Delete(*t_table_info);
+		*t_table_info = game_table_info;
+
 		if (is_playerid_added(table_id)) {
 			return ERR_DUPLICATE_PLAYERID;
 		}
@@ -1269,6 +1348,139 @@ cJSON *update_cmm_from_id_key_data_cJSON(const char *id, const char *key, cJSON 
 	return result;
 }
 
+/*
+ * Merge-mode CMM write
+ * --------------------
+ * Verus merges historical CMM updates only when readers query via
+ * `getidentitycontent <id> <heightstart>`. Plain `getidentity <id>` (and the
+ * code paths that go through `get_cmm()`) returns ONLY the latest snapshot,
+ * i.e. exactly the keys submitted in the most recent `updateidentity`
+ * transaction.
+ *
+ * That is fine for any participant that already knows `start_block` (the
+ * dealer, the cashier, and players that have already joined). It is NOT fine
+ * for a fresh player trying to discover the table for the first time: that
+ * player has no `start_block` yet, so it can only do `getidentity` on the
+ * table id and must be able to see the full game-bootstrap state
+ * (T_GAME_ID_KEY, T_TABLE_INFO_KEY.<g>, T_GAME_INFO_KEY.<g>,
+ * T_PLAYER_INFO_KEY.<g>) in that single snapshot.
+ *
+ * `merge_cmm_from_id_key_data_*` reads the combined CMM from `start_block`
+ * via `get_cmm_from_height()`, takes the latest value of every existing key,
+ * folds in the new key/value, and rewrites the whole thing in one
+ * transaction. Use this for table-id writes during the join phase
+ * (G_TABLE_STARTED). After G_PLAYERS_JOINED, every reader has start_block,
+ * so cheap single-key `append_cmm_from_id_key_data_*` writes are sufficient.
+ */
+cJSON *merge_cmm_from_id_key_data_hex(const char *id, int32_t start_block,
+				      const char *key, char *hex_data, bool is_key_vdxf_id)
+{
+	char *data_type = NULL;
+	const char *data_key = NULL;
+	cJSON *combined = NULL, *merged = NULL, *out = NULL;
+	cJSON *data_obj = NULL, *key_iter = NULL;
+
+	if (!id || !key || !hex_data) {
+		dlg_error("%s: Invalid input parameters", __func__);
+		return NULL;
+	}
+
+	if (is_key_vdxf_id) {
+		data_type = get_vdxf_id(BYTEVECTOR_VDXF_ID);
+		data_key = key;
+	} else {
+		data_type = get_vdxf_id(get_key_data_type(key));
+		data_key = get_vdxf_id(key);
+	}
+
+	if (!data_type || !data_key) {
+		dlg_error("%s: Failed to determine data type or key", __func__);
+		return NULL;
+	}
+
+	merged = cJSON_CreateObject();
+	if (!merged) {
+		dlg_error("%s: Failed to allocate merged CMM", __func__);
+		return NULL;
+	}
+
+	if (start_block > 0) {
+		combined = get_cmm_from_height(id, 0, start_block);
+	}
+
+	/* Carry over each existing key as {bytevec_vdxfid: latest_hex}. The
+	 * key being updated is skipped because it is appended below.
+	 */
+	if (combined) {
+		for (key_iter = combined->child; key_iter != NULL; key_iter = key_iter->next) {
+			const char *key_name = key_iter->string;
+			int32_t n = 0;
+			cJSON *latest = NULL, *wrapper = NULL;
+
+			if (!key_name || strcmp(key_name, data_key) == 0)
+				continue;
+
+			n = cJSON_GetArraySize(key_iter);
+			if (n <= 0)
+				continue;
+
+			latest = cJSON_GetArrayItem(key_iter, n - 1);
+			if (!latest)
+				continue;
+
+			if (latest->type == cJSON_String && latest->valuestring) {
+				wrapper = cJSON_CreateObject();
+				if (wrapper) {
+					cJSON_AddStringToObject(wrapper,
+								get_vdxf_id(BYTEVECTOR_VDXF_ID),
+								latest->valuestring);
+				}
+			} else if (latest->type == cJSON_Object) {
+				wrapper = cJSON_Duplicate(latest, 1);
+			}
+
+			if (wrapper)
+				cJSON_AddItemToObject(merged, key_name, wrapper);
+		}
+		cJSON_Delete(combined);
+	}
+
+	data_obj = cJSON_CreateObject();
+	if (!data_obj) {
+		dlg_error("%s: Failed to create data JSON object", __func__);
+		cJSON_Delete(merged);
+		return NULL;
+	}
+	cJSON_AddStringToObject(data_obj, data_type, hex_data);
+	cJSON_AddItemToObject(merged, data_key, data_obj);
+
+	out = update_cmm(id, merged);
+	cJSON_Delete(merged);
+	return out;
+}
+
+cJSON *merge_cmm_from_id_key_data_cJSON(const char *id, int32_t start_block,
+					const char *key, cJSON *data, bool is_key_vdxf_id)
+{
+	char *hex_data = NULL;
+	cJSON *out = NULL;
+
+	if (!data) {
+		dlg_error("%s: Invalid input parameters", __func__);
+		return NULL;
+	}
+
+	cJSON_hex(data, &hex_data);
+	if (!hex_data) {
+		dlg_error("%s: Failed to convert cJSON to HEX", __func__);
+		return NULL;
+	}
+
+	out = merge_cmm_from_id_key_data_hex(id, start_block, key, hex_data, is_key_vdxf_id);
+	free(hex_data);
+	return out;
+}
+
 static int32_t do_payin_tx_checks(char *txid, cJSON *payin_tx_data)
 {
 	int32_t retval = OK, game_state;
@@ -1352,9 +1564,15 @@ static cJSON *compute_updated_t_player_info(char *txid, cJSON *payin_tx_data)
 	if (!game_id_str)
 		return NULL;
 
-	// Get the actual payin amount from the transaction
+	/* Get the actual payin amount from the on-chain TX (CHIPS) and convert
+	 * to the integer table-chip unit used by the dealer/player game state.
+	 * This is one of the only two CHIPS->table-chips boundaries in the
+	 * codebase (the other is settlement -> sendcurrency in blinder.c).
+	 * The payin_amounts CMM array stores integer table chips from here on. */
 	payin_amount = chips_get_balance_on_address_from_tx(get_vdxf_id(bet_get_cashiers_id_fqn()), txid);
-	dlg_info("Player %s payin amount: %.8f CHIPS", jstr(payin_tx_data, "verus_pid"), payin_amount);
+	int64_t payin_table_chips = chips_to_table_chips(payin_amount);
+	dlg_info("Player %s payin: %.8f CHIPS -> %lld table chips",
+		 jstr(payin_tx_data, "verus_pid"), payin_amount, (long long)payin_table_chips);
 
 	t_player_info = get_cJSON_from_id_key_vdxfid_from_height(jstr(payin_tx_data, "table_id"),
 					     get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str), height_start);
@@ -1390,7 +1608,10 @@ static cJSON *compute_updated_t_player_info(char *txid, cJSON *payin_tx_data)
 	
 	sprintf(pa_tx_id, "%s_%s_%d", jstr(payin_tx_data, "verus_pid"), txid, num_players);
 	jaddistr(player_info, pa_tx_id);
-	cJSON_AddItemToArray(payin_amounts, cJSON_CreateNumber(payin_amount));
+	/* Store the new player's stake in table chips (game.c:init_game_meta_info
+	 * loads this back as int64). Existing entries copied above were
+	 * already in table chips since this CMM is dealer-internal. */
+	cJSON_AddItemToArray(payin_amounts, cJSON_CreateNumber((double)payin_table_chips));
 	num_players++;
 
 	updated_t_player_info = cJSON_CreateObject();
@@ -1435,12 +1656,23 @@ int32_t process_payin_tx_data(char *txid, cJSON *payin_tx_data)
 		return ERR_T_PLAYER_INFO_UPDATE;
 	}
 
-	//Update the t_player_info.<game_id> key of the table id with newly join requested player details.
-	dlg_info("%s", cJSON_Print(updated_t_player_info));
-	out = append_cmm_from_id_key_data_cJSON(jstr(payin_tx_data, "table_id"),
-						get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str),
-						updated_t_player_info, true);
-	dlg_info("%s", cJSON_Print(out));
+	/* Merge-mode write: rewrite the full table-id snapshot so that the
+	 * latest CMM (visible via plain getidentity) carries T_GAME_ID,
+	 * T_TABLE_INFO.<g>, T_GAME_INFO.<g> AND the updated T_PLAYER_INFO.<g>.
+	 * This keeps the bootstrap state intact for any player still trying
+	 * to join during G_TABLE_STARTED. After G_PLAYERS_JOINED, the dealer
+	 * reverts to single-key append writes. See merge_cmm_from_id_key_data_*
+	 * for the rationale.
+	 */
+	{
+		extern int32_t g_start_block;
+		dlg_info("%s", cJSON_Print(updated_t_player_info));
+		out = merge_cmm_from_id_key_data_cJSON(jstr(payin_tx_data, "table_id"),
+						       g_start_block,
+						       get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id_str),
+						       updated_t_player_info, true);
+		dlg_info("%s", cJSON_Print(out));
+	}
 
 	return retval;
 }
@@ -1651,7 +1883,7 @@ int32_t id_canspendfor(char *id, int32_t full_id, int32_t *err_no)
 	return id_canspendfor_value;
 }
 
-int32_t id_cansignfor(char *id, int32_t full_id, int32_t *err_no)
+int32_t id_cansignfor(const char *id, int32_t full_id, int32_t *err_no)
 {
 	int32_t retval = OK, id_cansignfor_value = false;
 	char id_param[256] = { 0 };

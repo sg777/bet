@@ -21,84 +21,103 @@ void print_cashiers_id(char *id)
 {
 	char *game_id = NULL;
 
-	game_id = poker_get_key_str(id, get_vdxf_id(T_GAME_ID_KEY));
+	// Check if this is the aggregator ID by looking for CASHIERS_KEY
+	cJSON *cashiers_info = get_cJSON_from_id_key_vdxfid_from_height(id, get_vdxf_id(CASHIERS_KEY), 0);
+	if (cashiers_info) {
+		dlg_info("%s :: %s", CASHIERS_KEY, cJSON_Print(cashiers_info));
+	}
+
+	game_id = get_str_from_id_key_from_height(id, T_GAME_ID_KEY, 0);
 	if (game_id) {
 		dlg_info("game_id::%s", game_id);
-		for (int32_t i = 0; i < all_t_b_p_keys_no; i++) {
-			cJSON *temp =
-				get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(all_t_b_p_keys[i], game_id));
-			if (temp)
-				dlg_info("%s :: %s", all_t_b_p_key_names[i], cJSON_Print(temp));
-		}
-		cJSON *temp = get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id));
-		if (temp)
-			dlg_info("%s :: %s", T_GAME_INFO_KEY, cJSON_Print(temp));
 
-		temp = NULL;
-		temp = get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id));
+		cJSON *temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(C_DISPUTE_RESULT_KEY, game_id), 0);
 		if (temp)
-			dlg_info("%s :: %s", T_CARD_BV_KEY, cJSON_Print(temp));
+			dlg_info("%s :: %s", C_DISPUTE_RESULT_KEY, cJSON_Print(temp));
+
+		/* Cashier-owned blinded decks (docs/TODO.md item 1.1).
+		 * Cashier is the sole writer; players read directly from cashier id. */
+		for (int32_t i = 0; i < all_t_b_p_keys_no; i++) {
+			temp = get_cJSON_from_id_key_vdxfid_from_height(
+				id, get_key_data_vdxf_id(all_c_b_p_keys[i], game_id), 0);
+			if (temp)
+				dlg_info("%s :: %s", all_c_b_p_key_names[i], cJSON_Print(temp));
+		}
+
+		/* Cashier-owned BV (docs/TODO.md item 1.2).
+		 * Cashier publishes the latest (player_id, card_id, bv) here;
+		 * players poll directly. */
+		temp = get_cJSON_from_id_key_vdxfid_from_height(
+			id, get_key_data_vdxf_id(C_CARD_BV_KEY, game_id), 0);
+		if (temp)
+			dlg_info("%s :: %s", C_CARD_BV_KEY, cJSON_Print(temp));
 	}
 }
 
 void print_dealers_id(char *id)
 {
-	int32_t no_of_keys = 1;
-	char all_ds_keys[1][128] = { DEALERS_KEY };
-
-	for (int32_t i = 0; i < no_of_keys; i++) {
-		cJSON *temp = get_cJSON_from_id_key_vdxfid(id, get_vdxf_id(all_ds_keys[i]));
-		if (temp)
-			dlg_info("%s", cJSON_Print(temp));
-	}
+	cJSON *temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_vdxf_id(DEALERS_KEY), 0);
+	if (temp)
+		dlg_info("%s :: %s", DEALERS_KEY, cJSON_Print(temp));
 }
 
 void print_dealer_id(char *id)
 {
-	int32_t no_of_keys = 1;
-	char all_d_keys[1][128] = { T_TABLE_INFO_KEY };
+	cJSON *temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_vdxf_id(T_TABLE_INFO_KEY), 0);
+	if (temp)
+		dlg_info("%s :: %s", T_TABLE_INFO_KEY, cJSON_Print(temp));
 
-	for (int32_t i = 0; i < no_of_keys; i++) {
-		cJSON *temp = get_cJSON_from_id_key_vdxfid(id, get_vdxf_id(all_d_keys[i]));
-		if (temp)
-			dlg_info("%s", cJSON_Print(temp));
-	}
+	temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_vdxf_id("registration_info"), 0);
+	if (temp)
+		dlg_info("registration_info :: %s", cJSON_Print(temp));
 }
 
 void print_table_id(char *id)
 {
 	char *game_id = NULL;
 
-	game_id = poker_get_key_str(id, get_vdxf_id(T_GAME_ID_KEY));
+	game_id = get_str_from_id_key_from_height(id, T_GAME_ID_KEY, 0);
 	if (game_id) {
 		dlg_info("game_id::%s", game_id);
 
-		cJSON *temp = get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id));
+		cJSON *temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(T_TABLE_INFO_KEY, game_id), 0);
+		if (temp)
+			dlg_info("%s :: %s", T_TABLE_INFO_KEY, cJSON_Print(temp));
+
+		temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(T_PLAYER_INFO_KEY, game_id), 0);
 		if (temp)
 			dlg_info("%s :: %s", T_PLAYER_INFO_KEY, cJSON_Print(temp));
 
+		temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, game_id), 0);
+		if (temp)
+			dlg_info("%s :: %s", T_SETTLEMENT_INFO_KEY, cJSON_Print(temp));
+
+		temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id), 0);
+		if (temp)
+			dlg_info("%s :: %s", T_BOARD_CARDS_KEY, cJSON_Print(temp));
+
+		temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(T_BETTING_STATE_KEY, game_id), 0);
+		if (temp)
+			dlg_info("%s :: %s", T_BETTING_STATE_KEY, cJSON_Print(temp));
+
 		for (int32_t i = 0; i < all_t_d_p_keys_no; i++) {
 			cJSON *temp =
-				get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(all_t_d_p_keys[i], game_id));
+				get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(all_t_d_p_keys[i], game_id), 0);
 			if (temp)
 				dlg_info("%s :: %s", all_t_d_p_key_names[i], cJSON_Print(temp));
 		}
-		for (int32_t i = 0; i < all_t_b_p_keys_no; i++) {
-			cJSON *temp =
-				get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(all_t_b_p_keys[i], game_id));
-			if (temp)
-				dlg_info("%s :: %s", all_t_b_p_key_names[i], cJSON_Print(temp));
-		}
-		temp = get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id));
+		/* T_B_P*_DECK_KEY are no longer written to the table (docs/TODO.md
+		 * item 1.1: cashier owns blinded-deck keys on its own id under
+		 * C_B_P*_DECK_KEY). Inspect those via `print_id <cashier_id> cashiers`. */
+		temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id), 0);
 		if (temp) {
 			int game_state = jint(temp, "game_state");
 			dlg_info("Game State: %s", game_state_str(game_state));
 		}
 
-		temp = NULL;
-		temp = get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(T_CARD_BV_KEY, game_id));
-		if (temp)
-			dlg_info("%s :: %s", T_CARD_BV_KEY, cJSON_Print(temp));
+		/* T_CARD_BV_KEY is no longer written to the table (docs/TODO.md
+		 * item 1.2: cashier owns BV on its own id under C_CARD_BV_KEY).
+		 * Inspect it via `print_id <cashier_id> cashiers`. */
 	}
 }
 
@@ -106,16 +125,32 @@ void print_player_id(char *id)
 {
 	char *game_id = NULL;
 
-	game_id = poker_get_key_str(id, get_vdxf_id(T_GAME_ID_KEY));
+	game_id = get_str_from_id_key_from_height(id, T_GAME_ID_KEY, 0);
 	if (game_id) {
-		cJSON *player_deck = NULL;
-		player_deck = get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(PLAYER_DECK_KEY, game_id));
-		if (player_deck)
-			dlg_info("%s :: %s", PLAYER_DECK_KEY, cJSON_Print(player_deck));
-		cJSON *game_info = NULL;
-		game_info = get_cJSON_from_id_key_vdxfid(id, get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id));
-		if (game_info)
-			dlg_info("%s :: %s", T_GAME_INFO_KEY, cJSON_Print(game_info));
+		dlg_info("game_id::%s", game_id);
+
+		// P_JOIN_REQUEST_KEY is a bare key, not suffixed with game_id
+		cJSON *join_req = get_cJSON_from_id_key_vdxfid_from_height(id, get_vdxf_id(P_JOIN_REQUEST_KEY), 0);
+		if (join_req) {
+			dlg_info("%s :: %s", P_JOIN_REQUEST_KEY, cJSON_Print(join_req));
+		}
+
+		// List of player-specific keys that are suffixed with game_id
+		const char *player_keys[] = {
+			P_GAME_HISTORY_KEY,
+			PLAYER_DECK_KEY,
+			P_BETTING_ACTION_KEY,
+			P_DECODED_CARD_KEY,
+			P_DISPUTE_REQUEST_KEY
+		};
+		int num_keys = sizeof(player_keys) / sizeof(player_keys[0]);
+
+		for (int i = 0; i < num_keys; i++) {
+			cJSON *temp = get_cJSON_from_id_key_vdxfid_from_height(id, get_key_data_vdxf_id((char *)player_keys[i], game_id), 0);
+			if (temp) {
+				dlg_info("%s :: %s", player_keys[i], cJSON_Print(temp));
+			}
+		}
 	}
 }
 

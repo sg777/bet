@@ -1,0 +1,25 @@
+---
+description: Hard prohibition on creating or modifying Verus IDs on-chain
+alwaysApply: true
+---
+
+# No Verus ID Creation or Modification
+
+## ABSOLUTELY FORBIDDEN — No Exceptions
+
+- **NEVER create a Verus ID** (`registernamecommitment`, `registeridentity`, or any variant)
+- **NEVER update a Verus ID** (`updateidentity`) directly — all identity updates go through the game nodes only
+- **NEVER call `updateidentity` or `update_cmm` manually** via CLI or RPC
+- **NEVER reset an identity** (`./bin/bet reset <id>` or `./bin/bet reset_id <id>`)
+- **NEVER call `add_dealer`, `register_dealer`, or `deregister_dealer`** without explicit user approval
+- **NEVER send funds to or from any Verus ID**
+
+## These Are Real On-Chain Identities With Real Money
+
+The IDs `d1`, `t1`, `p1`, `p2`, `cashier.sg777z.chips.vrsc@`, `dealer.sg777z.chips.vrsc@` exist on the live CHIPS blockchain.
+Modifying them has irreversible consequences.
+
+## What This Means in Practice
+
+If any planned action would result in an `updateidentity` transaction being submitted to the chain,
+**stop and ask the user first**, even if that action is triggered indirectly by starting a game node.

@@ -10,6 +10,7 @@
 #include "config.h"
 #include "poker_vdxf.h"
 #include "storage.h"
+#include "poker.h"
 
 struct d_deck_info_struct d_deck_info;
 struct game_meta_info_struct game_meta_info;
@@ -283,6 +284,190 @@ static bool is_cashier_shuffled_deck(char *cashier_id)
 	return (game_state == G_DECK_SHUFFLING_B);
 }
 
+/*
+ * Mirror of is_cashier_shuffled_deck for the settlement handshake
+ * (docs/TODO.md item 1.4). The cashier signals payout completion by
+ * writing G_SETTLEMENT_COMPLETE_BY_CASHIER on its own id; the dealer
+ * canonicalizes G_SETTLEMENT_COMPLETE on table_id once this fires.
+ */
+static bool is_cashier_settlement_complete(char *cashier_id)
+{
+	int32_t game_state = get_game_state(cashier_id);
+	return (game_state == G_SETTLEMENT_COMPLETE_BY_CASHIER);
+}
+
+/*
+ * Showdown hand evaluation.
+ *
+ * Reads each non-folded player's hole cards from
+ * P_HOLECARDS_REVEAL_KEY.<gid> on the player id (single-writer per
+ * identity), reads the 5 community cards from T_BOARD_CARDS_KEY.<gid>
+ * on the table id, builds a 7-card hand per player, and runs
+ * poker.c::seven_card_draw_score to pick winners. Sets
+ * vars->winners[i] = 1 for tied/best players and credits
+ * vars->win_funds[i] = pot/num_winners (integer split; remainder is
+ * dropped today — TODO: side-pot handling via det_dcv_pot_split).
+ *
+ * Returns:
+ *   OK                         all non-folded players have published
+ *                              hole cards and winners have been set;
+ *   ERR_T_BOARD_CARDS_NULL     community cards not yet on the table id
+ *                              (caller should retry on next tick);
+ *   ERR_PLAYER_HOLECARDS_PEND  one or more players haven't published
+ *                              hole cards yet (caller should retry).
+ */
+static int32_t dealer_evaluate_showdown(char *table_id, struct privatebet_vars *vars)
+{
+	int32_t retval = OK;
+	int32_t hole_cards[CARDS_MAXPLAYERS][2];
+	int32_t board[5];
+	int32_t folded[CARDS_MAXPLAYERS] = { 0 };
+	int32_t active_players = 0;
+	char *game_id_str = NULL;
+
+	for (int32_t i = 0; i < CARDS_MAXPLAYERS; i++) {
+		hole_cards[i][0] = -1;
+		hole_cards[i][1] = -1;
+	}
+	for (int32_t i = 0; i < 5; i++) board[i] = -1;
+
+	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
+	if (!game_id_str) {
+		dlg_error("Showdown: unable to resolve T_GAME_ID for table %s", table_id);
+		return ERR_GAME_ID_NOT_FOUND;
+	}
+
+	/* Mark folded vs active across all rounds. A player is considered
+	 * active if no fold action was recorded in any round. */
+	for (int32_t i = 0; i < num_of_players; i++) {
+		for (int32_t r = 0; r < CARDS_MAXROUNDS; r++) {
+			if (vars->bet_actions[i][r] == fold) {
+				folded[i] = 1;
+				break;
+			}
+		}
+		if (!folded[i]) active_players++;
+	}
+
+	if (active_players == 0) {
+		dlg_warn("Showdown: no active players (all folded?) — skipping hand eval");
+		return OK;
+	}
+
+	/* Edge case: only one active player — wins by default, no hand
+	 * eval needed (and they would not have decoded all 5 community
+	 * cards anyway since dealer aborts dealing once a single player
+	 * remains; see G_REVEAL_CARD timeout path). */
+	if (active_players == 1) {
+		for (int32_t i = 0; i < num_of_players; i++) {
+			if (!folded[i]) {
+				vars->winners[i] = 1;
+				vars->win_funds[i] = vars->pot;
+				dlg_info("Showdown: only player %d active — wins pot %lld table chips",
+					 i, (long long)vars->pot);
+			}
+		}
+		return OK;
+	}
+
+	/* Read community cards from the table id (dealer-canonical). */
+	{
+		cJSON *board_cards = get_cJSON_from_id_key_vdxfid_from_height(
+			table_id, get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id_str), g_start_block);
+		if (!board_cards) {
+			dlg_info("Showdown: T_BOARD_CARDS_KEY not yet on table id");
+			return ERR_T_BOARD_CARDS_NULL;
+		}
+		cJSON *flop = cJSON_GetObjectItem(board_cards, "flop");
+		if (flop && cJSON_GetArraySize(flop) >= 3) {
+			board[0] = jinti(flop, 0);
+			board[1] = jinti(flop, 1);
+			board[2] = jinti(flop, 2);
+		}
+		board[3] = jint(board_cards, "turn");
+		board[4] = jint(board_cards, "river");
+		cJSON_Delete(board_cards);
+	}
+	for (int32_t i = 0; i < 5; i++) {
+		if (board[i] < 0) {
+			dlg_info("Showdown: community card slot %d not yet revealed (got %d)", i, board[i]);
+			return ERR_T_BOARD_CARDS_NULL;
+		}
+	}
+
+	/* Read each active player's hole-card reveal from their own id. */
+	for (int32_t i = 0; i < num_of_players; i++) {
+		if (folded[i]) continue;
+		cJSON *reveal = get_cJSON_from_id_key_vdxfid_from_height(
+			player_ids[i],
+			get_key_data_vdxf_id(P_HOLECARDS_REVEAL_KEY, game_id_str),
+			g_start_block);
+		if (!reveal) {
+			dlg_info("Showdown: player %d (%s) has not published hole cards yet",
+				 i, player_ids[i]);
+			return ERR_PLAYER_HOLECARDS_PEND;
+		}
+		cJSON *hc = cJSON_GetObjectItem(reveal, "hole_cards");
+		if (!hc || cJSON_GetArraySize(hc) < 2) {
+			dlg_warn("Showdown: malformed hole-card reveal from player %d", i);
+			cJSON_Delete(reveal);
+			return ERR_PLAYER_HOLECARDS_PEND;
+		}
+		hole_cards[i][0] = jinti(hc, 0);
+		hole_cards[i][1] = jinti(hc, 1);
+		cJSON_Delete(reveal);
+	}
+
+	/* Build the 7-card hand per active player and score it.
+	 * card values land in 0..51 via card_rand256(privkeyflag, i)
+	 * which packs the deck index into priv.bytes[30] — that index is
+	 * what reveal_card writes into card_value, and what
+	 * poker.c::CardMask[52] expects. */
+	unsigned long scores[CARDS_MAXPLAYERS] = { 0 };
+	unsigned long max_score = 0;
+	int32_t num_winners = 0;
+
+	for (int32_t i = 0; i < num_of_players; i++) {
+		if (folded[i]) continue;
+		unsigned char h[7];
+		h[0] = (unsigned char)hole_cards[i][0];
+		h[1] = (unsigned char)hole_cards[i][1];
+		h[2] = (unsigned char)board[0];
+		h[3] = (unsigned char)board[1];
+		h[4] = (unsigned char)board[2];
+		h[5] = (unsigned char)board[3];
+		h[6] = (unsigned char)board[4];
+		scores[i] = seven_card_draw_score(h);
+		dlg_info("Showdown: player %d (%s) hand=[%d,%d,%d,%d,%d,%d,%d] score=%lu",
+			 i, player_ids[i], h[0], h[1], h[2], h[3], h[4], h[5], h[6], scores[i]);
+		if (scores[i] > max_score) max_score = scores[i];
+	}
+
+	for (int32_t i = 0; i < num_of_players; i++) {
+		if (folded[i]) continue;
+		if (scores[i] == max_score) {
+			vars->winners[i] = 1;
+			num_winners++;
+		}
+	}
+
+	/* Pot split. Integer division — remainder is dropped (no odd-chip
+	 * rule yet). Side-pot generalization for all-in scenarios is
+	 * tracked in docs/TODO.md. */
+	if (num_winners > 0) {
+		int64_t share = vars->pot / num_winners;
+		for (int32_t i = 0; i < num_of_players; i++) {
+			if (vars->winners[i] == 1) {
+				vars->win_funds[i] = share;
+				dlg_info("Showdown winner: player %d (%s) score=%lu wins %lld table chips",
+					 i, player_ids[i], scores[i], (long long)share);
+			}
+		}
+	}
+
+	return retval;
+}
+
 int32_t dealer_shuffle_deck(char *id)
 {
 	int32_t retval = OK;
@@ -341,11 +526,13 @@ int32_t dealer_initiate_settlement(struct table *t, struct privatebet_vars *vars
 		return ERR_GAME_ID_NOT_FOUND;
 	}
 	
-	// Build settlement info
+	/* Build settlement info. All chip amounts on this CMM are integer
+	 * table chips - the cashier converts back to CHIPS at sendcurrency
+	 * time (see blinder.c::cashier_process_settlement). */
 	settlement_info = cJSON_CreateObject();
 	cJSON_AddStringToObject(settlement_info, "game_id", game_id_str);
 	cJSON_AddStringToObject(settlement_info, "status", "pending");
-	cJSON_AddNumberToObject(settlement_info, "pot", vars->pot);  // Already in CHIPS
+	cJSON_AddNumberToObject(settlement_info, "pot", (double)vars->pot);
 	
 	// Winners array
 	winners_arr = cJSON_CreateArray();
@@ -356,12 +543,12 @@ int32_t dealer_initiate_settlement(struct table *t, struct privatebet_vars *vars
 	}
 	cJSON_AddItemToObject(settlement_info, "winners", winners_arr);
 	
-	// Settlement amounts per player (what each player gets back in CHIPS)
-	// settle_amount = remaining funds + winnings from pot
+	/* Settlement amount per player (table chips):
+	 * settle_amount = remaining stack + winnings from pot. */
 	amounts_arr = cJSON_CreateArray();
 	for (int32_t i = 0; i < num_of_players; i++) {
-		double amount = vars->win_funds[i] + vars->funds[i];  // Already in CHIPS
-		cJSON_AddItemToArray(amounts_arr, cJSON_CreateNumber(amount));
+		int64_t amount = vars->win_funds[i] + vars->funds[i];
+		cJSON_AddItemToArray(amounts_arr, cJSON_CreateNumber((double)amount));
 	}
 	cJSON_AddItemToObject(settlement_info, "settle_amounts", amounts_arr);
 	
@@ -439,19 +626,40 @@ int32_t handle_game_state(struct table *t)
 	}
 	switch (game_state) {
 	case G_TABLE_STARTED:
-		// Poll cashier for pending join requests (from start_block onwards)
-		// If start_block is 0 (old data), poll from block 1
+		// Poll player identities for pending join requests (since start_block).
+		// The cashier id is passed as a verifier — used only to confirm that
+		// each player's claimed payin_tx actually landed on-chain.
 		if (t->cashier_id[0] != '\0') {
 			int32_t start = (t->start_block > 0) ? t->start_block : 1;
-			int32_t joins = poker_poll_cashier_for_joins(t->cashier_id, t->table_id, 
+			int32_t joins = poker_poll_players_for_joins(t->cashier_id, t->table_id, 
 			                                              t->dealer_id, start);
 			if (joins > 0) {
-				dlg_info("Processed %d join requests from cashier", joins);
+				dlg_info("Processed %d join requests", joins);
 			}
 		}
 		// Check if enough players have joined
 		if (poker_is_table_full(t->table_id)) {
-			append_game_state(t->table_id, G_PLAYERS_JOINED, NULL);
+			/* Final join-phase write to t1: do a merge-mode (full
+			 * snapshot) update so the table id ends G_TABLE_STARTED
+			 * with all four bootstrap keys (T_GAME_ID, T_TABLE_INFO,
+			 * T_GAME_INFO, T_PLAYER_INFO) visible in the latest
+			 * snapshot. After this, single-key append_game_state
+			 * writes are safe because every participant already
+			 * knows start_block.
+			 */
+			char *game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
+			if (game_id_str) {
+				cJSON *t_game_info = cJSON_CreateObject();
+				cJSON_AddNumberToObject(t_game_info, "game_state", G_PLAYERS_JOINED);
+				merge_cmm_from_id_key_data_cJSON(t->table_id, t->start_block,
+								 get_key_data_vdxf_id(T_GAME_INFO_KEY, game_id_str),
+								 t_game_info, true);
+				cJSON_Delete(t_game_info);
+			} else {
+				dlg_warn("Could not read T_GAME_ID for merge-mode G_PLAYERS_JOINED write; "
+					 "falling back to append-mode");
+				append_game_state(t->table_id, G_PLAYERS_JOINED, NULL);
+			}
 		}
 		break;
 	case G_PLAYERS_JOINED:
@@ -474,7 +682,20 @@ int32_t handle_game_state(struct table *t)
 		dlg_info("Its time for game");
 		retval = init_game_state(t->table_id);
 		break;
-	case G_REVEAL_CARD:
+	case G_REVEAL_CARD: {
+		cJSON *gsi = get_game_state_info(t->table_id);
+		int32_t is_batch = (gsi && cJSON_GetObjectItem(gsi, "requests")) ? 1 : 0;
+		if (is_batch) {
+			retval = is_reveal_batch_complete(t->table_id);
+			if (retval == OK) {
+				const char *phase = jstr(gsi, "phase");
+				dlg_info("%s reveal batch complete", phase ? phase : "?");
+				retval = verus_receive_reveal_batch(t->table_id, dcv_vars);
+			} else {
+				retval = OK;
+			}
+			break;
+		}
 		retval = is_card_drawn(t->table_id);
 		if (retval == OK) {
 			dlg_info("Card is drawn");
@@ -497,47 +718,97 @@ int32_t handle_game_state(struct table *t)
 			retval = OK;  // Don't propagate timeout as error - game continues
 		}
 		break;
+	}
 	case G_ROUND_BETTING:
 		// Poll current player for their betting action
 		retval = verus_handle_round_betting(t->table_id, dcv_vars);
 		break;
 	case G_SHOWDOWN:
-		dlg_info("Showdown - determining winners and pot distribution");
-		// For now, split pot among players who didn't fold
-		// TODO: Implement proper hand evaluation
+		/* Showdown — collect each non-folded player's hole-card reveal
+		 * (P_HOLECARDS_REVEAL_KEY on player id, single-writer-per-id)
+		 * + community cards (T_BOARD_CARDS_KEY on table id), score
+		 * 7-card hands via poker.c::seven_card_draw_score, set
+		 * winners[] / win_funds[], and initiate settlement.
+		 *
+		 * If any input is not yet on-chain (board incomplete or some
+		 * player hasn't published yet), return OK so the dealer loop
+		 * retries on the next tick rather than escalating into a
+		 * failed-game path. Settlement is only initiated once eval
+		 * succeeds, so this gating also prevents emitting a stale/
+		 * incomplete settlement record. */
 		{
-			int32_t active_players = 0;
-			for (int32_t i = 0; i < num_of_players; i++) {
-				// Check if player folded in any round
-				int32_t player_folded = 0;
-				for (int32_t r = 0; r < CARDS_MAXROUNDS; r++) {
-					if (dcv_vars->bet_actions[i][r] == fold) {
-						player_folded = 1;
-						break;
-					}
+			static int32_t last_pending_log = -1;
+			int32_t eval_rc = dealer_evaluate_showdown(t->table_id, dcv_vars);
+			if (eval_rc == ERR_T_BOARD_CARDS_NULL ||
+			    eval_rc == ERR_PLAYER_HOLECARDS_PEND) {
+				if (last_pending_log != eval_rc) {
+					dlg_info("Showdown: %s — retrying", bet_err_str(eval_rc));
+					last_pending_log = eval_rc;
 				}
-				if (!player_folded) {
-					dcv_vars->winners[i] = 1;
-					active_players++;
-				}
+				retval = OK;
+				break;
 			}
-			// Split pot among winners (pot already in CHIPS)
-			if (active_players > 0) {
-				double share = dcv_vars->pot / active_players;
-				for (int32_t i = 0; i < num_of_players; i++) {
-					if (dcv_vars->winners[i] == 1) {
-						dcv_vars->win_funds[i] = share;
-						dlg_info("Player %d (%s): wins %.4f CHIPS", 
-							i, player_ids[i], share);
-					}
-				}
+			last_pending_log = -1;
+			if (eval_rc != OK) {
+				dlg_error("Showdown evaluation failed: %s", bet_err_str(eval_rc));
+				retval = eval_rc;
+				break;
 			}
+			retval = dealer_initiate_settlement(t, dcv_vars);
 		}
-		retval = dealer_initiate_settlement(t, dcv_vars);
 		break;
 	case G_SETTLEMENT_PENDING:
-		dlg_info("Waiting for cashier to process settlement...");
-		// Cashier will update game state to G_SETTLEMENT_COMPLETE when done
+		/* docs/TODO.md items 1.3 + 1.4: dealer canonicalizes the cashier's
+		 * settlement result onto the table id once it observes the
+		 * cashier-side terminal-state signal. Two-step canonicalize:
+		 *   (1) Read C_SETTLEMENT_RESULT_KEY.<gid> from cashier_id;
+		 *       copy {status, payout_txs} onto T_SETTLEMENT_INFO_KEY.<gid>
+		 *       on table_id (preserving dealer-written order fields).
+		 *   (2) Append canonical G_SETTLEMENT_COMPLETE on table_id.
+		 * Mirrors the existing G_DECK_SHUFFLING_B handshake. */
+		if (is_cashier_settlement_complete(t->cashier_id)) {
+			char *gid = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
+			if (gid) {
+				cJSON *c_result = get_cJSON_from_id_key_vdxfid_from_height(
+					t->cashier_id,
+					get_key_data_vdxf_id(C_SETTLEMENT_RESULT_KEY, gid),
+					g_start_block);
+				cJSON *t_settlement = get_cJSON_from_id_key_vdxfid_from_height(
+					t->table_id,
+					get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, gid),
+					g_start_block);
+				if (c_result && t_settlement) {
+					cJSON *updated = cJSON_Duplicate(t_settlement, 1);
+					cJSON_DeleteItemFromObject(updated, "status");
+					const char *new_status = jstr(c_result, "status");
+					cJSON_AddStringToObject(updated, "status",
+								new_status ? new_status : "completed");
+					cJSON *payout_txs = cJSON_GetObjectItem(c_result, "payout_txs");
+					if (payout_txs) {
+						cJSON_DeleteItemFromObject(updated, "payout_txs");
+						cJSON_AddItemToObject(updated, "payout_txs",
+								      cJSON_Duplicate(payout_txs, 1));
+					}
+					cJSON *out = poker_update_key_json(t->table_id,
+						get_key_data_vdxf_id(T_SETTLEMENT_INFO_KEY, gid),
+						updated, true);
+					if (!out) {
+						dlg_error("Failed to canonicalize T_SETTLEMENT_INFO_KEY on table id");
+					}
+					cJSON_Delete(updated);
+				} else {
+					dlg_warn("Cashier signalled but could not read %s on cashier or %s on table",
+						 c_result ? "T_SETTLEMENT_INFO_KEY" : "C_SETTLEMENT_RESULT_KEY",
+						 t_settlement ? "(other)" : "T_SETTLEMENT_INFO_KEY");
+				}
+				if (c_result) cJSON_Delete(c_result);
+				if (t_settlement) cJSON_Delete(t_settlement);
+			} else {
+				dlg_warn("Cashier signalled but no T_GAME_ID on table id; cannot canonicalize result");
+			}
+			dlg_info("Cashier settlement complete signal observed, advancing table to G_SETTLEMENT_COMPLETE");
+			append_game_state(t->table_id, G_SETTLEMENT_COMPLETE, NULL);
+		}
 		break;
 	case G_SETTLEMENT_COMPLETE:
 		dlg_info("Settlement complete - game finished!");

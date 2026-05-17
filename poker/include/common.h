@@ -1,6 +1,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <stdint.h>  /* int64_t used by chips_to_table_chips() below */
+
 // clang-format off
 #define __FUNCTION__ __func__
 #define CHANNELD_AWAITING_LOCKIN    2
@@ -58,18 +60,77 @@ extern int gui_table_requested;  // 0 = waiting, 1 = GUI requested table info
 #define channel_fund_satoshis   16777215 // 0.167CHIPS this is the mx limit set up the c lightning node
 #define satoshis                100000000 //10^8 satoshis for 1 COIN
 #define satoshis_per_unit       1000
+
+/* normalization_factor scales between on-chain CHIPS (the user-facing currency,
+ * which is fractional - the small blind is 0.01 CHIPS) and the integer
+ * "table chips" used internally by the dealer/player state machine and on
+ * the wire to the GUI.
+ *
+ *   1 CHIP = 100 table chips        (so 0.01 CHIPS = 1 table chip,
+ *                                       0.02 CHIPS = 2 table chips, etc.)
+ *
+ * Why: float arithmetic on 0.01-CHIPS amounts cumulates rounding error
+ * (0.01 is not exact in IEEE-754), and the GUI's chip-stack renderer
+ * tokenizes its input string digit-by-digit and breaks on a decimal point.
+ * Keeping the entire game pipeline in int64 table chips fixes both at once.
+ *
+ * CHIPS doubles only appear at three boundaries:
+ *   - INI parse                  (config -> table chips)
+ *   - on-chain payin (cashier credits player stack)
+ *   - on-chain payout (cashier sends settlement to player)
+ *
+ * Use chips_to_table_chips() / table_chips_to_chips() at those boundaries.
+ */
 #define normalization_factor    100
 
-#define CARDS_MAXCARDS       14 // 14 cards for 2 players (4 hole + 5 community + 5 spare)
-// Note: 52-card deck requires chunked identity updates (too large for single update)
+/* CHIPS (double, e.g. 0.01) -> table chips (int64_t, e.g. 1).
+ *
+ * Manual round-half-up instead of llround() because this codebase
+ * deliberately avoids <math.h> - cJSON.h pulls in includes/math_compat.h
+ * which #defines pow/floor/fabs to internal stubs, and a subsequent
+ * #include <math.h> then fails to parse the system pow declaration.
+ * +0.5 rounding is correct because chip amounts in this codebase are
+ * always >= 0 (no fold "spends" negative chips).
+ *
+ * The +0.5 fixes IEEE-754 imprecision: 0.01 * 100 evaluates to
+ * 1.0000000000000002, and a plain (int64_t) cast would truncate
+ * 0.99999... results from other multiples to the wrong integer.
+ */
+static inline int64_t chips_to_table_chips(double chips)
+{
+	return (int64_t)(chips * (double)normalization_factor + 0.5);
+}
+
+/* table chips (int64_t) -> CHIPS (double). Used at on-chain payout sites
+ * and in human-readable log lines. Exact for any int64 input that fits in
+ * a double mantissa (~9e15), which covers any plausible game amount.
+ */
+static inline double table_chips_to_chips(int64_t table_chips)
+{
+	return (double)table_chips / (double)normalization_factor;
+}
+
+/* Full 52-card deck. With 2 players (the current §10 CLI auto config)
+ * each updateidentity write of a blinded deck is ~6 KB hex-encoded JSON
+ * (52 × 32-byte points → 1664 raw bytes → ~3.5 KB JSON → ~7 KB hex),
+ * comfortably within the per-tx CMM budget.
+ *
+ * If/when num_players approaches 9 (max), the cashier's per-game writes
+ * scale to ~9 × 7 KB ≈ 63 KB across all C_B_P*_DECK_KEY entries. Each
+ * key is a separate CMM entry / separate write today, so this stays
+ * inside the per-tx limit; if a single write ever bundles all decks the
+ * comment that used to live here ("requires chunked identity updates")
+ * would become a real concern again. Keep an eye on this when scaling
+ * past ~6 players. */
+#define CARDS_MAXCARDS       52
 #define CARDS_MAXPLAYERS     9 // 9   //
 #define CARDS_MAXROUNDS      4 // 9   //
 #define CARDS_MAXCHIPS       1000
 #define CARDS_CHIPSIZE       (SATOSHIDEN / CARDS_MAXCHIPS)
 #define BET_PLAYERTIMEOUT       15
 #define BET_GAMESTART_DELAY     10
-#define BET_TURN_TIMEOUT_SECS   60      // Seconds before auto-fold
-#define BET_TURN_TIMEOUT_BLOCKS 6       // Blocks before auto-fold (whichever is higher)
+#define BET_TURN_TIMEOUT_SECS   120      // Seconds before auto-fold
+#define BET_TURN_TIMEOUT_BLOCKS 12       // Blocks before auto-fold (whichever is higher)
 #define BET_RESERVERATE         1.025
 #define LN_FUNDINGERROR         "\"Cannot afford funding transaction\""
 
@@ -136,12 +197,24 @@ extern int32_t threshold_value;
 extern char **notary_node_ips;
 extern char **notary_node_pubkeys;
 
-extern double SB_in_chips;
-extern double BB_in_chips;
-extern double table_stake_in_chips;
+/* Chip amounts in the integer "table chips" unit (1 CHIP = 100 table chips).
+ * See chips_to_table_chips() / table_chips_to_chips() above. INI files still
+ * carry these in CHIPS doubles; bet_parse_*_config_ini_file() converts at
+ * load time. Cross the boundary (table chips -> CHIPS) only when handing a
+ * value to an on-chain API (verus_sendcurrency_data, chips_get_balance, etc).
+ */
+extern int64_t SB_in_table_chips;
+extern int64_t BB_in_table_chips;
+extern int64_t table_stake_in_table_chips;
+extern int64_t table_min_stake_in_table_chips;
+extern int64_t table_max_stake_in_table_chips;
+
+/* On-chain TX fee, lives in the CHIPS-domain because every reader passes it
+ * straight to verus_sendcurrency_data / chips_get_balance arithmetic. */
 extern double chips_tx_fee;
-extern double table_min_stake;
-extern double table_max_stake;
+
+/* Number of big-blind multiples used to compute table_stake (config knob).
+ * Pure multiplier, not a chip amount, so stays as a plain double. */
 extern double table_stack_in_bb;
 
 extern char dev_fund_addr[64];

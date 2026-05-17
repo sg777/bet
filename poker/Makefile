@@ -24,7 +24,7 @@ SRCFILES := $(SRC_DIR)/cards.c  $(SRC_DIR)/client.c  $(SRC_DIR)/commands.c  $(SR
 OBJFILES := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCFILES))
 
 # Build a couple of small vendored deps directly into the binary
-EXT_OBJFILES := $(BUILD_DIR)/dlg.o $(BUILD_DIR)/jsmn.o
+EXT_OBJFILES := $(BUILD_DIR)/dlg.o
 OBJFILES += $(EXT_OBJFILES)
 
 CC := gcc
@@ -44,7 +44,6 @@ CFLAGS := -g -fPIC -std=c11 $(WARNINGS) -pthread \
           -I../includes/curl \
           -I$(EXTERNAL_DIR)/dlg/include \
           -I$(EXTERNAL_DIR)/iniparser/src \
-          -I$(EXTERNAL_DIR)/jsmn \
           -I/usr/local/include \
           $(CPPFLAGS)
 
@@ -90,9 +89,6 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(CPPFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/dlg.o: ../external/dlg/src/dlg/dlg.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(CPPFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/jsmn.o: ../external/jsmn/jsmn.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(CPPFLAGS) -c $< -o $@
 
 build_dir_tree:

@@ -136,20 +136,44 @@
 
 ## Documentation
 
-### Protocol Docs
-- **`docs/protocol/`** - Protocol specifications
-  - `architecture_doc.md` - System architecture
-  - `node_communication.md` - Communication protocols
-  - `tx_flow.md` - Transaction flow
-  - `player_configuration.md` - Player setup
-  - `dealer_configuration.md` - Dealer setup
-  - `cashier_configuration.md` - Cashier setup
+The doc tree follows [Diátaxis](https://diataxis.fr) (tutorials / guides /
+reference / explanation / archive). Top-level index: `docs/README.md`.
 
-### Migration Docs
-- **`docs/verus_migration/`** - Verus migration documentation
-  - `verus_migration.md` - Migration overview
-  - `schema.md` - Database schema
-  - `player.md` - Player migration
+### Tutorials (follow-along walkthroughs)
+- **`docs/tutorials/cli-auto-vrsctest.md`** — local VRSCTEST regtest bring-up
+- **`docs/tutorials/community-quickstart.md`** — sanity-check workflow for new contributors
+- **`docs/tutorials/revoke-recovery.md`** — registering an identity with revocation/recovery authorities
+
+### Guides (task-oriented how-tos)
+- **`docs/guides/build-from-source.md`** — packages, submodules, `make -j`
+- **`docs/guides/gui-simulator.md`** — running `tools/gui_simulator.js`
+
+### Reference (look-it-up facts)
+- **`docs/reference/glossary.md`** — terminology
+- **`docs/reference/dealer-config.md` / `player-config.md` / `cashier-config.md`** — per-role INI fields
+- **`docs/reference/gui-message-formats.md`** — full GUI ↔ backend WebSocket spec
+- **`docs/reference/gui-quick-reference.md`** — one-page cheat sheet
+- **`docs/reference/gui-backend-mapping.md`** — which C file emits which message
+- **`docs/reference/tx-types.md`** — on-chain transaction types
+- **`docs/reference/rpc-dependency.md`** — Verus RPCs `bet` relies on
+- **`docs/reference/game-states.md`** — `enum game_state` reference
+- **`docs/reference/vdxf-keys.md`** — every CMM key, per identity
+- **`docs/reference/cli-print.md`** — `./bet print*` shell commands
+- **`docs/reference/player-join-flow.md`** — payin + dealer poll + cashier verify
+
+### Explanation (architectural background)
+- **`docs/explanation/verus-overview.md`** — how `bet` uses Verus
+- **`docs/explanation/architecture.md`** — layered structure of the codebase
+- **`docs/explanation/identity-tree.md`** — aggregator / operational / per-table IDs
+- **`docs/explanation/adhoc-multisig.md`** — `primaryaddresses` + `minimumsignatures`
+- **`docs/explanation/node-communication.md`** — CMM-only inter-node model
+- **`docs/explanation/deck-shuffling.md`** — multi-pass Curve25519 shuffle
+- **`docs/explanation/getidentitycontent.md`** — CMM reconstruction from `height_start`
+- **`docs/explanation/player-rejoin.md`** — disconnect / reconnect semantics
+
+### Archive
+- **`docs/archive/`** — pre-Verus / pre-migration historical docs
+  (LN-era protocol, removed features, dated milestones).
 
 ## External Dependencies
 

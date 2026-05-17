@@ -33,6 +33,11 @@ char *verus_dealer_config = dealer_config_buf;           // dealer.ini
 char *verus_player_config_file = player_config_buf;      // player.ini (or p1.ini, p2.ini)
 char *cashier_config_ini_file = cashier_config_buf;      // cashier.ini
 char *blockchain_config_ini_file = blockchain_config_buf; // blockchain.ini
+
+/* Native currency name used in sendcurrency. Configurable via
+ * blockchain.ini → [blockchain] currency = ... . Defaults to CHIPS so
+ * production behavior is unchanged when the key is absent. */
+static char bet_currency_name[64] = CHIPS;
 char *verus_ids_keys_config_file = keys_config_buf;      // keys.ini
 char *rpc_credentials_file = rpc_credentials_buf;        // .rpccredentials
 
@@ -170,15 +175,19 @@ void bet_parse_dealer_config_ini_file()
 			max_players = iniparser_getint(ini, "table:max_players", -1);
 		}
 		if (0 != iniparser_getdouble(ini, "table:big_blind", 0)) {
-			BB_in_chips = iniparser_getdouble(ini, "table:big_blind", 0);
-			SB_in_chips = BB_in_chips / 2;
+			/* INI value is in CHIPS (e.g. 0.02); store in table chips. */
+			BB_in_table_chips = chips_to_table_chips(
+				iniparser_getdouble(ini, "table:big_blind", 0));
+			SB_in_table_chips = BB_in_table_chips / 2;
 		}
-		// min_stake and max_stake are now in CHIPS directly (not in BB multiples)
+		// min_stake and max_stake are read in CHIPS, stored in table chips
 		if (0 != iniparser_getdouble(ini, "table:min_stake", 0)) {
-			table_min_stake = iniparser_getdouble(ini, "table:min_stake", 0);
+			table_min_stake_in_table_chips = chips_to_table_chips(
+				iniparser_getdouble(ini, "table:min_stake", 0));
 		}
 		if (0 != iniparser_getdouble(ini, "table:max_stake", 0)) {
-			table_max_stake = iniparser_getdouble(ini, "table:max_stake", 0);
+			table_max_stake_in_table_chips = chips_to_table_chips(
+				iniparser_getdouble(ini, "table:max_stake", 0));
 		}
 
 		if (0 != iniparser_getdouble(ini, "dealer:chips_tx_fee", 0)) {
@@ -335,27 +344,18 @@ bool bet_is_new_block_set()
 	dictionary *ini = NULL;
 	bool is_new_block_set = false;
 
-	struct passwd *pw = getpwuid(getuid());
-	const char *homedir = pw->pw_dir;
-
-	char *config_file = NULL;
-	const char *suffix = "/bet/privatebet/config/blockchain_config.ini";
-	size_t need = strlen(homedir) + strlen(suffix) + 1;
-	config_file = calloc(1, need);
-	if (!config_file) {
-		return false;
-	}
-	snprintf(config_file, need, "%s%s", homedir, suffix);
-	ini = iniparser_load(config_file);
+	/* Use the same blockchain.ini that bet_parse_blockchain_config_ini_file()
+	 * already resolved relative to the bet binary, instead of a hardcoded
+	 * "$HOME/bet/privatebet/config/blockchain_config.ini" path that only
+	 * exists on the canonical production layout. */
+	ini = iniparser_load(blockchain_config_ini_file);
 	if (ini == NULL) {
-		dlg_error("error in parsing %s", config_file);
+		dlg_error("error in parsing %s", blockchain_config_ini_file);
 	} else {
 		if (-1 != iniparser_getboolean(ini, "blockchain:new_block", -1)) {
 			is_new_block_set = iniparser_getboolean(ini, "blockchain:new_block", -1);
 		}
 	}
-	if (config_file)
-		free(config_file);
 	return is_new_block_set;
 }
 
@@ -371,15 +371,39 @@ void bet_parse_blockchain_config_ini_file()
 			memset(blockchain_cli, 0x00, sizeof(blockchain_cli));
 			strncpy(blockchain_cli, iniparser_getstring(ini, "blockchain:blockchain_cli", "chips-cli"),
 				sizeof(blockchain_cli));
-			if (!((strcmp(blockchain_cli, chips_cli) == 0) ||
-			      (strcmp(blockchain_cli, verus_chips_cli) == 0))) {
+			/* Accept legacy values verbatim, otherwise accept any verus
+			 * CLI invocation (any "-chain=...", regtest or PBaaS) so a
+			 * local test chain like VRSCTEST works without a code edit. */
+			bool is_legacy_chips = (strcmp(blockchain_cli, chips_cli) == 0) ||
+					       (strcmp(blockchain_cli, verus_chips_cli) == 0);
+			bool is_verus_cli = (strncmp(blockchain_cli, "verus", 5) == 0);
+			if (!is_legacy_chips && !is_verus_cli) {
 				dlg_warn(
-					"The blockchain client configured in ./config/blockchain_config.ini is not in the supported list of clients, so setting it do default chips-cli");
+					"The blockchain client configured in ./config/blockchain.ini is not recognised, falling back to '%s'",
+					chips_cli);
 				memset(blockchain_cli, 0x00, sizeof(blockchain_cli));
 				strncpy(blockchain_cli, chips_cli, sizeof(blockchain_cli));
 			}
+			/* Mirror the configured CLI into the verus-cli pointer so all
+			 * code paths that branch on it use the same chain. */
+			if (is_verus_cli) {
+				verus_chips_cli = strdup(blockchain_cli);
+				dlg_info("verus_chips_cli set to '%s' (from blockchain.ini)", verus_chips_cli);
+			}
+		}
+		const char *cur = iniparser_getstring(ini, "blockchain:currency", NULL);
+		if (cur && *cur) {
+			memset(bet_currency_name, 0x00, sizeof(bet_currency_name));
+			strncpy(bet_currency_name, cur, sizeof(bet_currency_name) - 1);
+			dlg_info("blockchain currency set to '%s' (from %s)", bet_currency_name,
+				 blockchain_config_ini_file);
 		}
 	}
+}
+
+const char *bet_get_currency(void)
+{
+	return bet_currency_name;
 }
 
 int32_t bet_parse_verus_dealer()

@@ -182,15 +182,18 @@ static int32_t chips_rpc_cli(const char *method, cJSON *params, cJSON **result)
 	strncpy(argv[0], blockchain_cli, arg_size - 1);
 	strncpy(argv[1], method, arg_size - 1);
 
-	// Add parameters
+	/* The CLI is dispatched via popen(), which goes through /bin/sh -c, so any
+	 * shell metacharacters in string params (e.g. "*" used as the wildcard
+	 * wallet address in sendcurrency) get glob-expanded before they reach the
+	 * verus CLI. Always single-quote string params so they survive the shell
+	 * verbatim, mirroring what we already do for object/array params. */
 	for (int i = 0; i < param_count; i++) {
 		cJSON *param = cJSON_GetArrayItem(params, i);
 		if (is_cJSON_String(param)) {
-			strncpy(argv[2 + i], param->valuestring, arg_size - 1);
+			snprintf(argv[2 + i], arg_size, "'%s'", param->valuestring);
 		} else if (is_cJSON_Number(param)) {
 			snprintf(argv[2 + i], arg_size, "%g", param->valuedouble);
 		} else {
-			// For objects/arrays, print as JSON string
 			char *json_str = cJSON_PrintUnformatted(param);
 			if (json_str) {
 				snprintf(argv[2 + i], arg_size, "'%s'", json_str);
@@ -199,7 +202,16 @@ static int32_t chips_rpc_cli(const char *method, cJSON *params, cJSON **result)
 		}
 	}
 
-	// Execute command
+	/* make_command's blockchain-cli branch (e.g. updateidentity, sendcurrency)
+	 * mutates *argjson via jaddstr/jaddnum, which silently no-op when the
+	 * target is NULL. The REST path (chips_rpc_rest) pre-allocates via
+	 * cJSON_Duplicate, but the CLI path historically did not, so the result
+	 * came back NULL and update_with_retry kept retrying forever. Allocate
+	 * an empty object up front, mirroring the REST contract. */
+	if (*result == NULL) {
+		*result = cJSON_CreateObject();
+	}
+
 	retval = make_command(argc, argv, result);
 	bet_dealloc_args(argc, &argv);
 
@@ -1419,51 +1431,149 @@ static int32_t find_address_in_addresses(char *address, cJSON *argjson)
 
 double chips_get_balance_on_address_from_tx(char *address, char *tx)
 {
-	cJSON *raw_tx = NULL, *decoded_raw_tx = NULL, *vout = NULL;
+	cJSON *params = NULL, *decoded_tx = NULL, *vout = NULL;
 	double balance = 0;
 
-	raw_tx = chips_get_raw_tx(tx);
-	if (raw_tx == NULL) {
+	/* Use chips_rpc("getrawtransaction", ["<txid>", 1], ...) which maps to
+	 * chips_rpc_cli and produces the correct single-quoted, verbose command:
+	 *   verus -chain=VRSCTEST getrawtransaction '<txid>' 1
+	 * The old bet_copy_args + make_command path silently drops the "1" arg
+	 * when bet_copy_args fails, causing a non-verbose response (hex string)
+	 * that cJSON_Parse fails to decode, returning balance 0. */
+	params = cJSON_CreateArray();
+	cJSON_AddItemToArray(params, cJSON_CreateString(tx));
+	cJSON_AddItemToArray(params, cJSON_CreateNumber(1));
+
+	chips_rpc("getrawtransaction", params, &decoded_tx);
+	cJSON_Delete(params);
+
+	if (!decoded_tx) {
 		dlg_error("%s", bet_err_str(ERR_CHIPS_GET_RAW_TX));
 		return ERR_CHIPS_GET_RAW_TX;
 	}
-	decoded_raw_tx = chips_decode_raw_tx(raw_tx);
-	if (decoded_raw_tx == NULL) {
-		dlg_error("%s", bet_err_str(ERR_CHIPS_DECODE_TX));
-		return ERR_CHIPS_DECODE_TX;
-	}
 
-	vout = cJSON_GetObjectItem(decoded_raw_tx, "vout");
+	vout = cJSON_GetObjectItem(decoded_tx, "vout");
 
 	for (int i = 0; i < cJSON_GetArraySize(vout); i++) {
 		if (find_address_in_addresses(address, cJSON_GetArrayItem(vout, i)) == 1) {
 			balance += jdouble(cJSON_GetArrayItem(vout, i), "value");
 		}
 	}
+	cJSON_Delete(decoded_tx);
 	return balance;
 }
 
+/*
+ * chips_get_wallet_address
+ * ------------------------
+ * Returns a wallet R-address suitable for putting in the table_info "addr"
+ * field, payout transactions, etc.
+ *
+ * Historically this called `listaddressgroupings` and walked the entire
+ * wallet looking for the first address that passed `chips_validate_address`.
+ * On a regtest wallet that has accumulated tens of thousands of addresses
+ * from mining, that RPC returns >1M lines of JSON, which (combined with
+ * cJSON's O(N^2) array indexing and per-address validateaddress subprocess
+ * calls) takes minutes to chew through and parks the caller — including the
+ * libwebsockets service thread that pushes table_info to the GUI.
+ *
+ * We now resolve the address from the running node's own Verus identity:
+ *   1. Player nodes have player_config.verus_pid populated from <player>.ini.
+ *   2. Cashier / dealer nodes have verus_config.cashier_id / .dealer_id
+ *      populated from keys.ini.
+ *
+ * For whichever identity is configured we issue a single
+ *   verus -chain=VRSCTEST getidentity <id>
+ * and extract identity.primaryaddresses[0]. The result is cached for the
+ * process lifetime since the bound address does not change at runtime.
+ *
+ * The legacy listaddressgroupings/getnewaddress path is kept as a final
+ * fallback so the function never silently returns NULL if no identity is
+ * configured (e.g. unit tests / one-off CLI subcommands).
+ */
 char *chips_get_wallet_address()
 {
-	int argc;
-	char **argv = NULL;
-	cJSON *addresses = NULL;
+	static char cached_addr[64] = { 0 };
+	if (cached_addr[0] != '\0')
+		return cached_addr;
 
-	argc = 2;
-	bet_alloc_args(argc, &argv);
-	argv = bet_copy_args(argc, blockchain_cli, "listaddressgroupings");
-	make_command(argc, argv, &addresses);
-
-	for (int32_t i = 0; i < cJSON_GetArraySize(addresses); i++) {
-		cJSON *temp = cJSON_GetArrayItem(addresses, i);
-		for (int32_t j = 0; j < cJSON_GetArraySize(temp); j++) {
-			cJSON *temp1 = cJSON_GetArrayItem(temp, j);
-
-			if (chips_validate_address(unstringify(cJSON_Print(cJSON_GetArrayItem(temp1, 0)))))
-				return (unstringify(cJSON_Print(cJSON_GetArrayItem(temp1, 0))));
-		}
+	/* Build a fully-qualified Verus ID. player_config.verus_pid stores the
+	 * short form ("p1"), which getidentity rejects; verus_config.cashier_id
+	 * / .dealer_id are already FQNs (loaded from keys.ini). For the player
+	 * case we append the poker parent FQN ("sg777z.VRSCTEST@") the same way
+	 * vdxf.c::get_cmm_from_height does. */
+	char fqn[256] = { 0 };
+	if (player_config.verus_pid[0] != '\0') {
+		snprintf(fqn, sizeof(fqn), "%s.%s", player_config.verus_pid, bet_get_poker_id_fqn());
+	} else if (verus_config.initialized && verus_config.cashier_id[0] != '\0') {
+		strncpy(fqn, verus_config.cashier_id, sizeof(fqn) - 1);
+	} else if (verus_config.initialized && verus_config.dealer_id[0] != '\0') {
+		strncpy(fqn, verus_config.dealer_id, sizeof(fqn) - 1);
 	}
-	bet_dealloc_args(argc, &argv);
+
+	if (fqn[0] != '\0') {
+		int argc = 3;
+		char **argv = NULL;
+		cJSON *id_resp = NULL;
+
+		bet_alloc_args(argc, &argv);
+		argv = bet_copy_args(argc, blockchain_cli, "getidentity", fqn);
+		make_command(argc, argv, &id_resp);
+		bet_dealloc_args(argc, &argv);
+
+		if (id_resp != NULL) {
+			cJSON *identity = cJSON_GetObjectItem(id_resp, "identity");
+			if (identity != NULL) {
+				cJSON *primary = cJSON_GetObjectItem(identity, "primaryaddresses");
+				if (primary != NULL && cJSON_GetArraySize(primary) > 0) {
+					cJSON *first = cJSON_GetArrayItem(primary, 0);
+					if (first != NULL && first->type == cJSON_String && first->valuestring != NULL) {
+						strncpy(cached_addr, first->valuestring, sizeof(cached_addr) - 1);
+						cached_addr[sizeof(cached_addr) - 1] = '\0';
+					}
+				}
+			}
+			cJSON_Delete(id_resp);
+		}
+
+		if (cached_addr[0] != '\0') {
+			dlg_info("chips_get_wallet_address: resolved %s -> %s (cached)", fqn, cached_addr);
+			return cached_addr;
+		}
+		dlg_warn("chips_get_wallet_address: getidentity(%s) yielded no primaryaddresses, falling back",
+			 fqn);
+	}
+
+	/* Legacy fallback - slow, but preserves prior behaviour when no
+	 * identity is available. Result is NOT cached so a future call can
+	 * retry the identity path once configs are loaded. */
+	{
+		int argc = 2;
+		char **argv = NULL;
+		cJSON *addresses = NULL;
+
+		bet_alloc_args(argc, &argv);
+		argv = bet_copy_args(argc, blockchain_cli, "listaddressgroupings");
+		make_command(argc, argv, &addresses);
+
+		for (int32_t i = 0; i < cJSON_GetArraySize(addresses); i++) {
+			cJSON *temp = cJSON_GetArrayItem(addresses, i);
+			for (int32_t j = 0; j < cJSON_GetArraySize(temp); j++) {
+				cJSON *temp1 = cJSON_GetArrayItem(temp, j);
+
+				if (chips_validate_address(
+					    unstringify(cJSON_Print(cJSON_GetArrayItem(temp1, 0))))) {
+					char *addr = unstringify(cJSON_Print(cJSON_GetArrayItem(temp1, 0)));
+					cJSON_Delete(addresses);
+					bet_dealloc_args(argc, &argv);
+					return addr;
+				}
+			}
+		}
+		if (addresses != NULL)
+			cJSON_Delete(addresses);
+		bet_dealloc_args(argc, &argv);
+	}
 	return chips_get_new_address();
 }
 
@@ -1851,7 +1961,7 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		strcat(command, argv[i]);
 		strcat(command, " ");
 	}
-	dlg_info("command :: %s\n", command);
+	// dlg_info("command :: %s\n", command);
 	// Lightning Network support removed - lightning-cli commands no longer supported
 	if (strcmp(argv[0], "lightning-cli") == 0) {
 		dlg_warn("Lightning Network support removed - lightning-cli command ignored: %s", command);
@@ -2017,7 +2127,17 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 				if (strstr(data, "error") != NULL) {
 					retval = ERR_NO_TX_INFO_AVAILABLE;
 				} else {
-					*argjson = cJSON_CreateString(data);
+					/* verbose=1 callers (e.g. get_tx_block_height) need a
+					 * parsed object so jint(result,"height") works. With
+					 * verbose=0 the daemon returns a hex string, which is
+					 * not valid JSON and we just wrap it. */
+					cJSON *parsed = cJSON_Parse(data);
+					if (parsed) {
+						cJSON_Delete(*argjson);
+						*argjson = parsed;
+					} else {
+						*argjson = cJSON_CreateString(data);
+					}
 				}
 			} else if (strcmp(argv[1], "getrawmempool") == 0) {
 				if (data[strlen(data) - 1] == '\n')

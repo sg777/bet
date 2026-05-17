@@ -1,0 +1,34 @@
+---
+description: Interactive testing protocol and hard boundaries for the Pangea-Bet repo
+alwaysApply: true
+---
+
+# Interactive Testing Protocol & Hard Boundaries
+
+## NEVER Do Without Explicit User Approval
+
+- **NEVER start, stop, restart, or interact with the blockchain daemon** (`verusd`, `chipsd`, or any variant)
+- **NEVER run any command that touches the CHIPS wallet** (`withdraw`, `consolidate`, `transfer`, `sendtoaddress`, etc.)
+- **NEVER execute any on-chain transaction** of any kind
+- **NEVER start game nodes** (`./bin/bet dealer`, `./bin/bet start player`, etc.) without approval
+- **NEVER modify configuration files** (`.rpccredentials`, `keys.ini`, `dealer.ini`, `p1.ini`, etc.) without approval
+
+## This Is a Production System With Real Money
+
+The wallet at `/root/.verus/pbaas/f315367528394674d45277e369629605a1c3ce9f/wallet.dat` contains real CHIPS cryptocurrency. Any mistake can cause irreversible financial loss.
+
+## Mandatory Interactive Workflow
+
+1. **Understand first** - Read code and docs, do not act
+2. **Write a plan** - Present it clearly before doing anything
+3. **Wait for approval** - Do not proceed until the user explicitly says "go ahead" or equivalent
+4. **Report every action** - Before executing any command, state exactly what it will do
+5. **Stop immediately if uncertain** - Ask rather than guess
+
+## If in Doubt
+
+STOP. Ask the user. Never assume. Never proceed unilaterally.
+
+## Violation of These Rules
+
+Any agent action that bypasses this protocol (even with good intentions) is unacceptable. The user must be in control at all times.

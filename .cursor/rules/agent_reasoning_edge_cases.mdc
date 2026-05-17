@@ -1,0 +1,7 @@
+# Agent Reasoning and Edge Case Mapping
+
+To address limitations in edge-case handling during the reasoning process, the agent must adhere to the following cognitive steps before implementing code changes:
+
+1. **Explicit State Mapping:** Before modifying code, explicitly map all possible states (e.g., `NULL`, empty, out-of-bounds) of variables being introduced, modified, or extracted.
+2. **Dependency Verification:** Do not assume downstream functions will handle upstream data failures. Verify the exact state requirements of downstream functions (e.g., global variables like `g_start_block`) and ensure the current execution branch satisfies them under all conditions.
+3. **Failure Path Definition:** For every external read, API call, or data extraction, explicitly define the execution path and state mutations for failure scenarios before writing the code.
